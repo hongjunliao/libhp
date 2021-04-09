@@ -1,0 +1,34 @@
+; 
+; This file is PART of lbhp project
+; @author hongjun.liao <docici@126.com>, @date 2021/3/31
+; 
+; echo "EXPORTS" > libhp.def
+; dumpbin.exe /SYMBOLS lihp.lib | grep External | grep  _main | cut -d" " -f16 >> libhp.def
+;
+EXPORTS
+test_cjson_print_auto_del_main
+test_hp_libc_main
+test_vector_main
+test_string_util_main
+test_hp_log_main
+test_hp_inotify_main
+test_xhmdm_cjson_main
+test_fsutil_main
+test_hp_cache_main
+test_hp_io_main
+test_hp_stat_main
+test_hp_msg_main
+test_net_main
+test_update_fncat_mode_main
+test_xhmdm_mqtt_main
+test_hp_epoll_main
+test_hp_timerfd_main
+test_libxhhp_main
+test_string_util_main
+test_hp_test_main
+test_hp_opt_main
+test_hp_msg_main
+test_hp_log_main
+test_hp_libc_main
+hp_iocp_test_main
+test_hp_err_main

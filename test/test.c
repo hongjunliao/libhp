@@ -146,6 +146,7 @@ int main(int argc, char ** argv)
 	}
 	else return -1;
 
+	rc = test_hp_io_t_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_cpp_main(argc, argv); assert(rc == 0);
 	rc = test_cjson_main(argc, argv);

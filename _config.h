@@ -36,6 +36,13 @@
 /* define to use Redis client, hp_redis_XXX */
 #define LIBHP_WITH_REDIS
 
+/* for Win32 hp_iocp, libhp dependes some modules(sds, hiredis, etc) which from win-redis, 
+ * and MUST link to Win32_Interop.lib
+ * cause Win32_Interop.lib conflics with ws2_32.lib, 
+ * define if you use these modules
+ */
+#define LIBHP_WITH_WIN32_INTERROP
+
 /* define to use MySQL/MariaDB client, hp_mysql_XXX */
 #define LIBHP_WITH_MYSQL
 

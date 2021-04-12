@@ -9,33 +9,51 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+/* for sds */
+#ifdef _MSC_VER
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#endif
+
+#include "hp_io_t.h"
 #include <unistd.h> /* close */
 #include <assert.h> /* assert */
 #include <errno.h> /*  */
 #include <stdio.h>
 #include <string.h>
-#include "hp_io_t.h"
 #include "hp_log.h"
+#include "str_dump.h" /*dumpstr*/
 #include <uv.h>   /* uv_ip4_name */
 
 #ifndef _MSC_VER
 #include <sys/ioctl.h>  /* ioctl */
 #include <arpa/inet.h>	/* inet_ntop */
 #else
+#define ioctl ioctlsocket
 #endif /* _MSC_VER */
 
 extern int gloglevel;
 /////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef _MSC_VER
 static int hp_io_t__on_accept(struct epoll_event * ev)
+#else
+static hp_sock_t hp_io_t__on_accept(hp_iocp * iocpctx, int index)
+#endif /* _MSC_VER */
 {
+#ifndef _MSC_VER
 	hp_io_ctx * ioctx = (hp_io_ctx * )hp_epoll_arg(ev);
+	hp_sock_t fd = hp_epoll_fd(ev);
+#else
+	hp_io_ctx * ioctx = (hp_io_ctx *)hp_iocp_arg(iocpctx, index);
+	hp_sock_t fd = ioctx->fd;
+#endif /* _MSC_VER */
 	assert(ioctx);
 
 	for(;;){
 		struct sockaddr_in clientaddr = { 0 };
 		socklen_t len = sizeof(clientaddr);
-		int confd = accept(hp_epoll_fd(ev), (struct sockaddr *)&clientaddr, &len);
+		int confd = accept(fd, (struct sockaddr *)&clientaddr, &len);
 		if(confd < 0 ){
 			if(errno == EINTR || errno == EAGAIN)
 				return 0;
@@ -49,10 +67,12 @@ static int hp_io_t__on_accept(struct epoll_event * ev)
 			close(confd);
 			continue;
 		}
-
 		unsigned long sockopt = 1;
+#ifdef LIBHP_WITH_WIN32_INTERROP
+		ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt);
+#else
 		ioctl(confd, FIONBIO, &sockopt);
-
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 		++ioctx->n_accept;
 
 		char cliaddstr[64];
@@ -63,6 +83,7 @@ static int hp_io_t__on_accept(struct epoll_event * ev)
 				, __FUNCTION__, cliaddstr, confd, ioctx->n_accept);
 		}
 	}
+	
 	return 0;
 }
 
@@ -72,17 +93,31 @@ int hp_io_init(hp_io_ctx * ioctx, hp_sock_t fd, hp_io_on_accept on_accept)
 		return -1;
 	int rc;
 	memset(ioctx, 0, sizeof(hp_io_ctx));
-
+	ioctx->on_accept = on_accept;
 #ifndef _MSC_VER
 	/* init epoll */
 	if (hp_epoll_init(&ioctx->efds, 65535) != 0)
 		return -5;
 
-	ioctx->on_accept = on_accept;
-	hp_epolld_set(&ioctx->epolld, fd, hp_io_t__on_accept, ioctx);
-	rc = hp_epoll_add(&ioctx->efds, fd, EPOLLIN, &ioctx->epolld); assert(rc == 0);
+	if (on_accept && fd >= 0) {
+		hp_epolld_set(&ioctx->epolld, fd, hp_io_t__on_accept, ioctx);
+		rc = hp_epoll_add(&ioctx->efds, fd, EPOLLIN, &ioctx->epolld); assert(rc == 0);
+	}
 #else
-	rc = hp_iocp_init(&(ioctx->iocpctx), 2, WM_USER + 100, 200, 0);
+	ioctx->fd = fd;
+
+	rc = hp_iocp_init(&(ioctx->iocp), 2, WM_USER + 100, 200, 0);
+	assert(rc == 0);
+
+	int tid = (int)GetCurrentThreadId();
+	rc = hp_iocp_run(&ioctx->iocp, tid, 0);
+	assert(rc == 0);
+
+	if((fd && fd != hp_sock_invalid) && on_accept){
+		int index = hp_iocp_add(&ioctx->iocp, 0, 0, fd, hp_io_t__on_accept, 0, 0, ioctx);
+		rc = (index >= 0 ? 0 : index);
+	}
+
 #endif /* _MSC_VER */
 
 	return rc;
@@ -94,20 +129,25 @@ int hp_io_write(hp_io_t * io, void * buf, size_t len, hp_io_free_t free, void * 
 #ifndef _MSC_VER
 	rc = hp_eto_add(&io->eto, buf, len,  free, ptr);
 #else
-	rc = hp_iocp_write(io->io, io->index, buf, len, free, ptr);
+	rc = hp_iocp_write(io->iocp, io->index, buf, len, free, ptr);
 #endif /* _MSC_VER */
 	return rc;
 }
 
-int hp_io_run(hp_io_ctx * ioctx, int interval)
+int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 {
-	int rc;
+	int rc = 0;
 #ifndef _MSC_VER
-	rc = hp_epoll_run(&ioctx->efds, interval, (interval > 0? 0 : (void *)-1));
+	rc = hp_epoll_run(&ioctx->efds, interval, (mode != 0? 0 : (void *)-1));
 #else
-	MSG msgobj = { 0 }, *msg = &msgobj;
-	if (PeekMessage((LPMSG)msg, (HWND)0, (UINT)0, (UINT)0, PM_REMOVE)) {
-		rc = hp_iocp_handle_msg(&ioctx->iocpctx, msg->message, msg->wParam, msg->lParam);
+	for (;;) {
+		MSG msgobj = { 0 }, *msg = &msgobj;
+		if (PeekMessage((LPMSG)msg, (HWND)0, (UINT)0, (UINT)0, PM_REMOVE)) {
+			rc = hp_iocp_handle_msg(&ioctx->iocp, msg->message, msg->wParam, msg->lParam);
+		}
+		if(mode == 0)
+			break;
+		else sleep(interval);
 	}
 #endif /* _MSC_VER */
 
@@ -118,8 +158,14 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 {
 	if(!ioctx)
 		return -1;
+#ifndef _MSC_VER
+	hp_epoll_del(&ioctx->efds, ioctx->epolld.fd, EPOLLIN, &ioctx->epolld);
+	hp_epoll_uninit(&ioctx->efds);
+#else
+	hp_iocp_uninit(&ioctx->iocp);
+#endif /* _MSC_VER */
 
-	return -1;
+	return 0;
 }
 
 #ifndef _MSC_VER
@@ -194,15 +240,22 @@ static void hp_io_t__on_rerror(struct hp_eti * eti, int err, void * arg)
 #else
 static int hp_io_t__on_error(hp_iocp * iocpctx, int index, int err, char const * errstr)
 {
+	assert(iocpctx);
+	hp_io_t * io = (hp_io_t *)hp_iocp_arg(iocpctx, index);
+	assert(io);
 
-	return 0;
+	return io->on_error(io, err, errstr);
 }
 
-int hp_io_t__on_data(hp_iocp * iocpctx, int index, char * buf, size_t len)
+int hp_io_t__on_data(hp_iocp * iocpctx, int index, char * buf, size_t * len)
 {
+	assert(iocpctx && buf && len);
+	hp_io_t * io = (hp_io_t *)hp_iocp_arg(iocpctx, index);
+	assert(io);
+
+	return io->on_data(io, buf, len);
 }
 #endif /* _MSC_VER */
-
 
 int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 	, hp_io_on_data on_data, hp_io_on_error on_error)
@@ -236,8 +289,10 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 	assert(rc == 0);
 
 #else
-	io->io = ioctx;
-	io->index = hp_iocp_add(&ioctx->iocpctx, 0, 0, fd, 0, hp_io_t__on_data, hp_io_t__on_error, 0);
+	io->iocp = &ioctx->iocp;
+
+	io->index = hp_iocp_add(&ioctx->iocp, 0, 0, io->fd, 0, hp_io_t__on_data, hp_io_t__on_error, io);
+	rc = (io->index >= 0? 0 : io->index);
 #endif /* _MSC_VER */
 	return rc;
 }
@@ -246,7 +301,7 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 #ifndef NDEBUG
 #include "hp_net.h" /* hp_net_connect */
 #include "klist.h"  /* list_head */
-#include "sdsinc.h"
+#include "sdsinc.h" /* sds */
 #include "hp_config.h"
 
 static char server_ip[128] = "127.0.0.1";
@@ -266,12 +321,13 @@ struct server {
 };
 struct test {
 	sds in, out;
+	int quit;
 };
 
 static struct test s_testobj, * s_test = &s_testobj;
 static struct server s_sreverobj, * s_srever = &s_sreverobj;
 
-int on_data(hp_io_t * io, char * buf, size_t * len)
+static int on_data(hp_io_t * io, char * buf, size_t * len)
 {
 	assert(io && buf && len);
 
@@ -282,13 +338,20 @@ int on_data(hp_io_t * io, char * buf, size_t * len)
 
 	assert(strncmp(s_test->in, s_test->out, strlen(s_test->in)) == 0);
 
+	*len = 0;
+
+	if(sdslen(s_test->in) == sdslen(s_test->in))
+		s_test->quit = 1;
+
 	return 0;
 }
 
-int server_on_data(hp_io_t * io, char * buf, size_t * len)
+static int server_on_data(hp_io_t * io, char * buf, size_t * len)
 {
-	assert(io && buf);
+	assert(io && buf && len);
 	int rc;
+
+	hp_log(stdout, "%s: %s\n", __FUNCTION__, dumpstr(buf, *len, 128));
 
 	rc = hp_io_write(io, buf, *len, (void *)-1, 0);
 	assert(rc == 0);
@@ -300,11 +363,17 @@ int server_on_data(hp_io_t * io, char * buf, size_t * len)
 
 static int server_on_error(hp_io_t * io, int err, char const * errstr)
 {
+	hp_log((err != 0 ? stderr : stdout), "%s: close session, fd=%d, err=%d/'%s', total=%d\n"
+		, __FUNCTION__, io->fd
+		, err, errstr, -1);
 	return 0;
 }
 
 static int on_error(hp_io_t * io, int err, char const * errstr)
 {
+	hp_log((err != 0 ? stderr : stdout), "%s: close session, fd=%d, err=%d/'%s'\n"
+		, __FUNCTION__, io->fd
+		, err, errstr);
 	return 0;
 }
 
@@ -314,9 +383,11 @@ static int on_accept(hp_sock_t fd)
 
 	int tcp_keepalive = cfgi("tcp-keepalive");
 	if(hp_net_set_alive(fd, tcp_keepalive) != 0)
-		hp_log(stderr, "%s: WARNING: socket_set_alive failed, interval=%ds\n", __FUNCTION__, tcp_keepalive);
+		hp_log(stderr, "%s: WARNING: socket_set_alive failed, interval=%d s\n", __FUNCTION__, tcp_keepalive);
 
 	struct client * c = calloc(1, sizeof(struct client));
+	c->io.arg = c;
+
 	list_add_tail(&c->li, &s_srever->clients);
 
 	rc = hp_io_add(&s_srever->ioctx, &c->io, fd, server_on_data, server_on_error);
@@ -351,12 +422,23 @@ int test_hp_io_t_main(int argc, char ** argv)
 	rc = hp_io_write(&c->io, sdsdup(s_test->out), sdslen(s_test->out), (hp_io_free_t)sdsfree, 0);
 
 	/* run event loop */
-	hp_io_run(&s_srever->ioctx, 200);
+	for (; !s_test->quit;) {
+		hp_io_run(&s_srever->ioctx, 200, 0);
+	}
 
 	hp_io_uninit(&s_srever->ioctx);
 
-	/**/
+	/*clear*/
+	sdsfree(s_test->in);
 	sdsfree(s_test->out);
+
+	struct list_head * pos, * next;;
+	list_for_each_safe(pos, next, &s_srever->clients){
+		struct client * node = (struct client *)list_entry(pos, struct client, li);
+		assert(node);
+		list_del(&node->li);
+		free(node);
+	}
 
 	return 0;
 }

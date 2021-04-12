@@ -30,12 +30,12 @@ file(GLOB SRCS ${SRCS}
 	deps/http-parser/http_parser.c
 	deps/gbk-utf8/utf8.c
 	)
-file(GLOB_RECURSE SRCS ${SRCS} src/*.c include/*)
+file(GLOB_RECURSE SRCS ${SRCS} src/*.c src/*.cpp include/* )
 file(GLOB SRCS ${SRCS} README.md)
 
 add_library(libhp STATIC ${SRCS})
 target_compile_options(libhp PUBLIC
-    -DHAVE_CONFIG_H -D_GNU_SOURCE -O0 -g3 -Wall -DCMAKE_EXPORT_COMPILE_COMMANDS
+    -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
     # for redis
     -DDICT_BENCHMARK_MAIN
     # for cJSON
@@ -43,15 +43,22 @@ target_compile_options(libhp PUBLIC
 	)
 add_compile_options(-DcJSON_FREE_PRINT)
 if(NOT WIN32)
-add_compile_options(-g3 -Wall)
+	target_compile_options(libhp PUBLIC  -O0 -g3  -Wall)
 else()
-target_compile_options(-D_CRT_SECURE_NO_WARNINGS)
+	target_compile_options(libhp PUBLIC -D_CRT_SECURE_NO_WARNINGS /MTd)
 endif()
 
+# add_subdirectory(deps/uuid)
 add_subdirectory(deps/cJSON)
 add_subdirectory(deps/dlfcn-win32)
+if(WIN32)
+add_subdirectory(deps/libuv)
+endif()
 
-target_include_directories(libhp PRIVATE include/hp/ include/ deps/ ./)
+target_include_directories(libhp PRIVATE include/hp/ include/ deps/ deps/libuv/include/ deps/libc/ ./)
+if(WIN32)
+target_include_directories(libhp PRIVATE deps/redis/deps/ )
+endif()
 target_link_libraries(libhp dl cjson)
 # message(STATUS ${CMAKE_C_FLAGS})
 
@@ -60,5 +67,13 @@ project(test-libhp)
 file(GLOB SRCS test/*.c deps/inih/*)
 add_executable(test-libhp ${SRCS} )
 target_include_directories(test-libhp PRIVATE include/ deps/ ./)
+if(WIN32)
+target_include_directories(test-libhp PRIVATE deps/redis/deps/ deps/libuv/include/)
+endif()
+
 target_link_directories(test-libhp PRIVATE lib/)
+if(WIN32)
+target_link_libraries(test-libhp libhp uv)
+else()
 target_link_libraries(test-libhp libhp ssl crypto dl cjson hiredis uv zlog uuid pthread db z paho-mqtt3a curl mysqlclient)
+endif()

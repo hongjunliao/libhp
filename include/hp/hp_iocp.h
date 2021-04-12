@@ -12,15 +12,16 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "hp_sock_t.h"  /* hp_sock_t */
+
 #ifdef _MSC_VER
 
-#ifdef _WIN32
+#ifdef LIBHP_WITH_WIN32_INTERROP
 #include "redis/src/Win32_Interop/Win32_Portability.h"
 #include "redis/src/Win32_Interop/win32_types.h"
-#endif
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 
-#include <winsock2.h>    /*  */
-#include <windows.h>
 #include <stdint.h>      /* size_t */
 #include "libhp.h"
  /////////////////////////////////////////////////////////////////////////////////////
@@ -82,20 +83,21 @@ int hp_iocp_run(hp_iocp * iocpctx, int tid, HWND hwnd);
  *                       return <0 for close
  * @param on_error:    callback when error
  *                       return >0 for reconnect
- * @param flags:       flags
+ * @param flags:       user data
  * @return:            an index for this new I/O context, >= 0 on OK, <0 on error
  * NOTES:
  * call order: hp_iocp_init=>hp_iocp_run=>hp_iocp_add=>hp_iocp_write
  * */
 int hp_iocp_add(hp_iocp * iocpctx
 	, int rb_max, int rb_size
-	, SOCKET sock
-	, SOCKET (* on_connect)(hp_iocp * iocpctx, int index)
-	, int (* on_data)(hp_iocp * iocpctx, int index, char * buf, size_t len)
+	, hp_sock_t sock
+	, hp_sock_t(* on_connect)(hp_iocp * iocpctx, int index)
+	, int (* on_data)(hp_iocp * iocpctx, int index, char * buf, size_t * len)
 	, int (* on_error)(hp_iocp * iocpctx, int index, int on_error, char const * errstr)
-	, int flags
+	, void * arg
 	);
 int hp_iocp_size(hp_iocp * iocpctx);
+void * hp_iocp_arg(hp_iocp * iocpctx, int index);
 /*
  * write something async
  * @param index:      return value from @hp_iocp_add
@@ -107,7 +109,7 @@ int hp_iocp_size(hp_iocp * iocpctx);
  * @return:           0 on OK
  * */
 int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
-	, hp_iocp_free_t free, void * ptr);
+	, hp_iocp_free_t freecb, void * ptr);
 
 /*
  * because this IOCP wrapper use Windows message queue to sync

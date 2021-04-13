@@ -54,6 +54,7 @@ extern "C" {
 #include "hp/string_util.h"  /*  */
 #include "hp/hp_uv_curl.h"  /*  */
 #include "hp/hp_ssl.h"  /*  */
+#include "hp/hp_io_t.h"  /*  */
 
 #ifdef __cplusplus
 }

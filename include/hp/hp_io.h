@@ -99,6 +99,14 @@ do { \
 	hp_eto_write((eto), (epolld)->fd, __hetw_ev); \
 }while(0)
 
+#define hp_eti_try_read(eti, epolld) \
+do { \
+	struct epoll_event hetw_evobj, * __hetw_ev = &hetw_evobj; \
+	__hetw_ev->data.ptr = (epolld); \
+	__hetw_ev->events = EPOLLIN; \
+	hp_eti_read((eti), (epolld)->fd, __hetw_ev); \
+}while(0)
+
 /* @see writev_a */
 size_t hp_eto_write(struct hp_eto *eto, int fd, void * arg);
 size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg);

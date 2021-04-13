@@ -25,14 +25,17 @@ typedef int hp_sock_t;
 SOCKET FDAPI_get_ossocket(int fd);
 /* invalid socket */
 #define hp_sock_invalid 0
+#define hp_sock_close close
 #else
 #include <winsock2.h>
 typedef SOCKET hp_sock_t;
 #define hp_sock_invalid INVALID_SOCKET
+#define hp_sock_close closesocket
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 #else
 typedef int hp_sock_t;
 #define hp_sock_invalid (-1)
+#define hp_sock_close close
 
 #endif /* _MSC_VER */
 

@@ -44,6 +44,7 @@ struct hp_epoll {
 	hp_bwait **          bwaits;
 
 	int                  stop; /* stop loop? */
+	void *               arg;  /* ignored by hp_epoll */
 };
 
 int hp_epoll_init(struct hp_epoll * efds, int n);

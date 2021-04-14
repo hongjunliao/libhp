@@ -142,8 +142,10 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 static int iolist_match(void *ptr, void *key)
 {
 	assert(ptr);
-	hp_io_t * io = (hp_io_t *)ptr;
-	return key && io->id == *(int *)key;
+	if(!key) { return 0; }
+	hp_io_t * io = (hp_io_t *)ptr, * k = (hp_io_t *)key;
+	return (k->id > 0 && io->id == k->id) ||
+			(hp_sock_is_valid(k->fd) && io->fd == k->fd);
 }
 
 int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
@@ -177,7 +179,7 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 	rc = hp_iocp_run(&ioctx->iocp, tid, opt->hwnd);
 	assert(rc == 0);
 
-	if((opt->listen_fd && opt->listen_fd != hp_sock_invalid)){
+	if(hp_sock_is_valid(opt->listen_fd)){
 		int index = hp_iocp_add(&ioctx->iocp, 0, 0, opt->listen_fd, hp_io_internal_on_accept, 0, 0, ioctx);
 		rc = (index >= 0 ? 0 : index);
 	}
@@ -243,7 +245,10 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 #else
 	for (;;) {
 		MSG msgobj = { 0 }, *msg = &msgobj;
-		if (PeekMessage((LPMSG)msg, (HWND)0, (UINT)0, (UINT)0, PM_REMOVE)) {
+		if (PeekMessage((LPMSG)msg, (HWND)-1
+				, (UINT)HP_IOCP_WM_FIRST(&ioctx->iocp), (UINT)HP_IOCP_WM_LAST(&ioctx->iocp)
+				, PM_REMOVE | PM_NOYIELD)) {
+
 			rc = hp_iocp_handle_msg(&ioctx->iocp, msg->message, msg->wParam, msg->lParam);
 		}
 		if(mode == 0)
@@ -253,6 +258,32 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 #endif /* _MSC_VER */
 
 	return rc;
+}
+
+int hp_io_close(hp_io_t * io)
+{
+	if(!(io)) { return -1; }
+	int rc;
+#ifndef _MSC_VER
+	rc = close(io->ed.fd);
+#else
+	rc = hp_iocp_close(io->iocp, io->index);
+#endif /* _MSC_VER */
+	return rc;
+}
+
+int hp_io_close_sock(hp_io_ctx * ioctx, hp_sock_t fd)
+{
+	if(!(ioctx && hp_sock_is_valid(fd))) { return -1; }
+
+	hp_io_t key = { 0 };
+	key.fd = fd;
+
+	listNode * node = listSearchKey(ioctx->iolist, &key);
+	if (!node) { return -1; }
+
+	hp_io_t * io = (hp_io_t *)listNodeValue(node);
+	return hp_io_close(io);
 }
 
 int hp_io_uninit(hp_io_ctx * ioctx)
@@ -329,7 +360,10 @@ static void hp_io_t__on_error(int err, char const * errstr, void * arg)
 	assert(io->efds && io->efds->arg);
 
 	list * li = (list *)io->efds->arg;
-	listNode * node = listSearchKey(li, &io->id);
+	hp_io_t key = { 0 };
+	key.id = io->id;
+
+	listNode * node = listSearchKey(li, &key);
 	if(node){ listDelNode(li, node); }
 
 	hp_epoll_del(io->efds, io->ed.fd, EPOLLIN | EPOLLOUT | EPOLLET, &io->ed);
@@ -418,6 +452,7 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 
 /////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
+#include <time.h>   /*difftime*/
 #include "hp_net.h" /* hp_net_connect */
 #include "klist.h"  /* list_head */
 #include "sdsinc.h" /* sds */

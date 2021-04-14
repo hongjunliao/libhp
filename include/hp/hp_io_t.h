@@ -110,6 +110,11 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 int hp_io_write(hp_io_t * io
 	, void * buf, size_t len, hp_io_free_t free, void * ptr);
 int hp_io_run(hp_io_ctx * ioctx, int interval, int mode);
+
+/* for those fds added to hp_io_t, use hp_io_close_XXX to close it */
+int hp_io_close(hp_io_t * io);
+int hp_io_close_sock(hp_io_ctx * ioctx, hp_sock_t fd);
+
 int hp_io_uninit(hp_io_ctx * ioctx);
 
 /////////////////////////////////////////////////////////////////////////////////////////

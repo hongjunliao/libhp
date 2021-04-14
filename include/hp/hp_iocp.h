@@ -30,7 +30,14 @@
 extern "C" {
 #endif
 
+/* WM_USER + N */
+#define HP_IOCP_WM_FIRST(c)        ((c)->wmuser + 1)
+#define HP_IOCP_WM_LAST(c)        ((c)->wmuser + 3)
+
+/////////////////////////////////////////////////////////////////////////////////////
+
 #define HP_IOCP_TMAX  16         /* IOCP thread max */
+
 
 typedef struct hp_iocp hp_iocp;
 typedef struct hp_iocp_item hp_iocp_item;
@@ -41,7 +48,7 @@ struct hp_iocp {
 	int           ctid;                  /* user thread ID */
 	HWND          hwnd;                  /* user thread HWND */
 	HANDLE        sthread;               /* select threads */
-	HANDLE        threads[HP_IOCP_TMAX]; /* IOCP threads */
+	HANDLE        threads[HP_IOCP_TMAX + 1]; /* IOCP threads */
 	int           n_threads;              /* number of IOCP threads  */
 	hp_iocp_item *items;				  /*  */
 	int           flags;
@@ -96,6 +103,7 @@ int hp_iocp_add(hp_iocp * iocpctx
 	, int (* on_error)(hp_iocp * iocpctx, int index, int on_error, char const * errstr)
 	, void * arg
 	);
+int hp_iocp_close(hp_iocp * iocpctx, int index);
 int hp_iocp_size(hp_iocp * iocpctx);
 void * hp_iocp_arg(hp_iocp * iocpctx, int index);
 /*

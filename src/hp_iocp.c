@@ -12,6 +12,10 @@
 #ifdef _MSC_VER
 
 #ifdef LIBHP_WITH_WIN32_INTERROP
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+
 #define WSARecv FDAPI_WSARecv
 #define WSASend FDAPI_WSASend
 #define WSAGetLastError FDAPI_WSAGetLastError
@@ -20,6 +24,8 @@
 #define _fd_isset(fd,set) FD_ISSET(FDAPI_get_ossocket(fd), set)
 #define _fd_set(fd,set) FD_SET((fd), set) 
 //#define _fd_isset(fd,set) FD_ISSET(fd, set) 
+#else
+#include <winsock2.h>
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include "hp_iocp.h"    /* hp_iocp */
@@ -55,7 +61,9 @@
 /* internal use */
 #define HP_IOCP_WM_FD_ADD		(WM_USER + 10)
 #define HP_IOCP_WM_FD_RM		(WM_USER + 11)
-#define HP_IOCP_WM_FD_END		(WM_USER + 12)
+#define HP_IOCP_WM_FD_WINC		(WM_USER + 12)
+#define HP_IOCP_WM_FD_WDEC		(WM_USER + 13)
+#define HP_IOCP_WM_FD_END		(WM_USER + 14)
 
 #define HP_IOCP_WM_FD_FIRST     HP_IOCP_WM_FD_ADD
 #define HP_IOCP_WM_FD_LAST      HP_IOCP_WM_FD_END
@@ -64,7 +72,7 @@
 #define HP_IOCP_WMF_FDW         (1 << 2)
 #define HP_IOCP_WMF_FDE         (1 << 3)
 
-#define HP_IOCP_RBUF  (1024 * 1024 * 1)
+#define HP_IOCP_RBUF  (1024 * 512)
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -607,7 +615,7 @@ static int select_sock_match(void *ptr, void *key)
 static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 {
 #ifndef NDEBUG
-	hp_log(stdout, "%s: enter thread function\n", __FUNCTION__);
+	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
 	hp_iocp * iocpctx = (hp_iocp *)arg;
 	assert(iocpctx);
@@ -630,21 +638,27 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 		for(; PeekMessage((LPMSG)message, (HWND)-1
 				, (UINT)HP_IOCP_WM_FD_FIRST, (UINT)HP_IOCP_WM_FD_LAST
 				, PM_REMOVE | PM_NOYIELD); ) {
-			
-			if(HP_IOCP_WM_FD_END == message->message) { exit_ = 1; }
-
 			struct hp_iocp_msg * msg = (struct hp_iocp_msg *)message->wParam;
-			if (!msg)
-				continue;
-			if ((int)message->message == HP_IOCP_WM_FD_ADD) {
-				listAddNodeTail(socks, select_sock_alloc(msg->sock));
+
+			if(message->message == HP_IOCP_WM_FD_END) { exit_ = 1; }
+			else {
+				if(!msg) { continue; }
+
+				if (message->message == HP_IOCP_WM_FD_ADD) {
+					listAddNodeTail(socks, select_sock_alloc(msg->sock));
+				}
+				else{
+					listNode * node = listSearchKey(socks, &msg->sock);
+					if (node) {
+						hp_select_sock * ssock = listNodeValue(node);
+
+						if (message->message == HP_IOCP_WM_FD_RM) { listDelNode(socks, node); }
+						else if (message->message == HP_IOCP_WM_FD_WINC && ssock) { ++ssock->_2; }
+						else if (message->message == HP_IOCP_WM_FD_WDEC && ssock) { --ssock->_2; }
+					}
+				}
+				free(msg);
 			}
-			else if ((int)message->message == HP_IOCP_WM_FD_RM) {
-				listNode * node = listSearchKey(socks, &msg->sock);
-				if (node)
-					listDelNode(socks, node);
-			}
-			free(msg);
 		}
 		/* if no fd to select, just sleep */
 		if (!(listLength(socks) > 0)) {
@@ -697,16 +711,17 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 			continue; /* stop this time */
 		}
 
+		Sleep(200);
+
 		iter = listGetIterator(socks, 0);
 		for (; (node = listNext(iter));) {
 
 			hp_select_sock * sock = listNodeValue(node);
 			if (_fd_isset(sock->_1, rfds)
-				|| (_fd_isset(sock->_1, wfds) /*&& sock->_2 > 0*/)
+				|| (_fd_isset(sock->_1, wfds) && sock->_2 > 0)
 				|| _fd_isset(sock->_1, exceptfds)) {
 
 				struct hp_iocp_msg * msg = hp_iocp_msg_alloc(sock->_1);
-
 				if (_fd_isset(sock->_1, exceptfds)) {
 					listDelNode(socks, node);
 					msg->flags = HP_IOCP_WMF_FDE;
@@ -714,7 +729,7 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 				else {
 					if (_fd_isset(sock->_1, rfds))
 						msg->flags |= HP_IOCP_WMF_FDR;
-					if (_fd_isset(sock->_1, wfds) /* && sock->_2 > 0*/)
+					if (_fd_isset(sock->_1, wfds) && sock->_2 > 0)
 						msg->flags |= HP_IOCP_WMF_FDW;
 				}
 
@@ -742,7 +757,7 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 static unsigned WINAPI hp_iocp_threadfn(void * arg)
 {
 #ifndef NDEBUG
-	hp_log(stdout, "%s: enter thread function\n", __FUNCTION__);
+	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
 	hp_iocp * iocpctx = (hp_iocp *)arg;
 	assert(iocpctx);
@@ -982,7 +997,7 @@ int hp_iocp_add(hp_iocp * iocpctx
 item_done:
 	item->sock = sock;
 	item->rb_size = (rb_size <= 0 ? (int)HP_IOCP_RBUF : rb_size);
-	item->rb_max = (rb_max <= 0 ? 1 : rb_max);
+	item->rb_max = (rb_max <= 0 ? 2 : rb_max);
 	item->connect = on_connect;
 	item->on_data = on_data;
 	item->on_error = on_error;
@@ -1050,9 +1065,27 @@ int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
 
 	cvector_push_back(item->obuf, obuf);
 
+	/* tell select thread */
+	//struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
+	//msg->id = item->id;
+	//msg->sock = item->sock;
+	//int tid = GetThreadId(iocpctx->sthread);
+	//hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_WINC, msg);
+
 	return 0;
 }
 
+int hp_iocp_try_write(hp_iocp * iocpctx, int index)
+{
+	if (!(iocpctx && cvector_in(iocpctx->items, index)))
+		return -1;
+	hp_iocp_item * item = iocpctx->items + index;
+	if (!item->obuf)
+		return -2;
+	hp_iocp_do_write(iocpctx, item);
+
+	return 0;
+}
 /////////////////////////////////////////////////////////////////////////////////////
 /* tests */
 #ifndef NDEBUG
@@ -1483,3 +1516,4 @@ int test_hp_iocp_main(int argc, char ** argv)
 #endif /* NDEBUG */
 
 #endif /* _MSC_VER */
+

@@ -30,7 +30,7 @@
 extern "C" {
 #endif
 
-/* WM_USER + N */
+/* WM_USER + N, [first,last] */
 #define HP_IOCP_WM_FIRST(c)        ((c)->wmuser + 1)
 #define HP_IOCP_WM_LAST(c)        ((c)->wmuser + 3)
 
@@ -118,6 +118,7 @@ void * hp_iocp_arg(hp_iocp * iocpctx, int index);
  * */
 int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
 	, hp_iocp_free_t freecb, void * ptr);
+int hp_iocp_try_write(hp_iocp * iocpctx, int index);
 
 /*
  * because this IOCP wrapper use Windows message queue to sync

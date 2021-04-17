@@ -66,9 +66,17 @@ static int hp_io_internal_on_data(hp_io_t * io, char * buf, size_t * len)
 static int hp_io_internal_on_error(hp_io_t * io, int err, char const * errstr)
 {
 	assert(io && io->iohdl);
+	list * li = 0;
+#ifndef _MSC_VER
+	assert(io->efds && io->efds->arg);
+	li = (list *)io->efds->arg;
+#else
+	assert(io->iocp && io->iocp->user);
+	li = (list *)io->iocp->user;
+#endif /* _MSC_VER */
 	hp_log((err != 0 ? stderr : stdout), "%s: close session, fd=%d, err=%d/'%s', total=%d\n"
 		, __FUNCTION__, io->fd
-		, err, errstr, -1);
+		, err, errstr, listLength(li));
 
 	if(io->iohdl->on_delete)
 		io->iohdl->on_delete(io);
@@ -172,7 +180,7 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 #else
 	ioctx->fd = opt->listen_fd;
 
-	rc = hp_iocp_init(&(ioctx->iocp), 2, WM_USER + opt->wm_user, 200, 0);
+	rc = hp_iocp_init(&(ioctx->iocp), 0, WM_USER + opt->wm_user, 200, ioctx->iolist);
 	assert(rc == 0);
 
 	int tid = (int)GetCurrentThreadId();
@@ -229,6 +237,9 @@ static int hp_io_epoll_before_wait(struct hp_epoll * efds)
 	for(node = 0; (node = listNext(iter));){
 		hp_io_t * io = (hp_io_t *)listNodeValue(node);
 		assert(io);
+		if (io->iohdl && io->iohdl->on_loop) {
+			io->iohdl->on_loop(io);
+		}
 	}
 	listReleaseIterator(iter);
 
@@ -251,9 +262,31 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 
 			rc = hp_iocp_handle_msg(&ioctx->iocp, msg->message, msg->wParam, msg->lParam);
 		}
+
+		/* user loop */
+		listIter * iter = 0;
+		listNode * node;
+		iter = listGetIterator(ioctx->iolist, 0);
+		for (node = 0; (node = listNext(iter));) {
+			hp_io_t * io = (hp_io_t *)listNodeValue(node);
+			assert(io);
+
+			if (io->iohdl && io->iohdl->on_loop) {
+				io->iohdl->on_loop(io);
+			}
+		}
+		listReleaseIterator(iter);
+
+		iter = listGetIterator(ioctx->iolist, 0);
+		for (node = 0; (node = listNext(iter));) {
+			hp_io_t * io = (hp_io_t *)listNodeValue(node);
+			assert(io);
+			hp_iocp_try_write(&ioctx->iocp, io->index);
+		}
+		listReleaseIterator(iter);
+
 		if(mode == 0)
 			break;
-		else sleep(interval);
 	}
 #endif /* _MSC_VER */
 
@@ -301,6 +334,8 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 
 	return 0;
 }
+
+/////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef _MSC_VER
 
@@ -369,10 +404,10 @@ static void hp_io_t__on_error(int err, char const * errstr, void * arg)
 	hp_epoll_del(io->efds, io->ed.fd, EPOLLIN | EPOLLOUT | EPOLLET, &io->ed);
 	close(io->ed.fd);
 
-	io->on_error(io, err, errstr);
-
 	hp_eti_uninit(&io->eti);
 	hp_eto_uninit(&io->eto);
+
+	io->on_error(io, err, errstr);
 }
 
 static void hp_io_t__on_werror(struct hp_eto * eto, int err, void * arg)
@@ -391,6 +426,14 @@ static int hp_io_t__on_error(hp_iocp * iocpctx, int index, int err, char const *
 	assert(iocpctx);
 	hp_io_t * io = (hp_io_t *)hp_iocp_arg(iocpctx, index);
 	assert(io);
+	assert(io->iocp && io->iocp->user);
+	list * li = (list *)io->iocp->user;
+      
+	hp_io_t key = { 0 };
+	key.id = io->id;
+
+	listNode * node = listSearchKey(li, &key);
+	if (node) { listDelNode(li, node); }
 
 	return io->on_error(io, err, errstr);
 }
@@ -404,6 +447,8 @@ int hp_io_t__on_data(hp_iocp * iocpctx, int index, char * buf, size_t * len)
 	return io->on_data(io, buf, len);
 }
 #endif /* _MSC_VER */
+
+/////////////////////////////////////////////////////////////////////////////////////
 
 int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 	, hp_io_on_data on_data, hp_io_on_error on_error)
@@ -691,8 +736,8 @@ int test_hp_io_t_main(int argc, char ** argv)
 
 		struct client cobj, *c = &cobj;
 
-		hp_sock_t listen_fd = hp_net_listen(7006);
-		hp_sock_t fd = hp_net_connect("127.0.0.1", 7006);
+		hp_sock_t listen_fd = hp_net_listen(7006); assert(listen_fd > 0);
+		hp_sock_t fd = hp_net_connect("127.0.0.1", 7006); assert(fd > 0);
 
 		hp_ioopt ioopt = { listen_fd, test__on_accept, { 0 }
 #ifdef _MSC_VER

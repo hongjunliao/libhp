@@ -69,6 +69,14 @@ struct hp_iohdl {
 			, hp_iohdr_t ** hdrp, char ** bodyp);
 	/* callback when new message coming */
 	int(* on_dispatch)(hp_io_t * io, hp_iohdr_t * imhdr, char * body);
+	/**
+	 * callback in loop,
+	 * this function will be hi-frequently called
+	 * DO NOT block TOO LONG
+	 * @return: return <0 to ask to close the client
+	*/
+	int (* on_loop)(hp_io_t * io);
+
 	/* callback when disconnect */
 	void(* on_delete)(hp_io_t * io);
 	/* will pass to on_parse(...,flags, ...) */

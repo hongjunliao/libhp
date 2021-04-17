@@ -13,19 +13,21 @@
 
 #ifdef LIBHP_WITH_REDIS
 
-#include "sds/sds.h"
-/* use our modified sds instead of default
- * please include sds/sds.h first
- *  */
-#include <hiredis/async.h>
+#ifndef _MSC_VER
 #include <uv.h>
+typedef uv_loop_t hp_redis_ev_t;
+#else
+#include "redis/src/ae.h" /* aeEventLoop */
+typedef aeEventLoop hp_redis_ev_t;
+#endif /* _MSC_VER */
+#include <hiredis/async.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /////////////////////////////////////////////////////////////////////////////////////////
-int hp_redis_init(redisAsyncContext ** redisc, uv_loop_t * uvloop, char const * addr, char const *passwd
+int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * rev, char const * addr, char const *passwd
 	, void ( * on_connect)(const redisAsyncContext *c, int status));
 void hp_redis_uninit(redisAsyncContext *redisc);
 /////////////////////////////////////////////////////////////////////////////////////////

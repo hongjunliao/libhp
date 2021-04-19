@@ -10,7 +10,11 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
+#include "sdsinc.h"
+#include <string.h>
+#ifdef _MSC_VER
+#define strcasecmp  _stricmp
+#endif /* _MSC_VER */
 
 #include "hp_log.h"     /* hp_log */
 #include "str_dump.h"   /* dumpstr */
@@ -24,7 +28,6 @@
 #include <time.h>
 
 //#include <search.h>     /* hsearch_r,hsearch_data, ... */
-#include "sds/sds.h"
 
 /////////////////////////////////////////////////////////////////////////////////////
 extern int gloglevel;
@@ -87,7 +90,12 @@ int hp_cache_get(char const * key, char const * dir, struct hp_cache_entry ** en
 
 		if(strcasecmp(key, htab->key) == 0){
 			entp = *entpp = (struct hp_cache_entry *)htab->data;
-			if(fs.st_mtim.tv_sec == entp->chksum)
+#ifndef _MSC_VER
+			if (fs.st_mtim.tv_sec == entp->chksum)
+#else
+			if (fs.st_mtime == entp->chksum)
+#endif /* _MSC_VER */
+			
 				return 0;
 
 			if(fs.st_size != entp->size)
@@ -110,7 +118,12 @@ int hp_cache_get(char const * key, char const * dir, struct hp_cache_entry ** en
 
 	entp->buf[0] = '\0';
 	entp->size = fs.st_size;
+#ifndef _MSC_VER
 	entp->chksum = fs.st_mtim.tv_sec;
+#else
+	entp->chksum = fs.st_mtime;
+#endif /* _MSC_VER */
+
 
 	size_t size = fread(entp->buf, sizeof(char), entp->size, f);
 	fclose(f);
@@ -156,4 +169,6 @@ int test_hp_cache_main(int argc, char ** argv)
 }
 
 #endif /* NDEBUG */
+#ifndef _MSC_VER
+
 #endif /*_MSC_VER*/

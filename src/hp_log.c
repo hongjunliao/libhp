@@ -35,7 +35,7 @@ void hp_log(void * f, char const * fmt, ...)
 {
 	FILE * fp = (FILE *)f;
 	int color = (fileno(fp) == fileno(stderr) ? 31 : 0); /* 31 for red, 0 for default */
-#ifdef XHCHAT_NO_STDERR
+#ifdef _MSC_VER
 	if (fp == stderr)
 		fp = stdout;
 #endif /* XHCHAT_NO_STDERR */
@@ -89,8 +89,8 @@ void hp_log(void * f, char const * fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	if(f == stderr) vdzlog_error(fmt, ap);
-	else 		    vdzlog_debug(fmt, ap); 
+	if(f == stderr) { vdzlog_error(fmt, ap); }
+	else 		    { vdzlog_debug(fmt, ap); } 
 	va_end(ap);
 }
 

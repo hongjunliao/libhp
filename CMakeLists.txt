@@ -10,11 +10,10 @@ endif(COMMAND cmake_policy)
 project(libhp)
 
 # deps
-file(GLOB SRCS deps/libyuarel/*.c deps/c-vector/*)
+file(GLOB SRCS deps/libyuarel/*.c deps/c-vector/*.c deps/c-vector/*.cc)
 if(WIN32)
 file(GLOB SRCS ${SRCS}
 	deps/redis/src/sds.c
-	deps/redis/src/zmalloc.c
 	)
 else()
 file(GLOB SRCS ${SRCS}
@@ -24,13 +23,13 @@ endif()
 
 file(GLOB SRCS ${SRCS}
 	deps/redis/src/adlist.c
-	deps/redis/src/dict.c
 	deps/redis/src/zmalloc.c
+	deps/redis/src/dict.c
     deps/redis/src/siphash.c
 	deps/http-parser/http_parser.c
 	deps/gbk-utf8/utf8.c
 	)
-file(GLOB_RECURSE SRCS ${SRCS} src/*.c src/*.cpp include/* )
+file(GLOB_RECURSE SRCS ${SRCS} src/*.c src/*.cpp)
 file(GLOB SRCS ${SRCS} README.md)
 
 add_library(libhp STATIC ${SRCS})
@@ -62,18 +61,35 @@ endif()
 target_link_libraries(libhp dl cjson)
 # message(STATUS ${CMAKE_C_FLAGS})
 
-# test-libhp
+# test-libhp 
 project(test-libhp)
-file(GLOB SRCS test/*.c deps/inih/*)
+file(GLOB SRCS test/test.c deps/inih/*.c)
+
 add_executable(test-libhp ${SRCS} )
+target_compile_options(test-libhp PUBLIC
+    -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
+    # for mongoose
+    -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING
+    # for redis
+    -DDICT_BENCHMARK_MAIN
+    # for cJSON
+    -DcJSON_FREE_PRINT
+)
+if(NOT WIN32)
+	target_compile_options(test-libhp PUBLIC  -O0 -g3  -Wall)
+else()
+	target_compile_options(test-libhp PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
+endif()
+
 target_include_directories(test-libhp PRIVATE include/ deps/ ./)
 if(WIN32)
 target_include_directories(test-libhp PRIVATE deps/redis/deps/ deps/libuv/include/)
 endif()
 
 target_link_directories(test-libhp PRIVATE lib/)
-if(WIN32)
-target_link_libraries(test-libhp libhp uv)
+target_link_libraries(test-libhp libhp dl uv hiredis zlog)
+if(NOT WIN32)
+target_link_libraries(test-libhp uuid curl  z ssl crypto pthread mysqlclient paho-mqtt3a db)
 else()
-target_link_libraries(test-libhp libhp ssl crypto dl cjson hiredis uv zlog uuid pthread db z paho-mqtt3a curl mysqlclient)
+target_link_libraries(test-libhp Win32_Interop lua jemalloc redis-server)
 endif()

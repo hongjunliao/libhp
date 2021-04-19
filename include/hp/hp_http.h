@@ -12,7 +12,9 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "sds/sds.h"     /* sds */
+#ifdef LIBHP_WITH_HTTP
+
+#include "sdsinc.h"     /* sds */
 #include "http_parser.h"
 #include "hp_epoll.h"    /* hp_epoll */
 #include "hp_io.h"       /* hp_eti */
@@ -82,4 +84,5 @@ int test_hp_http_main(int argc, char ** argv);
 }
 #endif
 
+#endif
 #endif /* LIBHP_HTTP_H__ */

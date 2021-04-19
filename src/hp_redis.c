@@ -43,24 +43,24 @@ static void auth_cb(redisAsyncContext *c, void *r, void *privdata)
 	}
 }
 
-static void connectCallback(const redisAsyncContext *c, int status) {
+static void hp_redis_connectCallback(const redisAsyncContext *c, int status) {
     if (status != REDIS_OK) {
         hp_log(stdout, "%s: connect Redis failed: '%s'\n", __FUNCTION__, c->errstr);
         return;
     }
 }
 
-static void disconnectCallback(const redisAsyncContext *c, int status) {
+static void hp_redis_disconnectCallback(const redisAsyncContext *c, int status) {
     if (status != REDIS_OK) {
-        printf("Error: %s\n", c->errstr);
+		hp_log(stderr, "%s: Error: %s\n", __FUNCTION__, c->errstr);
         return;
     }
 }
 
-int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * rev, char const * addr, char const *passwd
+int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * s_ev, char const * addr, char const *passwd
 	, void ( * on_connect)(const redisAsyncContext *c, int status))
 {
-	if(!(redisc && addr))
+	if(!(redisc && s_ev && addr))
 		return -1;
 
 	redisAsyncContext * c = 0;
@@ -79,20 +79,21 @@ int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * rev, char const *
 		return -2;
 	}
 #ifndef _MSC_VER
-	redisLibuvAttach(c, rev);
+	redisLibuvAttach(c, s_ev);
 #else
-	redisAeAttach(rev, c);
+	redisAeAttach(s_ev, c);
 #endif /* _MSC_VER */
 
-	redisAsyncSetConnectCallback(c, on_connect? on_connect : connectCallback);
-	redisAsyncSetDisconnectCallback(c, disconnectCallback);
+	redisAsyncSetConnectCallback(c, on_connect? on_connect : hp_redis_connectCallback);
+	redisAsyncSetDisconnectCallback(c, hp_redis_disconnectCallback);
 
 	if(passwd && strlen(passwd) > 0)
 		redisAsyncCommand(c, auth_cb, /* privdata */0, "AUTH %s", passwd);
 
-	if(gloglevel > 0)
+	if(gloglevel > 0){
 		hp_log(stdout, "%s: connecting to Redis, host='%s:%d', password='%s' ...\n", __FUNCTION__
 			, host, port, (strlen(passwd) > 0? "***" : ""));
+	}
 
 	*redisc = c;
 
@@ -113,7 +114,18 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 #ifndef NDEBUG
 #include "hp_config.h"
 
+#ifndef _MSC_VER
+#define rev_init(s_ev) do { if(uv_loop_init(s_ev) != 0) { s_ev = 0; } } while(0)
+#define rev_run(s_ev) do { uv_run(s_ev, UV_RUN_NOWAIT); } while(0)
+#define rev_close(s_ev) do { uv_loop_close(s_ev); } while(0)
+#else
+#define rev_init(s_ev) do { s_ev = aeCreateEventLoop(1024 * 10);assert(s_ev); } while(0)
+#define rev_run(s_ev) do { aeProcessEvents((s_ev), AE_ALL_EVENTS); } while(0)
+#define rev_close(s_ev) do { aeDeleteEventLoop(s_ev); } while(0)
+#endif /* _MSC_VER */
+
 extern hp_config_t g_conf;
+static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;
 
 static int done = 0;
 static int s_conn_flag = 0;
@@ -153,78 +165,15 @@ int test_hp_redis_main(int argc, char ** argv)
 	hp_config_t cfg = g_conf;
 
 	int r, rc;
-#ifndef _MSC_VER
 	/* test if connect OK */
 	{
 		redisAsyncContext * c = 0;
-		hp_redis_ev_t revobj = { 0 }, * rev = &revobj;
-
-		r = uv_loop_init(rev);
-		assert(r == 0);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_1);
-
-		assert(r == 0 && c);
-		for(;;) {
-			uv_run(rev, UV_RUN_NOWAIT);
-			if(s_conn_flag){
-				fprintf(stdout, "%s: connect to Redis failed, skip this test\n", __FUNCTION__);
-				return 0;
-			}
-		};
-		hp_redis_uninit(c);
-	}
-
-	/* basic test */
-	{
-		redisAsyncContext * c = 0;
-		hp_redis_ev_t revobj = { 0 }, * rev = &revobj;
-
-		r = uv_loop_init(rev);
-		assert(r == 0);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), 0);
-
-		assert(r == 0 && c);
-
-		int ping = 0;
-		for(;!done ;) {
-			if(!ping){
-				rc = redisAsyncCommand(c, test_hp_redis_cb_1, 0/* privdata */, "ping");
-				assert(rc == 0);
-				ping  = 1;
-			}
-			uv_run(rev, UV_RUN_NOWAIT);
-		}
-	}
-	/* reconnect test */	
-	{
-		static redisAsyncContext * c = 0;
-		hp_redis_ev_t revobj = { 0 }, * rev = &revobj;
-
-		r = uv_loop_init(rev);
-		assert(r == 0);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_2);
-
-		assert(r == 0 && c);
-
-		for(; ;) {
-			rc = redisAsyncCommand(c, test_hp_redis_cb_2, 0/* privdata */, "ping");
-			if(rc != 0)
-				printf("%s: Error: %d\n", __FUNCTION__, c->err);
-			uv_run(rev, UV_RUN_NOWAIT);
-
-			sleep(2);
-		}
-	}	
-#else
-	/* test if connect OK */
-	{
-		redisAsyncContext * c = 0;
-		hp_redis_ev_t *rev = aeCreateEventLoop(65535); assert(rev);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_1);
+		rev_init(s_ev);
+		r = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_1);
 
 		assert(r == 0 && c);
 		for (;;) {
-			aeProcessEvents(rev, AE_ALL_EVENTS);
+			rev_run(s_ev);
 			if (s_conn_flag < 0) {
 				fprintf(stdout, "%s: connect to Redis failed, skip this test\n", __FUNCTION__);
 				return 0;
@@ -232,12 +181,14 @@ int test_hp_redis_main(int argc, char ** argv)
 			else if(s_conn_flag > 0) { break; }
 		};
 		hp_redis_uninit(c);
+		rev_close(s_ev);
+		done = 0;
 	}
 	/* basic test */
 	{
 		redisAsyncContext * c = 0;
-		hp_redis_ev_t *rev = aeCreateEventLoop(65535); assert(rev);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), 0);
+		rev_init(s_ev);
+		r = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), 0);
 		assert(r == 0 && c);
 
 		int ping = 0;
@@ -247,26 +198,29 @@ int test_hp_redis_main(int argc, char ** argv)
 				assert(rc == 0);
 				ping = 1;
 			}
-			aeProcessEvents(rev, AE_ALL_EVENTS);
+			rev_run(s_ev);
 		}
 		hp_redis_uninit(c);
+		rev_close(s_ev);
+		done = 0;
 	}
 	/* reconnect test */
 	{
 		static redisAsyncContext * c = 0;
-		hp_redis_ev_t *rev = aeCreateEventLoop(65535); assert(rev);
-		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_2);
+		rev_init(s_ev);
+		r = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), test_hp_redis_on_connect_2);
 		assert(r == 0 && c);
 
 		for (; ;) {
 			rc = redisAsyncCommand(c, test_hp_redis_cb_2, 0/* privdata */, "ping");
 			assert(rc == 0);
-			aeProcessEvents(rev, AE_ALL_EVENTS);
+			rev_run(s_ev);
 			if(done) { break; }
 		}
 		hp_redis_uninit(c);
+		rev_close(s_ev);
+		done = 0;
 	}
-#endif /* _MSC_VER */
 
 	if(s_conn_flag < 0)
 		fprintf(stdout, "%s: connect to Redis failed, skip this test\n", __FUNCTION__);

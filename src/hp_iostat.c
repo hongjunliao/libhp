@@ -7,7 +7,9 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+
 #ifndef _MSC_VER
+
 #include "hp_iostat.h"
 #include <unistd.h>      /* close */
 #include <sys/time.h>    /* gettimeofday */
@@ -118,4 +120,5 @@ int test_hp_stat_main(int argc, char ** argv)
 	return 0;
 }
 #endif /* NDEBUG */
+
 #endif /* _MSC_VER */

@@ -35,12 +35,6 @@ char *strlwr(char *s);
 char *strupr(char *s);
 #endif	/*(defined __GNUC__) && !(defined __CYGWIN__)*//*to lower string*/
 
-#ifdef _MSC_VER
-#define strcasecmp strcmp
-#define strncasecmp strncmp
-//int strncasecmp(const char *__s1, const char *__s2, size_t __n);
-#endif /* _MSC_VER */
-
 //////////////////////////////////////////////////////////////////////////////////
 
 /*string_util.cpp*/

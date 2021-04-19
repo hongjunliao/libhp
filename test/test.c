@@ -7,12 +7,26 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef _MSC_VER
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+#include "redis/src/Win32_Interop/Win32_ThreadControl.h"
+//#define QFORK_MAIN_IMPL
+#include "redis/src/Win32_Interop/Win32_QFork.h"
+#endif /* _MSC_VER */
+
 #include <assert.h>
 #include "hphdrs.h"
 #include "c-vector/cvector.h"
 #include "inih/ini.h"
 #include "redis/src/dict.h"
 #include "zlog.h"
+
+int hiredis_exmaple_ae_main(int argc, char **argv);
+
+#ifdef _MSC_VER
+#define strcasecmp  _stricmp
+#endif /* _MSC_VER */
 
 int gloglevel = 0;
 
@@ -27,7 +41,7 @@ hp_config_t g_conf = cfg;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*====================== Hash table type implementation  ==================== */
-int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
+static int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 {
     int l1,l2;
     DICT_NOTUSED(privdata);
@@ -40,7 +54,7 @@ int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 
 /* A case insensitive version used for the command lookup table and other
  * places where case insensitive non binary-safe comparison is needed. */
-int dictSdsKeyCaseCompare(void *privdata, const void *key1,
+static int dictSdsKeyCaseCompare(void *privdata, const void *key1,
         const void *key2)
 {
     DICT_NOTUSED(privdata);
@@ -48,14 +62,14 @@ int dictSdsKeyCaseCompare(void *privdata, const void *key1,
     return strcasecmp(key1, key2) == 0;
 }
 
-void dictSdsDestructor(void *privdata, void *val)
+static void dictSdsDestructor(void *privdata, void *val)
 {
     DICT_NOTUSED(privdata);
 
     sdsfree(val);
 }
 
-uint64_t dictSdsHash(const void *key) {
+static uint64_t dictSdsHash(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 
@@ -146,6 +160,13 @@ int main(int argc, char ** argv)
 	}
 	else return -1;
 
+#ifdef LIBHP_WITH_REDIS
+//	rc = hiredis_exmaple_ae_main(argc, argv); assert(rc == 0);
+	
+	rc = test_hp_redis_main(argc, argv); assert(rc == 0);
+	rc = test_hp_pub_main(argc, argv); assert(rc == 0);
+#endif
+
 	rc = test_hp_io_t_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_cpp_main(argc, argv); assert(rc == 0);
@@ -154,21 +175,13 @@ int main(int argc, char ** argv)
 	rc = test_hp_cache_main(argc, argv); assert(rc == 0);
 	rc = test_hp_err_main(argc, argv); assert(rc == 0);
 	rc = test_hp_log_main(argc, argv);
-	rc = test_hp_io_main(argc, argv); assert(rc == 0);
-	rc = test_hp_stat_main(argc, argv); assert(rc == 0);
 	rc = test_hp_msg_main(argc, argv); assert(rc == 0);
 	rc = test_hp_net_main(argc, argv); assert(rc == 0);
 	rc = test_string_util_main(argc, argv); assert(rc == 0);
 	rc = test_hp_opt_main(argc, argv); assert(rc == 0);
-	rc = test_hp_var_main(argc, argv);
 
 #ifdef LIBHP_WITH_MYSQL
 	rc = test_hp_mysql_main(argc, argv);
-#endif
-
-#ifdef LIBHP_WITH_REDIS
-	rc = test_hp_redis_main(argc, argv); assert(rc == 0);
-	rc = test_hp_pub_main(argc, argv); assert(rc == 0);
 #endif
 
 #if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
@@ -192,6 +205,10 @@ int main(int argc, char ** argv)
 #endif
 
 #ifndef _MSC_VER
+	rc = test_hp_stat_main(argc, argv); assert(rc == 0);
+	rc = test_hp_io_main(argc, argv); assert(rc == 0);
+	rc = test_hp_var_main(argc, argv);
+
 	rc = test_hp_cjson_main(argc, argv); assert(rc == 0);
 	rc = test_hp_inotify_main(argc, argv);
 	rc = test_hp_epoll_main(argc, argv); assert(rc == 0);

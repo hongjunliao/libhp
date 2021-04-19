@@ -16,9 +16,14 @@
 #include <netinet/in.h>	/* sockaddr_in */
 #include <stdlib.h>     /* uint32_t */
 #else
-#include <winsock2.h>
+#ifdef LIBHP_WITH_WIN32_INTERROP
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 #endif /* _MSC_VER */
-/////////////////////////////////////////////////////////////////////////////////////
+#include "hp_sock_t.h"  /* hp_sock_t */
+ /////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,11 +39,12 @@ ssize_t hp_net_sendmsg1(struct sockaddr_in * origaddr, socklen_t olen
 ssize_t
 hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 			   struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origdst);
-
-int hp_net_listen(int port);
-int hp_net_connect(char const * ip, int port);
+#endif /*_MSC_VER*/
+hp_sock_t hp_net_listen(int port);
+hp_sock_t hp_net_connect(char const * ip, int port);
 int hp_net_connect_addr(char const * addr);
-int hp_net_set_alive(int fd, int interval);
+int hp_net_set_alive(hp_sock_t fd, int interval);
+#ifndef _MSC_VER
 int hp_net_udp_bind(char const * ip, int port);
 
 int hp_net_socketpair(int mwfd[2]);
@@ -55,7 +61,7 @@ ssize_t
 hp_net_recvfrom_flags(int fd, void *ptr, size_t nbytes, int *flagsp,
 			   struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origdst);
 #else
-SOCKET hp_net_connect(char const * ip, int port);
+SOCKET hp_net_connect2(char const * ip, int port);
 #endif /* _MSC_VER */
 
 #ifndef NDEBUG

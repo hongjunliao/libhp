@@ -8,11 +8,17 @@
 #include <stdio.h>
 #include <math.h>          /* pow */
 #include <string.h>        /* strcmp */
+
 #include <stdlib.h>        /* qsort */
 #include <ctype.h>         /* toupper */
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <sys/stat.h>	/*fstat*/
 #include "hp_libc.h"
+
+#ifdef _MSC_VER
+#define strcasecmp  _stricmp
+#define strncasecmp  strncmp
+#endif /* _MSC_VER */
 
 int str_t_fprint(str_t const * s, FILE * f)
 {
@@ -523,10 +529,6 @@ int test_string_util_main(int argc, char ** argv)
 		assert(strcmp(hp_2str(&p, "%d", 20), "20") == 0);
 		assert(strncmp(buf, "1\0hello\020\0", 11) == 0);
 	}
-	char data[] = "If-Modified-Since: Sun, 21 Oct 2018 07:34:06 GMT\r\n\r\n";
-	char * v = data + 19, * end = data + 19 + 29;
-	memmove(v, end, strlen(data) - (end - data));
-
 	char const * hdr = "Host";
 	/* header NOT found: NONE http header */
 	{

@@ -9,17 +9,19 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifndef WIN32
+#include <netinet/in.h>  /* ntohl */
+#else
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#endif /* WIN32 */
+
+
 #include "hp_libc.h"
 #include "hp_msg.h"
 #include "hp_z.h"
 #include "hp_log.h"
 #include "str_dump.h"
-
-#ifndef WIN32
-#include <netinet/in.h>  /* ntohl */
-#else
-#include <winsock2.h>
-#endif /* WIN32 */
 
 #include <stdio.h>
 #include <stdlib.h>

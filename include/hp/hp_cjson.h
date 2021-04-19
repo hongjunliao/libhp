@@ -12,8 +12,6 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
-
 #include <string.h>
 #include <assert.h>
 #include "cJSON/cJSON.h"	/* cJSON */
@@ -95,5 +93,4 @@ int test_hp_cjson_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
-#endif /* _MSC_VER */
 #endif /* LIBHP_CJSON_H */

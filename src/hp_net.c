@@ -10,6 +10,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #include "hp_net.h"
+#include "hp_sock_t.h"  /* hp_sock_t */
 #include "hp_log.h"  /* hp_log */
 #include <stdio.h>
 #include <assert.h>     /* define NDEBUG to disable assertion */
@@ -31,16 +32,19 @@
 #include <string.h>     /* strerror */
 #include <errno.h>
 #else
-#include <winsock2.h>
 #include <WS2tcpip.h>   /* inet_pton */
 #endif //_MSC_VER
 
-#ifndef _MSC_VER
 #define LISTENQ 512  /* for listen() */
 
+#ifdef _MSC_VER
+#define ioctl ioctlsocket
+#endif //_MSC_VER
+
+#ifndef _MSC_VER
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len)
 {
-	if(!(ip && buf))
+	if (!(ip && buf))
 		return -1;
 
 	struct sockaddr_in servaddr = { 0 };
@@ -49,7 +53,7 @@ ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_
 	inet_pton(AF_INET, ip, &servaddr.sin_addr);
 
 	ssize_t n = sendto(fd, buf, len, 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-	if(n <= 0){
+	if (n <= 0) {
 		fprintf(stderr, "%s: sendto: errno=%d/'%s'\n", __FUNCTION__, errno, strerror(errno));
 	}
 	return n;
@@ -57,7 +61,7 @@ ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_
 
 ssize_t hp_net_sendmsg2(int fd, char const * ip, int port, struct iovec * iov, size_t iovlen)
 {
-	if(!(ip && iov))
+	if (!(ip && iov))
 		return -1;
 
 	struct sockaddr_in servaddr = { 0 };
@@ -72,7 +76,7 @@ ssize_t hp_net_sendmsg2(int fd, char const * ip, int port, struct iovec * iov, s
 	msg.msg_iovlen = iovlen;
 
 	ssize_t n = sendmsg(fd, &msg, 0);
-	if(n <= 0){
+	if (n <= 0) {
 		fprintf(stderr, "%s: sendmsg: errno=%d/'%s'\n", __FUNCTION__, errno, strerror(errno));
 	}
 	return n;
@@ -80,7 +84,7 @@ ssize_t hp_net_sendmsg2(int fd, char const * ip, int port, struct iovec * iov, s
 
 ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, struct iovec * iov, size_t iovlen)
 {
-	if(!(servaddr && iov))
+	if (!(servaddr && iov))
 		return -1;
 
 	int i;
@@ -96,7 +100,7 @@ ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, str
 		nbytes += iov[i].iov_len;
 
 	ssize_t n = sendmsg(fd, &msg, 0);
-	if(n != nbytes){
+	if (n != nbytes) {
 		fprintf(stderr, "%s: sendmsg: errno=%d/'%s'\n", __FUNCTION__, errno, strerror(errno));
 	}
 	return n;
@@ -110,7 +114,7 @@ ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, str
  * */
 ssize_t
 hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
-			   struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origindst)
+	struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origindst)
 {
 	struct msghdr	msg;
 	struct iovec	iov[1];
@@ -118,9 +122,9 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 
 	struct cmsghdr	*cmptr;
 	union {
-	  struct cmsghdr	cm;
-	  char				control[CMSG_SPACE(sizeof(struct in_addr)) +
-								CMSG_SPACE(sizeof(struct sockaddr_in))];
+		struct cmsghdr	cm;
+		char				control[CMSG_SPACE(sizeof(struct in_addr)) +
+			CMSG_SPACE(sizeof(struct sockaddr_in))];
 	} control_un;
 
 	msg.msg_control = control_un.control;
@@ -134,7 +138,7 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1;
 
-	if ( (n = recvmsg(fd, &msg, *flagsp)) < 0)
+	if ((n = recvmsg(fd, &msg, *flagsp)) < 0)
 		return(n);
 
 	*salenptr = msg.msg_namelen;	/* pass back results */
@@ -148,75 +152,77 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 		return(n);
 
 	for (cmptr = CMSG_FIRSTHDR(&msg); cmptr != NULL;
-		 cmptr = CMSG_NXTHDR(&msg, cmptr)) {
+		cmptr = CMSG_NXTHDR(&msg, cmptr)) {
 
 		if (cmptr->cmsg_level == SOL_IP &&
 			cmptr->cmsg_type == IP_ORIGDSTADDR) {
 
 			memcpy(origindst, CMSG_DATA(cmptr),
-				   sizeof(struct sockaddr_in));
+				sizeof(struct sockaddr_in));
 
-//			char ip[16];
-//			inet_ntop(AF_INET, &origindst->sin_addr, ip, sizeof(ip));
-//			fprintf(stdout, "%s: IP_ORIGDSTADDR=%X:%d/'%s:%d'\n", __FUNCTION__
-//					, origindst->sin_addr.s_addr, origindst->sin_port
-//					, ip, ntohs(origindst->sin_port));
+			//			char ip[16];
+			//			inet_ntop(AF_INET, &origindst->sin_addr, ip, sizeof(ip));
+			//			fprintf(stdout, "%s: IP_ORIGDSTADDR=%X:%d/'%s:%d'\n", __FUNCTION__
+			//					, origindst->sin_addr.s_addr, origindst->sin_port
+			//					, ip, ntohs(origindst->sin_port));
 			continue;
 		}
 	}
 	return(n);
 }
+#endif /* _MSC_VER */
+
 /*
  * NOTE: code from hiredis/net.c
  * */
-int hp_net_set_alive(int fd, int interval)
+int hp_net_set_alive(hp_sock_t fd, int interval)
 {
-    int val = 1;
+	int val = 1;
 
-    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1){
-    	fprintf(stderr, "%s: setsockopt(SOL_SOCKET, SO_KEEPALIVE): %s\n", __FUNCTION__, strerror(errno));
-        return -1;
-    }
+	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1) {
+		fprintf(stderr, "%s: setsockopt(SOL_SOCKET, SO_KEEPALIVE): %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
 
-    val = interval;
+	val = interval;
 
 #ifdef _OSX
-    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val)) < 0) {
-    	fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPALIVE): %s\n", __FUNCTION__, strerror(errno));
-        return -1;
-    }
+	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val)) < 0) {
+		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPALIVE): %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
 #else
 #if defined(__GLIBC__) && !defined(__FreeBSD_kernel__)
-    val = interval;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
-    	fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPIDLE): %s\n", __FUNCTION__, strerror(errno));
-        return -1;
-    }
+	val = interval;
+	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
+		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPIDLE): %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
 
-    val = interval/3;
-    if (val == 0) val = 1;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
-    	fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPINTVL): %s\n", __FUNCTION__, strerror(errno));
-        return -1;
-    }
+	val = interval / 3;
+	if (val == 0) val = 1;
+	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
+		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPINTVL): %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
 
-    val = 3;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
-    	fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPCNT): %s\n", __FUNCTION__, strerror(errno));
-        return -1;
-    }
+	val = 3;
+	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
+		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPCNT): %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
 #endif
-#endif
+#endif //_OSX
 
-    return 0;
+	return 0;
 }
 
-int hp_net_listen(int port)
+hp_sock_t hp_net_listen(int port)
 {
-	int fd;
+	hp_sock_t fd;
 	struct sockaddr_in	servaddr = { 0 };
 
-	if((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+	if ((fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		fprintf(stderr, "%s: socket error('%s')\n", __FUNCTION__, strerror(errno));
 		return -1;
 	}
@@ -225,44 +231,48 @@ int hp_net_listen(int port)
 	servaddr.sin_port = htons(port);
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    /* Make sure connection-intensive things like the redis benckmark
-     * will be able to close/open sockets a zillion of times */
-    int yes = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-    	fprintf(stderr, "%s: setsockopt SO_REUSEADDR: %s", __FUNCTION__, strerror(errno));
-        close(fd);
-        return -1;
-    }
-
+	/* Make sure connection-intensive things like the redis benckmark
+	 * will be able to close/open sockets a zillion of times */
+	int yes = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+		fprintf(stderr, "%s: setsockopt SO_REUSEADDR: %s", __FUNCTION__, strerror(errno));
+		close(fd);
+		return -1;
+	}
 	unsigned long sockopt = 1;
-	if(ioctl(fd, FIONBIO, &sockopt) < 0){
+#ifdef LIBHP_WITH_WIN32_INTERROP
+	if (ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt) < 0) {
+#else
+	if (ioctl(fd, FIONBIO, &sockopt) < 0) {
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
 		return -1;
 	}
 
-	if(bind(fd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0){
+	if (bind(fd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
 		fprintf(stderr, "%s: bind error('%s'), port=%d\n"
-				, __FUNCTION__, strerror(errno), port);
+			, __FUNCTION__, strerror(errno), port);
 		close(fd);
 		return -1;
 	}
 
-	if(listen(fd, LISTENQ) < 0){
+	if (listen(fd, LISTENQ) < 0) {
 		fprintf(stderr, "%s: listen error(%s), port=%d\n"
-				, __FUNCTION__, strerror(errno), port);
+			, __FUNCTION__, strerror(errno), port);
 		close(fd);
 		return -1;
 	}
 	return fd;
-}
+	}
 
+#ifndef _MSC_VER
 int hp_net_udp_bind(char const * ip, int port)
 {
 	int fd;
 	struct sockaddr_in	servaddr = { 0 };
 
-	if((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0){
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 		fprintf(stderr, "%s: socket error('%s')\n", __FUNCTION__, strerror(errno));
 		return -1;
 	}
@@ -271,40 +281,40 @@ int hp_net_udp_bind(char const * ip, int port)
 	servaddr.sin_port = htons(port);
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-//	inet_pton(AF_INET, (ip? ip : "0.0.0.0"), &(servaddr.sin_addr));
-    /* Make sure connection-intensive things like the redis benckmark
-     * will be able to close/open sockets a zillion of times */
-    int yes = 1;
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
-        fprintf(stderr, "%s: setsockopt SO_REUSEADDR: %s", __FUNCTION__, strerror(errno));
-        close(fd);
-        return -1;
-    }
+	//	inet_pton(AF_INET, (ip? ip : "0.0.0.0"), &(servaddr.sin_addr));
+		/* Make sure connection-intensive things like the redis benckmark
+		 * will be able to close/open sockets a zillion of times */
+	int yes = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+		fprintf(stderr, "%s: setsockopt SO_REUSEADDR: %s", __FUNCTION__, strerror(errno));
+		close(fd);
+		return -1;
+	}
 
 	yes = 1;
-    if (setsockopt(fd, SOL_IP, IP_TRANSPARENT, &yes, sizeof(yes)) == -1) {
-        fprintf(stderr, "%s: setsockopt IP_TRANSPARENT: %s", __FUNCTION__, strerror(errno));
-        close(fd);
-        return -1;
-    }
+	if (setsockopt(fd, SOL_IP, IP_TRANSPARENT, &yes, sizeof(yes)) == -1) {
+		fprintf(stderr, "%s: setsockopt IP_TRANSPARENT: %s", __FUNCTION__, strerror(errno));
+		close(fd);
+		return -1;
+	}
 
-    yes = 1;
-    if (setsockopt(fd, SOL_IP, IP_RECVORIGDSTADDR, &yes, sizeof(yes)) == -1) {
-        fprintf(stderr, "%s: setsockopt IP_RECVORIGDSTADDR: %s", __FUNCTION__, strerror(errno));
-        close(fd);
-        return -1;
-    }
+	yes = 1;
+	if (setsockopt(fd, SOL_IP, IP_RECVORIGDSTADDR, &yes, sizeof(yes)) == -1) {
+		fprintf(stderr, "%s: setsockopt IP_RECVORIGDSTADDR: %s", __FUNCTION__, strerror(errno));
+		close(fd);
+		return -1;
+	}
 
 	unsigned long sockopt = 1;
-	if(ioctl(fd, FIONBIO, &sockopt) < 0){
+	if (ioctl(fd, FIONBIO, &sockopt) < 0) {
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
 		return -1;
 	}
 
-	if(bind(fd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0){
+	if (bind(fd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
 		fprintf(stderr, "%s: bind error('%s'), port=%d\n"
-				, __FUNCTION__, strerror(errno), port);
+			, __FUNCTION__, strerror(errno), port);
 		close(fd);
 		return -1;
 	}
@@ -316,30 +326,31 @@ int hp_net_socketpair(int mwfd[2])
 {
 	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, mwfd) < 0) {
 		fprintf(stderr, "%s: socketpair failed, errno=%d, error='%s'\n",
-				__FUNCTION__, errno, strerror(errno));
+			__FUNCTION__, errno, strerror(errno));
 		return -1;
 	}
 	unsigned long sockopt = 1;
 	if (ioctl(mwfd[0], FIONBIO, &sockopt) < 0) {
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n",
-				__FUNCTION__, mwfd[0]);
+			__FUNCTION__, mwfd[0]);
 		return -1;
 	}
 	sockopt = 1;
 	if (ioctl(mwfd[1], FIONBIO, &sockopt) < 0) {
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n",
-				__FUNCTION__, mwfd[1]);
+			__FUNCTION__, mwfd[1]);
 		return -1;
 	}
 	return 0;
 }
+#endif /* _MSC_VER */
 
 char * get_ipport_cstr(int sockfd, char * buf)
 {
 	struct sockaddr_in cliaddr = { 0 };
 	socklen_t len;
-	getsockname(sockfd, (struct sockaddr * )&cliaddr, &len);
-	if(!buf){
+	getsockname(sockfd, (struct sockaddr *)&cliaddr, &len);
+	if (!buf) {
 		static char sbuf[64] = "ip:port";
 		buf = sbuf;
 	}
@@ -351,7 +362,7 @@ char * get_ipport_cstr(int sockfd, char * buf)
 
 char * get_ipport_cstr2(struct sockaddr_in * addr, char const * sep, char * buf, int len)
 {
-	if(!(addr && sep && buf && len > 0))
+	if (!(addr && sep && buf && len > 0))
 		return 0;
 
 	buf[0] = '\0';
@@ -365,7 +376,7 @@ char * get_ipport_cstr2(struct sockaddr_in * addr, char const * sep, char * buf,
 
 char * hp_net_get_ipport2(struct sockaddr_in * addr, char * ip, int iplen, int * port)
 {
-	if(!(addr && ip && port))
+	if (!(addr && ip && port))
 		return ip;
 
 	ip[0] = '\0';
@@ -378,11 +389,11 @@ char * hp_net_get_ipport2(struct sockaddr_in * addr, char * ip, int iplen, int *
 
 char * get_ipport(int sockfd, char * ip, int len, int * port)
 {
-	if(!(ip && port)) return ip;
+	if (!(ip && port)) return ip;
 
 	struct sockaddr_in cliaddr = { 0 };
 	socklen_t slen;
-	getsockname(sockfd, (struct sockaddr * )&cliaddr, &slen);
+	getsockname(sockfd, (struct sockaddr *)&cliaddr, &slen);
 	inet_ntop(AF_INET, &cliaddr.sin_addr, ip, len);
 
 	*port = ntohs(cliaddr.sin_port);
@@ -394,375 +405,45 @@ char * get_ipport(int sockfd, char * ip, int len, int * port)
  * @return: return the connected fd on success
  * (including errno == EINPROGRESS), -1 on error,
  *  */
-int hp_net_connect(char const * ip, int port)
+hp_sock_t hp_net_connect(char const * ip, int port)
 {
-    struct sockaddr_in servaddr = { 0 };
-    int fd = -1;
+#if (defined LIBHP_WITH_WIN32_INTERROP) || (!defined _MSC_VER)
+	struct sockaddr_in servaddr = { 0 };
+	int fd = -1;
 
-    fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0){
-    	fprintf(stderr, "%s: create socket failed(%s), ip='%s', port=%d.\n", __FUNCTION__, strerror(errno), ip, port);
-        return -1;
-    }
-    if(inet_pton(AF_INET, ip, &servaddr.sin_addr) <= 0){
-    	fprintf(stderr, "%s: inet_pton failed(%s), ip='%s', port=%d\n", __FUNCTION__, strerror(errno), ip, port);
-    	close(fd);
-        return -1;
-    }
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(port);
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0) {
+		fprintf(stderr, "%s: create socket failed(%s), ip='%s', port=%d.\n", __FUNCTION__, strerror(errno), ip, port);
+		return -1;
+	}
+	if (inet_pton(AF_INET, ip, &servaddr.sin_addr) <= 0) {
+		fprintf(stderr, "%s: inet_pton failed(%s), ip='%s', port=%d\n", __FUNCTION__, strerror(errno), ip, port);
+		close(fd);
+		return -1;
+	}
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(port);
 
 	unsigned long sockopt = 1;
-	if(ioctl(fd, FIONBIO, &sockopt) < 0){
+#if (defined _MSC_VER) && (defined LIBHP_WITH_WIN32_INTERROP)
+	if (ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt) < 0) {
+#else
+	if (ioctl(fd, FIONBIO, &sockopt) < 0) {
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
 		return -1;
 	}
-	if(connect(fd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr)) < 0){
-		if(errno != EINPROGRESS){
+	if (connect(fd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr)) < 0) {
+		if (errno != EINPROGRESS) {
 			fprintf(stderr, "%s: connect error(%s), ip='%s', port=%d.\n", __FUNCTION__, strerror(errno), ip, port);
 			close(fd);
 			return -1;
 		}
-    }
+	}
 
 	return fd;
-}
-
-int hp_net_connect_addr(char const * addr)
-{
-	char buf[128] = "";
-	strncpy(buf, addr, sizeof(buf));
-	char * ip = buf, * p = strchr(buf, ':');
-	int port = 0;
-	if(p){
-		*p = '\0';
-		port = atoi(p + 1);
-	}
-	return hp_net_connect(ip , port);
-}
-
-int fd_set_recvbuf(int fd, int * oldsz, int newsz)
-{
-	if(!(fd > 0)) return -1;
-	if(!(newsz > 0)) return 0;
-
-	int err;
-	int len, * plen = &len;
-	socklen_t nOptLen = sizeof(len);
-	if(oldsz) plen = oldsz;
-
-	err = getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)plen, &nOptLen);
-	if(!(err == 0)) {
-		fprintf(stderr, "%s: getsockopt(SO_RCVBUF) failed, fd=%d, new=%d, errno=%d, error='%s'\n"
-				, __FUNCTION__, fd, newsz, errno, strerror(errno));
-		return -1;
-	}
-
-	err = setsockopt(fd,SOL_SOCKET,SO_RCVBUF,(char*)&newsz, nOptLen);
-	if(!(err == 0)) {
-		fprintf(stderr, "%s: setsockopt(SO_RCVBUF) failed, fd=%d, old=%d, new=%d, errno=%d, error='%s'\n"
-				, __FUNCTION__, fd, len, newsz, errno, strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
-int fd_set_sendbuf(int fd, int * oldsz, int newsz)
-{
-	if(!(fd > 0)) return -1;
-	if(!(newsz > 0)) return 0;
-
-	int err;
-	int len, * plen = &len;
-	socklen_t nOptLen = sizeof(len);
-	if(oldsz) plen = oldsz;
-
-	err = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)plen, &nOptLen);
-	if(!(err == 0)) return -1;
-
-	err = setsockopt(fd,SOL_SOCKET,SO_SNDBUF,(char*)&newsz, nOptLen);
-	if(!(err == 0)) return -1;
-
-	return 0;
-}
-
-static void before_readv(struct iovec * vec, int count,
-		size_t nread, int * vec_n)
-{
-	size_t r = 0;
-	int i = *vec_n;
-	for(; i != count; ++i){
-		r += vec[i].iov_len;
-		if(nread < r){
-			size_t left = r - nread;
-			vec[i].iov_base = (char *)(vec[i].iov_base) + vec[i].iov_len - left;
-			vec[i].iov_len = left;
-
-			*vec_n = i;
-			break;
-		}
-	}
-}
-
-ssize_t do_readv(int fd, struct iovec * vec, int count, size_t bytes)
-{
-	if(!vec) return -1;
-
-	size_t nread  = 0;
-	int vec_n = 0;
-	for(;;){
-		ssize_t r = readv(fd, vec + vec_n, count - vec_n);
-		if ( r < 0) {
-			if (errno == EINTR || errno == EAGAIN)
-				continue;		/* and call read() again */
-			else
-				return(-1);
-		}
-		else if (r == 0)
-			break;				/* EOF */
-
-		nread += r;
-		if(nread == bytes)
-			return nread;
-
-		before_readv(vec, count, r, &vec_n);
-	}
-	return nread;
-}
-
-size_t readv_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t bytes)
-{
-	if(!(vec && n && err)) return 0;
-
-	*n = 0;
-	size_t nread  = 0;
-	for(;;){
-		ssize_t r = readv(fd, vec + *n, count - *n);
-		if ( r < 0) {
-			/* and call read() again later */
-			if (errno == EINTR || errno == EAGAIN)
-				*err = EAGAIN;
-			else
-				*err = errno;
-			break;
-		}
-		else if (r == 0){ /* EOF */
-			*err = -1;
-			break;
-		}
-		nread += r;
-		if(nread == bytes){
-			*n = count;
-			*err = 0;
-			break;
-		}
-
-		before_readv(vec, count, r, n);
-	}
-	return nread;
-}
-
-size_t read_a(int fd, int * err, char * buf, size_t len, size_t bytes)
-{
-	if(!(fd >= 0 && err && buf && len > 0))
-		return 0;
-
-	size_t nread  = 0;
-	for(;;){
-		ssize_t r = read(fd, buf + nread, len - nread);
-		if ( r < 0) {
-			/* and call read() again later */
-			if (errno == EINTR || errno == EAGAIN)
-				*err = EAGAIN;
-			else
-				*err = errno;
-			break;
-		}
-		else if (r == 0){ /* EOF */
-			*err = -1;
-			break;
-		}
-		nread += r;
-		if(nread == bytes){
-			*err = 0;
-			break;
-		}
-	}
-	return nread;
-}
-/*
- * Write "n" bytes to a descriptor.
- * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e
- * */
-ssize_t	writen(int fd, const char *vptr, size_t n)
-{
-	size_t		nleft;
-	ssize_t		nwritten;
-	const char	*ptr;
-
-	ptr = vptr;
-	nleft = n;
-	while (nleft > 0) {
-		if ( (nwritten = write(fd, ptr, nleft)) <= 0) {
-			if (nwritten < 0 && (errno == EINTR || errno == EAGAIN))
-				nwritten = 0;		/* and call write() again */
-			else
-				return(-1);			/* error */
-		}
-
-		nleft -= nwritten;
-		ptr   += nwritten;
-	}
-	return(n);
-}
-
-/*
- * Read "n" bytes from a descriptor
- * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e
- * */
-ssize_t	readn(int fd, void *vptr, size_t n)
-{
-	size_t	nleft;
-	ssize_t	nread;
-	char	*ptr;
-
-	ptr = (char *)vptr;
-	nleft = n;
-	while (nleft > 0) {
-		if ( (nread = read(fd, ptr, nleft)) < 0) {
-			if (errno == EINTR || errno == EAGAIN)
-				nread = 0;		/* and call read() again */
-			else
-				return(-1);
-		} else if (nread == 0)
-			break;				/* EOF */
-
-		nleft -= nread;
-		ptr   += nread;
-	}
-	return(n - nleft);		/* return >= 0 */
-}
-
-//#include <stdio.h>
-//#include <string.h>
-//#include <arpa/inet.h>
-#include <netdb.h>
-//#include <stdlib.h>
-
-/* NOTE:
- * from http://blog.csdn.net/small_qch/article/details/16805857
-*/
-int get_ip_from_host(char *ipbuf, const char *host, int maxlen)
-{
-    struct sockaddr_in sa;
-    sa.sin_family = AF_INET;
-    /* TODO: inet_pton */
-    if (inet_aton(host, &sa.sin_addr) == 0)
-    {
-        struct hostent *he;
-        he = gethostbyname(host);
-        if (he == NULL)
-            return -1;
-        memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
-    }
-    strncpy(ipbuf, inet_ntoa(sa.sin_addr), maxlen);
-    return 0;
-}
-
-/*
- * @return: 0 on false; else true */
-int netutil_same_subnet(int mask, char const * ip1, char const * ip2)
-{
-	if(!(ip1 && ip2))
-		return 0;
-	if(mask < 0) {
-		char const * netmask = "255.255.255.0";
-		struct sockaddr_in addr1 = { 0 }, addr2 = { 0 }, addr = { 0 };
-		if(inet_pton(AF_INET, ip1, &addr1.sin_addr) <= 0 ||
-				inet_pton(AF_INET, ip2, &addr2.sin_addr) <= 0 ||
-				inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0){
-			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%s', ip2='%s', mask='%s'.\n"
-					, __FUNCTION__, strerror(errno)
-					, ip1, ip2, netmask);
-			return 0;
-		}
-		return (addr1.sin_addr.s_addr & addr.sin_addr.s_addr) ==
-				(addr2.sin_addr.s_addr & addr.sin_addr.s_addr)? 1 : 0;
-	}
-	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
-	return 0;
-}
-
-/* same as @see netutil_same_subnet */
-int netutil_same_subnet3(int mask, uint32_t ip1, char const * ip2)
-{
-	if(!(ip1 && ip2))
-		return 0;
-	if(mask < 0) {
-		char const * netmask = "255.255.255.0";
-		struct sockaddr_in addr2 = { 0 }, addr = { 0 };
-		if(inet_pton(AF_INET, ip2, &addr2.sin_addr) <= 0 ||
-				inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0){
-			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%u', ip2='%s', mask='%s'.\n"
-					, __FUNCTION__, strerror(errno)
-					, ip1, ip2, netmask);
-			return 0;
-		}
-		return (ip1 & addr.sin_addr.s_addr) ==
-				(addr2.sin_addr.s_addr & addr.sin_addr.s_addr)? 1 : 0;
-	}
-	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
-	return 0;
-}
-
-/* same as @see netutil_same_subnet */
-static int netutil_same_subnet2(int mask, char const * ip1, uint32_t ip2)
-{
-	if(mask < 0) {
-		char const * netmask = "255.255.255.0";
-		struct sockaddr_in addr1 = { 0 }, addr = { 0 };
-		if(inet_pton(AF_INET, ip1, &addr1.sin_addr) <= 0 ||
-				inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0){
-			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%s', ip2=%d, mask='%s'.\n"
-					, __FUNCTION__, strerror(errno)
-					, ip1, ip2, netmask);
-			return 0;
-		}
-		return (addr1.sin_addr.s_addr & addr.sin_addr.s_addr) ==
-				(ip2 & addr.sin_addr.s_addr)? 1 : 0;
-	}
-	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
-	return 0;
-
-}
-/* @param ips: ':' seperated IPs, e.g. '172.28.0.170:172.19.255.95'
- * @return: 0 on false; else true */
-int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
-{
-	if(!(ips && ips[0] != '\0')) return 0;
-
-	char buf[512];
-	strncpy(buf, ips, sizeof(buf) - 2);
-	char * ptr = strchr(buf, '\0');
-	*ptr = ':';
-	*(ptr + 1) = '\0';
-
-	char * p = buf, * q = strchr(p, ':');
-	for(; (q = strchr(p, ':')); p = q + 1){
-		if(p == q)
-			continue;
-		*q = '\0';
-		if(netutil_same_subnet2(mask, p, ip))
-			return 1;
-	}
-	return 0;
-}
-
 #else
-SOCKET hp_net_connect(char const * ip, int port)
-{
 	struct sockaddr_in server_addr;
 
 	SOCKET sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
@@ -787,8 +468,342 @@ SOCKET hp_net_connect(char const * ip, int port)
 	}
 
 	return sock;
+
+#endif /* LIBHP_WITH_WIN32_INTERROP */
+	}
+#ifndef _MSC_VER
+
+int hp_net_connect_addr(char const * addr)
+{
+	char buf[128] = "";
+	strncpy(buf, addr, sizeof(buf));
+	char * ip = buf, *p = strchr(buf, ':');
+	int port = 0;
+	if (p) {
+		*p = '\0';
+		port = atoi(p + 1);
+	}
+	return hp_net_connect(ip, port);
 }
 
+int fd_set_recvbuf(int fd, int * oldsz, int newsz)
+{
+	if (!(fd > 0)) return -1;
+	if (!(newsz > 0)) return 0;
+
+	int err;
+	int len, *plen = &len;
+	socklen_t nOptLen = sizeof(len);
+	if (oldsz) plen = oldsz;
+
+	err = getsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)plen, &nOptLen);
+	if (!(err == 0)) {
+		fprintf(stderr, "%s: getsockopt(SO_RCVBUF) failed, fd=%d, new=%d, errno=%d, error='%s'\n"
+			, __FUNCTION__, fd, newsz, errno, strerror(errno));
+		return -1;
+	}
+
+	err = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (char*)&newsz, nOptLen);
+	if (!(err == 0)) {
+		fprintf(stderr, "%s: setsockopt(SO_RCVBUF) failed, fd=%d, old=%d, new=%d, errno=%d, error='%s'\n"
+			, __FUNCTION__, fd, len, newsz, errno, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+int fd_set_sendbuf(int fd, int * oldsz, int newsz)
+{
+	if (!(fd > 0)) return -1;
+	if (!(newsz > 0)) return 0;
+
+	int err;
+	int len, *plen = &len;
+	socklen_t nOptLen = sizeof(len);
+	if (oldsz) plen = oldsz;
+
+	err = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)plen, &nOptLen);
+	if (!(err == 0)) return -1;
+
+	err = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (char*)&newsz, nOptLen);
+	if (!(err == 0)) return -1;
+
+	return 0;
+}
+
+static void before_readv(struct iovec * vec, int count,
+	size_t nread, int * vec_n)
+{
+	size_t r = 0;
+	int i = *vec_n;
+	for (; i != count; ++i) {
+		r += vec[i].iov_len;
+		if (nread < r) {
+			size_t left = r - nread;
+			vec[i].iov_base = (char *)(vec[i].iov_base) + vec[i].iov_len - left;
+			vec[i].iov_len = left;
+
+			*vec_n = i;
+			break;
+		}
+	}
+}
+
+ssize_t do_readv(int fd, struct iovec * vec, int count, size_t bytes)
+{
+	if (!vec) return -1;
+
+	size_t nread = 0;
+	int vec_n = 0;
+	for (;;) {
+		ssize_t r = readv(fd, vec + vec_n, count - vec_n);
+		if (r < 0) {
+			if (errno == EINTR || errno == EAGAIN)
+				continue;		/* and call read() again */
+			else
+				return(-1);
+		}
+		else if (r == 0)
+			break;				/* EOF */
+
+		nread += r;
+		if (nread == bytes)
+			return nread;
+
+		before_readv(vec, count, r, &vec_n);
+	}
+	return nread;
+}
+
+size_t readv_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t bytes)
+{
+	if (!(vec && n && err)) return 0;
+
+	*n = 0;
+	size_t nread = 0;
+	for (;;) {
+		ssize_t r = readv(fd, vec + *n, count - *n);
+		if (r < 0) {
+			/* and call read() again later */
+			if (errno == EINTR || errno == EAGAIN)
+				*err = EAGAIN;
+			else
+				*err = errno;
+			break;
+		}
+		else if (r == 0) { /* EOF */
+			*err = -1;
+			break;
+		}
+		nread += r;
+		if (nread == bytes) {
+			*n = count;
+			*err = 0;
+			break;
+		}
+
+		before_readv(vec, count, r, n);
+	}
+	return nread;
+}
+
+size_t read_a(int fd, int * err, char * buf, size_t len, size_t bytes)
+{
+	if (!(fd >= 0 && err && buf && len > 0))
+		return 0;
+
+	size_t nread = 0;
+	for (;;) {
+		ssize_t r = read(fd, buf + nread, len - nread);
+		if (r < 0) {
+			/* and call read() again later */
+			if (errno == EINTR || errno == EAGAIN)
+				*err = EAGAIN;
+			else
+				*err = errno;
+			break;
+		}
+		else if (r == 0) { /* EOF */
+			*err = -1;
+			break;
+		}
+		nread += r;
+		if (nread == bytes) {
+			*err = 0;
+			break;
+		}
+	}
+	return nread;
+}
+/*
+ * Write "n" bytes to a descriptor.
+ * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e
+ * */
+ssize_t	writen(int fd, const char *vptr, size_t n)
+{
+	size_t		nleft;
+	ssize_t		nwritten;
+	const char	*ptr;
+
+	ptr = vptr;
+	nleft = n;
+	while (nleft > 0) {
+		if ((nwritten = write(fd, ptr, nleft)) <= 0) {
+			if (nwritten < 0 && (errno == EINTR || errno == EAGAIN))
+				nwritten = 0;		/* and call write() again */
+			else
+				return(-1);			/* error */
+		}
+
+		nleft -= nwritten;
+		ptr += nwritten;
+	}
+	return(n);
+}
+
+/*
+ * Read "n" bytes from a descriptor
+ * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e
+ * */
+ssize_t	readn(int fd, void *vptr, size_t n)
+{
+	size_t	nleft;
+	ssize_t	nread;
+	char	*ptr;
+
+	ptr = (char *)vptr;
+	nleft = n;
+	while (nleft > 0) {
+		if ((nread = read(fd, ptr, nleft)) < 0) {
+			if (errno == EINTR || errno == EAGAIN)
+				nread = 0;		/* and call read() again */
+			else
+				return(-1);
+		}
+		else if (nread == 0)
+			break;				/* EOF */
+
+		nleft -= nread;
+		ptr += nread;
+	}
+	return(n - nleft);		/* return >= 0 */
+}
+
+//#include <stdio.h>
+//#include <string.h>
+//#include <arpa/inet.h>
+#include <netdb.h>
+//#include <stdlib.h>
+
+/* NOTE:
+ * from http://blog.csdn.net/small_qch/article/details/16805857
+*/
+int get_ip_from_host(char *ipbuf, const char *host, int maxlen)
+{
+	struct sockaddr_in sa;
+	sa.sin_family = AF_INET;
+	/* TODO: inet_pton */
+	if (inet_aton(host, &sa.sin_addr) == 0)
+	{
+		struct hostent *he;
+		he = gethostbyname(host);
+		if (he == NULL)
+			return -1;
+		memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
+	}
+	strncpy(ipbuf, inet_ntoa(sa.sin_addr), maxlen);
+	return 0;
+}
+
+/*
+ * @return: 0 on false; else true */
+int netutil_same_subnet(int mask, char const * ip1, char const * ip2)
+{
+	if (!(ip1 && ip2))
+		return 0;
+	if (mask < 0) {
+		char const * netmask = "255.255.255.0";
+		struct sockaddr_in addr1 = { 0 }, addr2 = { 0 }, addr = { 0 };
+		if (inet_pton(AF_INET, ip1, &addr1.sin_addr) <= 0 ||
+			inet_pton(AF_INET, ip2, &addr2.sin_addr) <= 0 ||
+			inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0) {
+			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%s', ip2='%s', mask='%s'.\n"
+				, __FUNCTION__, strerror(errno)
+				, ip1, ip2, netmask);
+			return 0;
+		}
+		return (addr1.sin_addr.s_addr & addr.sin_addr.s_addr) ==
+			(addr2.sin_addr.s_addr & addr.sin_addr.s_addr) ? 1 : 0;
+	}
+	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
+	return 0;
+}
+
+/* same as @see netutil_same_subnet */
+int netutil_same_subnet3(int mask, uint32_t ip1, char const * ip2)
+{
+	if (!(ip1 && ip2))
+		return 0;
+	if (mask < 0) {
+		char const * netmask = "255.255.255.0";
+		struct sockaddr_in addr2 = { 0 }, addr = { 0 };
+		if (inet_pton(AF_INET, ip2, &addr2.sin_addr) <= 0 ||
+			inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0) {
+			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%u', ip2='%s', mask='%s'.\n"
+				, __FUNCTION__, strerror(errno)
+				, ip1, ip2, netmask);
+			return 0;
+		}
+		return (ip1 & addr.sin_addr.s_addr) ==
+			(addr2.sin_addr.s_addr & addr.sin_addr.s_addr) ? 1 : 0;
+	}
+	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
+	return 0;
+}
+
+/* same as @see netutil_same_subnet */
+static int netutil_same_subnet2(int mask, char const * ip1, uint32_t ip2)
+{
+	if (mask < 0) {
+		char const * netmask = "255.255.255.0";
+		struct sockaddr_in addr1 = { 0 }, addr = { 0 };
+		if (inet_pton(AF_INET, ip1, &addr1.sin_addr) <= 0 ||
+			inet_pton(AF_INET, netmask, &addr.sin_addr) <= 0) {
+			fprintf(stderr, "%s: inet_pton failed, error='%s', ip1='%s', ip2=%d, mask='%s'.\n"
+				, __FUNCTION__, strerror(errno)
+				, ip1, ip2, netmask);
+			return 0;
+		}
+		return (addr1.sin_addr.s_addr & addr.sin_addr.s_addr) ==
+			(ip2 & addr.sin_addr.s_addr) ? 1 : 0;
+	}
+	fprintf(stderr, "%s: TODO: no implementation yet!, set mask to -1 to use default subnet mask: '255.255.255.0'\n", __FUNCTION__);
+	return 0;
+
+}
+/* @param ips: ':' seperated IPs, e.g. '172.28.0.170:172.19.255.95'
+ * @return: 0 on false; else true */
+int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
+{
+	if (!(ips && ips[0] != '\0')) return 0;
+
+	char buf[512];
+	strncpy(buf, ips, sizeof(buf) - 2);
+	char * ptr = strchr(buf, '\0');
+	*ptr = ':';
+	*(ptr + 1) = '\0';
+
+	char * p = buf, *q = strchr(p, ':');
+	for (; (q = strchr(p, ':')); p = q + 1) {
+		if (p == q)
+			continue;
+		*q = '\0';
+		if (netutil_same_subnet2(mask, p, ip))
+			return 1;
+	}
+	return 0;
+}
 #endif /* _MSC_VER */
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -802,7 +817,7 @@ SOCKET hp_net_connect(char const * ip, int port)
 int test_hp_net_main(int argc, char ** argv)
 {
 #ifndef _MSC_VER
-{
+	{
 		struct sockaddr_in addr = { 0 };
 		char ip[64];
 		int port = 3;
@@ -865,12 +880,12 @@ int test_hp_net_main(int argc, char ** argv)
 	{
 		struct sockaddr_in	servaddr = { 0 };
 		hp_log(stdout, "%s: sockaddr_in, ip_len=%zu, port_len=%zu\n", __FUNCTION__
-				, sizeof(servaddr.sin_addr.s_addr), sizeof(servaddr.sin_port));
+			, sizeof(servaddr.sin_addr.s_addr), sizeof(servaddr.sin_port));
 	}
 	{
 		struct iovec vec[2] = { {0, 0}, {0, 0} };
 		FILE * f = fopen("test_writev_0_count", "w");
-		if(f){
+		if (f) {
 			int fd = fileno(f);
 			assert(fd > 0);
 
@@ -881,11 +896,11 @@ int test_hp_net_main(int argc, char ** argv)
 		}
 	}
 	int a = 0;
-	if(a == 0){
+	if (a == 0) {
 		hp_log(stdout, "%s:a==0\n", __FUNCTION__);
 		a = 1;
 	}
-	else if(a == 1){
+	else if (a == 1) {
 		hp_log(stdout, "%s:a==1\n", __FUNCTION__);
 	}
 	return 0;
@@ -900,17 +915,17 @@ int test_hp_net_main(int argc, char ** argv)
 	int fd = hp_net_connect(ipbuf, 80);
 
 	ssize_t nwrite = write(fd, buf, strlen(buf));
-	if(nwrite <= 0){
+	if (nwrite <= 0) {
 		return -1;
 	}
 	hp_log(stdout, "%s: sent http request '%s' to host '%s'\n"
-					, __FUNCTION__, buf, host);
+		, __FUNCTION__, buf, host);
 
 	ssize_t nread = read(fd, buf, sizeof(buf));
-	if(nread > 0){
+	if (nread > 0) {
 		buf[nread] = '\0';
 		hp_log(stdout, "%s: recv response from '%s', content='%p', len=%zu\n"
-								, __FUNCTION__, host, buf, strlen(buf));
+			, __FUNCTION__, host, buf, strlen(buf));
 	}
 #endif /* _MSC_VER */
 	return 0;

@@ -10,17 +10,19 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
-
 #include <stdio.h>
 #include <stdlib.h>	       /* malloc */
 #include <errno.h>         /* errno */
 #include <string.h>	       /* strncmp */
 #include <ctype.h>	       /* isblank */
+#ifndef _MSC_VER
 #include <regex.h>
+#else
+#endif /* _MSC_VER */
+
 #include <limits.h>	       /* INT_MAX, IOV_MAX */
 #include <assert.h>        /* define NDEBUG to disable assertion */
-#include "sds/sds.h"        /* sds */
+#include "sdsinc.h"        /* sds */
 #include "cJSON/cJSON.h"	/* cJSON */
 #include "hp_cjson.h"
 #include "string_util.h"
@@ -178,12 +180,12 @@ cJSON * cjson_(cJSON const * cjson, char const * key)
 	int i, j, r;
 	int count = 0;
 	sds * s = sdssplitlen(key, strlen(key), "/", 1, &count);
-	cJSON * subjson = cjson;
+	cJSON const * subjson = cjson;
 	for(i = 0; i < count; ++i){
 		if(sdslen(s[i]) == 0)
 			continue;
 
-		cJSON * tmp = subjson;
+		cJSON const * tmp = subjson;
 		/* has 'or' syntarx? ( a | b) */
 		int or_count = 0;
 		sds * ss = sdssplitlen(s[i], strlen(s[i]), "|", 1, &or_count);
@@ -191,7 +193,7 @@ cJSON * cjson_(cJSON const * cjson, char const * key)
 		for(j = 0; j < or_count; ++j){
 			if(sdslen(ss[j]) == 0)
 				continue;
-				
+#ifndef _MSC_VER
 			/* array? */
 			if(strrchr(ss[j], ']')){
 				regex_t start_state;
@@ -221,6 +223,9 @@ cJSON * cjson_(cJSON const * cjson, char const * key)
 				} else subjson = cJSON_GetObjectItem(subjson, ss[j]);
 			}
 			else subjson = cJSON_GetObjectItem(subjson, ss[j]);
+#else
+			subjson = cJSON_GetObjectItem(subjson, ss[j]);
+#endif /* _MSC_VER */
 
 			if(subjson)
 				break; /* got one of ( a | b), done! */
@@ -265,6 +270,7 @@ char const * cjson_sval(cJSON const * cjson, char const * key, char * def)
 	int rc;
 
 	sds k = sdsnew(key);
+#ifndef _MSC_VER
 	regex_t start_state;
 	regmatch_t matchptr[8] = { 0 };
 	const char *pattern = "\\[\([0-9]+\),\([0-9]+\)\\]$";
@@ -299,7 +305,8 @@ char const * cjson_sval(cJSON const * cjson, char const * key, char * def)
 		sdsfree(k);
 		return s;
 	}
-
+#else
+#endif /* _MSC_VER */
 	cJSON const * json = cjson_(cjson, k);
 	sdsfree(k);
 	return (json? (!(cJSON_IsObject(json) || cJSON_IsArray(json))?
@@ -753,5 +760,3 @@ int test_hp_cjson_main(int argc, char ** argv)
 }
 
 #endif /* NDEBUG */
-
-#endif //_MSC_VER

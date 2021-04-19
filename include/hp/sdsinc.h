@@ -5,6 +5,13 @@
  * sds
  * */
 
+/* for those use sds on Win32, include following first
+ * #ifdef _MSC_VER
+ * #include "redis/src/Win32_Interop/Win32_Portability.h"
+ * #include "redis/src/Win32_Interop/win32_types.h"
+ * #endif
+ */
+
 #ifndef HP_SDSINC_H
 #define HP_SDSINC_H
 

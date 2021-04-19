@@ -12,6 +12,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifndef _MSC_VER
+
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -40,4 +42,6 @@ int test_hp_stat_main(int argc, char ** argv);
 }
 #endif
 
+#endif /* _MSC_VER */
 #endif /* XHHP_IOSTAT_H__ */
+

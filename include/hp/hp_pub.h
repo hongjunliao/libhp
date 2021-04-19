@@ -45,7 +45,7 @@ typedef void (* hp_sub_cb_t)(hp_sub_t * s, char const * topic, sds id, sds msg);
 
 struct hp_sub_t {
 	redisAsyncContext * c, * subc;
-	char shasub[64], shasup[64];;
+	char shasub[64], shasup[64];
 	char sid[128];
 	hp_sub_cb_t cb;
 	hp_sub_arg_t arg;
@@ -74,7 +74,7 @@ redisAsyncContext * hp_subc(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid
 		, hp_sub_cb_t cb
-		, void * arg);
+		, void const * arg);
 redisAsyncContext * hp_subc_arg(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid

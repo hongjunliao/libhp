@@ -9,11 +9,19 @@
 
 #ifdef LIBHP_WITH_REDIS
 
+#ifndef _MSC_VER
+#include <sys/time.h> /*gettimeofday*/
+#else
+#include "deps/redis/src/Win32_Interop/Win32_Portability.h"
+#include "deps/redis/src/Win32_Interop/Win32_Time.h"
+#include "deps/redis/src/Win32_Interop/win32fixes.h"
+#endif /* _MSC_VER */
+
 #include "hp_pub.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include "sds/sds.h"
+#include "sdsinc.h"
 #include "c-vector/cvector.h"
 #include "hp_log.h"
 #include "hp_libc.h"
@@ -29,7 +37,7 @@ extern "C" {
  * pub
  * */
 
-static void pub_cb(redisAsyncContext *c, void *r, void *privdata)
+static void hp_pub_pub_cb(redisAsyncContext *c, void *r, void *privdata)
 {
 	redisReply * reply = (redisReply *)r;
 
@@ -46,24 +54,32 @@ int hp_pub(redisAsyncContext * c, char const * topic, char const * msg, int len
 		return -1;
 
 	int rc;
-	if(len <= 0)
-		len = strlen(msg);
+	if(len <= 0) { len = strlen(msg); }
 
 	char uuidstr[64] = "";
-
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	snprintf(uuidstr, sizeof(uuidstr), "%ld", tv.tv_sec * 1000 + tv.tv_usec / 1000);
+	snprintf(uuidstr, sizeof(uuidstr), "%.0f", tv.tv_sec * 1000.0 + tv.tv_usec / 1000);
 
+#ifndef _MSC_VER
 	rc = redisAsyncCommand(c, 0, 0/* privdata */, "ZADD %s %s %b", topic, uuidstr, msg, len);
-	if(rc != 0)
+#else
+	const char * argv[] = { "ZADD", topic, uuidstr, msg};
+	size_t argvlen[] = {4, strlen(topic), strlen(uuidstr), len};
+	int argc = sizeof(argv) / sizeof(argv[0]);
+	rc = redisAsyncCommandArgv(c, 0, 0/* privdata */, argc, argv, argvlen);
+#endif /* _MSC_VER */
+
+	if(rc != 0){
 		hp_log(stderr, "%s: Redis 'ZADD %s %s %s', failed: %d/'%s'\n"
 			, __FUNCTION__, topic, uuidstr, msg, c->err, c->errstr);
+	}
 
-	rc = redisAsyncCommand(c, (done? done : pub_cb), done/* privdata */, "publish %s %s", topic, uuidstr);
-	if(rc != 0)
+	rc = redisAsyncCommand(c, (done? done : hp_pub_pub_cb), done/* privdata */, "publish %s %s", topic, uuidstr);
+	if(rc != 0){
 		hp_log(stderr, "%s: Redis 'publish %s %s' failed: %d/'%s'\n"
 			, __FUNCTION__, topic, uuidstr, c->err, c->errstr);
+	}
 
 	return rc;
 }
@@ -87,7 +103,7 @@ static int comp(const void * a, const void * b)
 	return sdscmp(ent1->_1, ent2->_1);
 }
 
-static void all_cb(redisAsyncContext *c, void *r, void *privdata)
+static void hp_sub_all_cb(redisAsyncContext *c, void *r, void *privdata)
 {
 	assert(privdata);
 	hp_sub_async_t * as = (hp_sub_async_t *)privdata;
@@ -146,7 +162,7 @@ static int hp_sub_all(hp_sub_t * ps)
 	async->s = ps;
 	list_add_tail(&async->node, &ps->async_list);
 
-	rc = redisAsyncCommand(ps->c, all_cb, async/* privdata */, "evalsha %s 0 %s", ps->shasub, ps->sid);
+	rc = redisAsyncCommand(ps->c, hp_sub_all_cb, async/* privdata */, "evalsha %s 0 %s", ps->shasub, ps->sid);
 
 	return rc;
 }
@@ -209,7 +225,8 @@ static int hp_sub_dosub(redisAsyncContext * c
 	redisReply *reply = 0;
 
 	int i, rc;
-	const char *argv[n_topic + 8];
+	const char ** argv = 0;
+	cvector_init(argv, n_topic + 8);
 	argv[0] = "subscribe";
 
 	sds msg = sdsempty();
@@ -240,11 +257,12 @@ static int hp_sub_dosub(redisAsyncContext * c
 	}
 
 	sdsfree(msg);
+	cvector_free(argv);
 
 	return rc;
 }
 
-static void session_cb(redisAsyncContext *c, void *r, void *privdata)
+static void hp_sub_session_cb(redisAsyncContext *c, void *r, void *privdata)
 {
 	assert(privdata);
 	hp_sub_async_t * as = (hp_sub_async_t *)privdata;
@@ -253,7 +271,8 @@ static void session_cb(redisAsyncContext *c, void *r, void *privdata)
 	int i, rc;
 
     int n_topics = (reply && reply->elements > 0? reply->elements : 0);
-	sds topics[n_topics];
+	sds * topics = 0;
+	cvector_init(topics, n_topics);
 
 	if(!as->s){
 		goto ret;
@@ -298,6 +317,7 @@ ret:
 	if(as->s)
 		list_del(&as->node);
 	free(as);
+	cvector_free(topics);
 
     return;
 }
@@ -324,7 +344,8 @@ static int hp_sub_sup(redisAsyncContext * c
 
 	sds nk = sdsfromlonglong(n_topic);
 
-	const char *argv[n_topic + 8];
+	const char ** argv = 0;
+	cvector_init(argv, n_topic + 8);
 	argv[0] = "evalsha";
 	argv[1] = shasup;
 	argv[2] = nk;
@@ -336,11 +357,12 @@ static int hp_sub_sup(redisAsyncContext * c
 	int argc = n_topic + 4;
 	rc = redisAsyncCommandArgv(c, sup_cb, 0/* privdata */, argc, argv, 0);
 	sdsfree(nk);
+	cvector_free(argv);
 
 	return rc;
 }
 
-static void my_free(void * ptr)
+static void hp_subc_free(void * ptr)
 {
 	printf("%s: free redisAsyncContext::data ptr=%p\n", __FUNCTION__, ptr);
 
@@ -390,11 +412,7 @@ redisAsyncContext * hp_subc_arg(redisAsyncContext * c, redisAsyncContext * subc
 		subc->data = calloc(1, sizeof(hp_sub_t));
 		INIT_LIST_HEAD(&((hp_sub_t *)subc->data)->async_list);
 	}
-#ifndef NDEBUG
-	subc->dataCleanup = my_free;
-#else 
-	subc->dataCleanup = free;
-#endif		
+	subc->dataCleanup = hp_subc_free;
 
 	hp_sub_t * done = (hp_sub_t *)subc->data;
 	done->cb = cb;
@@ -416,7 +434,7 @@ redisAsyncContext * hp_subc(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid
 		, hp_sub_cb_t cb
-		, void * arg)
+		, void const * arg)
 {
 	hp_sub_arg_t a = { arg, 0 };
 	return hp_subc_arg(c, subc, shasub, shasup, sid, cb, a);
@@ -445,7 +463,7 @@ int hp_sub(redisAsyncContext * subc, int n_topic, char * const* topic)
 		async->s = done;
 		list_add_tail(&async->node, &done->async_list);
 
-		rc= redisAsyncCommand(done->c, session_cb, async/* privdata */, "HKEYS %s", done->sid);
+		rc = redisAsyncCommand(done->c, hp_sub_session_cb, async/* privdata */, "HKEYS %s", done->sid);
 	}
 
 	return rc;
@@ -496,26 +514,43 @@ int hp_sub_ping(redisAsyncContext * subc)
 
 #ifndef NDEBUG
 #include "hp_redis.h"
+#ifndef _MSC_VER
 #include <uuid/uuid.h>
+#endif /* _MSC_VER */
 #include "hp_config.h"	/* hp_config_t  */
-
 extern hp_config_t g_conf;
 
-static int done = 0, dones[64] = { 0 };
-static redisAsyncContext * pubc = 0;
-static int s_conn_failed = 0;
+#ifndef _MSC_VER
+#define rev_init(rev) do { if(uv_loop_init(rev) != 0) { rev = 0; } } while(0)
+#define rev_run(rev) do { uv_run(rev, UV_RUN_NOWAIT); } while(0)
+#define rev_close(rev) do { uv_loop_close(rev); } while(0)
+#else
+#define rev_init(rev) do { rev = aeCreateEventLoop(1024 * 10);assert(rev); } while(0)
+#define rev_run(rev) do { aeProcessEvents((rev), AE_ALL_EVENTS); } while(0)
+#define rev_close(rev) do { aeDeleteEventLoop(rev); } while(0)
+#endif /* _MSC_VER */
 
-char const * sids[] = { "xhmdm_test:s:865452044887154", "xhmdm_test:s:868783048901857" };
-static char * topics[] = { "xhmdm_test:1:865452044887154", "xhmdm_test:apps:chat.tox.antox", "xhmdm_test:dept:1006"};
+static int done = 0, dones[64] = { 0 };
+static int s_conn_flag = 0;
+
+char const * sids[] = { "rmqtt:s:865452044887154", "rmqtt:s:868783048901857" };
+static char * topics[] = { "rmqtt:1:865452044887154", "rmqtt:apps:chat.tox.antox", "rmqtt:dept:1006"};
 static char const * fmts[] = { "{\"uuid0\":\"%s\"}", "{\"uuid1\":\"%s\"}", "{\"uuid2\":\"%s\"}" };
 static sds msgs[128] = { 0 };
 
 static char const * fmt_msg(char const * fmt)
 {
 	char uuidstr[64] = "";
+#ifndef _MSC_VER
 	uuid_t uuid;
 	uuid_generate_time(uuid);
 	uuid_unparse(uuid, uuidstr);
+#else
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	snprintf(uuidstr, sizeof(uuidstr), "%.0f", tv.tv_sec * 1000.0 + tv.tv_usec / 1000);
+#endif /* _MSC_VER */
+
 
 	static char msg[1024] = "";
 	msg[0] = '\0';
@@ -554,7 +589,7 @@ static void test_cb_1(hp_sub_t * s, char const * topic, sds id, sds msg)
 	if(msgs[0]){
 		if(strcmp(msg, msgs[0]) == 0){
 			assert(strcmp(topic, topics[0]) == 0);
-			rc = redisAsyncCommand(pubc, test_cb_1_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
+			rc = redisAsyncCommand(s->c, test_cb_1_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
 			assert(rc == 0);
 		}
 	}
@@ -583,7 +618,7 @@ static void test_cb_2(hp_sub_t * s, char const * topic, sds id, sds msg)
 	for(i = 0; i < 2; ++i){
 		if(msgs[i] && strcmp(msg, msgs[i]) == 0){
 			assert(strcmp(topic, topics[i]) == 0);
-			rc = redisAsyncCommand(pubc, test_cb_2_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
+			rc = redisAsyncCommand(s->c, test_cb_2_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
 			assert(rc == 0);
 			break;
 		}
@@ -613,7 +648,7 @@ static void test_cb_2_2(hp_sub_t * s, char const * topic, sds id, sds msg)
 	for(i = 0; i < 2; ++i){
 		if(msgs[i] && strcmp(msg, msgs[i]) == 0){
 			assert(strcmp(topic, topics[0]) == 0);
-			rc = redisAsyncCommand(pubc, test_cb_2_2_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
+			rc = redisAsyncCommand(s->c, test_cb_2_2_cb, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
 			assert(rc == 0);
 			break;
 		}
@@ -654,7 +689,7 @@ static void test_cb_2_3(hp_sub_t * s, char const * topic, sds id, sds msg)
 	for(i = 0; i < 2; ++i){
 		if(msgs[i] && strcmp(msg, msgs[i]) == 0){
 			assert(strcmp(topic, topics[1]) == 0);
-			rc = redisAsyncCommand(pubc, test_cb_2_3_cb, s->arg._1/* privdata */, "hset %s %s %s", (char *)s->arg._1, topic, id);
+			rc = redisAsyncCommand(s->c, test_cb_2_3_cb, s->arg._1/* privdata */, "hset %s %s %s", (char *)s->arg._1, topic, id);
 			assert(rc == 0);
 			break;
 		}
@@ -684,7 +719,7 @@ static void test_cb_sub_from_session(hp_sub_t * s, char const * topic, sds id, s
 	if(msgs[0]){
 		if(strcmp(msg, msgs[0]) == 0){
 			if(strcmp(topic, topics[1]) == 0){
-				rc = redisAsyncCommand(pubc, test_cb_sub_from_session_1, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
+				rc = redisAsyncCommand(s->c, test_cb_sub_from_session_1, 0/* privdata */, "hset %s %s %s", sids[0], topic, id);
 				assert(rc == 0);
 			}
 		}
@@ -738,12 +773,24 @@ ret:
 	return;
 }
 
-static void on_connect(const redisAsyncContext *c, int status) {
-    if (status != REDIS_OK) {
+static void hp_pub_on_connect_1(const redisAsyncContext *c, int status) {
+	s_conn_flag = (status != REDIS_OK) ? -1 : (hp_max(s_conn_flag, 0) + 1);
+	if (status != REDIS_OK) {
         hp_log(stdout, "%s: connect Redis failed: '%s'\n", __FUNCTION__, c->errstr);
-        s_conn_failed = 1;
         return;
     }
+}
+
+void is_done_1(redisAsyncContext *c, void *r, void *privdata) {
+	redisReply * reply = (redisReply *)r;
+	assert(reply && reply->type != REDIS_REPLY_ERROR);
+	done = 1;
+}
+
+void is_done_2(redisAsyncContext *c, void *r, void *privdata) {
+	redisReply * reply = (redisReply *)r;
+	assert(reply && reply->type != REDIS_REPLY_ERROR);
+	++done;
 }
 
 int test_hp_pub_main(int argc, char ** argv)
@@ -755,47 +802,67 @@ int test_hp_pub_main(int argc, char ** argv)
 	int n_topic = sizeof(topics) / sizeof(topics[0]);
 	int arg = 10;
 
-	static redisAsyncContext * subcs[64] = { 0 };
-	uv_loop_t uvloopobj = { 0 }, * uvloop = &uvloopobj;
+	{
+		redisAsyncContext * pubc = 0;
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		/* test if connect OK */
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), hp_pub_on_connect_1);
+		assert(r == 0 && pubc);
+		for (;;) {
+			rev_run(rev);
+			if (s_conn_flag < 0) {
+				fprintf(stdout, "%s: connect to Redis failed, skip this test\n", __FUNCTION__);
+				return 0;
+			}
+			else if (s_conn_flag > 0) { break; }
+		};
+		hp_redis_uninit(pubc);
+	}
 
-	r = uv_loop_init(uvloop);
-	assert(r == 0);
 
-	/* test if connect OK */
-	r = hp_redis_init(&pubc, uvloop, cfg("redis"), cfg("redis.password"), on_connect);
-	assert(r == 0 && pubc);
-	for(;;) {
-		uv_run(uvloop, UV_RUN_NOWAIT);
-		if(s_conn_failed){
-			fprintf(stdout, "%s: connect to Redis failed, skip this test\n", __FUNCTION__);
-			return 0;
-		}
-	};
-	hp_redis_uninit(pubc);
-
-	r = hp_redis_init(&pubc, uvloop, cfg("redis"), cfg("redis.password"), 0);
-	assert(r == 0 && pubc);
-	r = hp_redis_init(&subcs[0], uvloop, cfg("redis"), cfg("redis.password"), 0);
-	assert(r == 0 && subcs[0]);
-
-	/* test for command: zrevrange xhmdm_test:1:868783048901857 0 0 withscores
+	/* test for command: zrevrange rmqtt:1:868783048901857 0 0 withscores
 	 * OK */
 	{
-		r = redisAsyncCommand(pubc, zrevrange_cb, 0/* privdata */, "zrevrange %s 0 0 withscores", "xhmdm_test:1:868783048901857");
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+		r = redisAsyncCommand(pubc, zrevrange_cb, 0/* privdata */, "zrevrange %s 0 0 withscores", "rmqtt:1:868783048901857");
 		assert(r == 0);
-		for(; !done;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; !done;) rev_run(rev);
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 		done = 0;
 	}
-	/* test for command: zrevrange xhmdm_test:1:868783048901857 0 0 withscores
+	/* test for command: zrevrange rmqtt:1:868783048901857 0 0 withscores
 	 * zet NOT exist */
 	{
-		r = redisAsyncCommand(pubc, zrevrange_cb_2, 0/* privdata */, "zrevrange %s 0 0 withscores", "xhmdm_test:1:not_exist");
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		r = redisAsyncCommand(pubc, zrevrange_cb_2, 0/* privdata */, "zrevrange %s 0 0 withscores", "rmqtt:1:not_exist");
 		assert(r == 0);
-		for(; !done;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; !done;) rev_run(rev);
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 		done = 0;
 	}
 	/* failed: invalid arg */
 	{
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
 		assert(hp_pub(0, 0, 0, 0, 0) != 0);
 		assert(hp_pub(pubc, 0, 0, 0, 0) != 0);
 		assert(hp_pub(pubc, topics[0], 0, 0, 0) != 0);
@@ -812,13 +879,24 @@ int test_hp_pub_main(int argc, char ** argv)
 	}
 	/* OK: sub only, sub from session */
 	{
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
 		int unsub = 0;
-		subcs[0] = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[1], test_cb_sub_only_from_session, &arg);
+		subcs[0] = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_sub_only_from_session, &arg);
 		r = hp_sub(subcs[0], 0, 0);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(!unsub && done >= 1){
 				r = hp_unsub(subcs[0]);
@@ -830,52 +908,71 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done >= 1 && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
 		memset(msgs, 0, sizeof(msgs));
 	}
-
-	/* OK: pub only, pub 1 */
+	/* _1 OK: pub only, pub 1 */
 	{
-		void is_done(redisAsyncContext *c, void *r, void *privdata) { 
-			redisReply * reply = (redisReply *)r;
-			assert(reply && reply->type != REDIS_REPLY_ERROR);
-			done = 1; 
-		}
-		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done);
+		redisAsyncContext * pubc = 0;
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+
+		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done_1);
 		assert(r == 0);
 
-		for(; !done;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; !done;) rev_run(rev);
+		hp_redis_uninit(pubc);
+		rev_close(rev);
 
 		done = 0;
 	}
-	/* OK: pub only, pub 2 */
+	/* _2 OK: pub only, pub 2 */
 	{
-		void is_done(redisAsyncContext *c, void *r, void *privdata) { 
-			redisReply * reply = (redisReply *)r;
-			assert(reply && reply->type != REDIS_REPLY_ERROR);
-			++done; 
-		}
-		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done);
+		redisAsyncContext * pubc = 0;
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+
+		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done_2);
 		assert(r == 0);
 
-		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done);
+		r = hp_pub(pubc, topics[0], fmt_msg(fmts[0]), -1, is_done_2);
 		assert(r == 0);
 
-		for(; done < 2;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; done < 2;) rev_run(rev);
 
+		hp_redis_uninit(pubc);
+		rev_close(rev);
 		done = 0;
 	}
 	/* OK: resub */
 	{
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
 		int unsub = 0, resub = 0;
 		redisAsyncContext * c = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_resub, &arg);
 		r = hp_sub(c, 0, 0);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(!resub){
 				r = hp_sub(c, n_topic, topics);
@@ -895,6 +992,9 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done >= 2)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
@@ -903,13 +1003,24 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: pub 1 */
 	{
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
 		int unsub = 0;
 		redisAsyncContext * c = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_1, &arg);
 		r = hp_sub(c, n_topic, topics);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 1){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -929,6 +1040,9 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
@@ -937,8 +1051,15 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: pub 1 and exit without unsub */
 	{
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+
 		static redisAsyncContext * c = 0;
-		r = hp_redis_init(&c, uvloop, cfg("redis"), cfg("redis.password"), 0);
+		r = hp_redis_init(&c, rev, cfg("redis"), cfg("redis.password"), 0);
 		assert(r == 0 && c);
 
 		c = hp_subc(pubc, c, cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_1, &arg);
@@ -946,7 +1067,7 @@ int test_hp_pub_main(int argc, char ** argv)
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 1){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -962,6 +1083,9 @@ int test_hp_pub_main(int argc, char ** argv)
 				break;
 			}
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
@@ -970,13 +1094,24 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: pub 2 */
 	{
-		int unsub = 0; 
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
+		int unsub = 0;
 		redisAsyncContext * c = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_2, &arg);
 		r = hp_sub(c, n_topic, topics);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 2){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -996,6 +1131,9 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done >= 2 && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
@@ -1004,13 +1142,24 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: pub 2, with the same topic */
 	{
-		int unsub = 0; 
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
+		int unsub = 0;
 		redisAsyncContext * c = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_2_2, &arg);
 		r = hp_sub(c, n_topic, topics);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 2){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -1030,6 +1179,9 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done >= 2 && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
@@ -1038,8 +1190,16 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: one message 2 subscribers */
 	{
-		r = hp_redis_init(&subcs[1], uvloop, cfg("redis"), cfg("redis.password"), 0);
-		assert(r == 0 && subcs[1]);
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 2; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
 
 		int unsub = 0;
 		subcs[0] = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_2_3, sids[0]);
@@ -1051,7 +1211,7 @@ int test_hp_pub_main(int argc, char ** argv)
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 1){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -1074,6 +1234,9 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(dones[0] && dones[1] && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done= 0;
 		dones[0] = dones[1] = 0;
@@ -1083,13 +1246,24 @@ int test_hp_pub_main(int argc, char ** argv)
 
 	/* OK: pub 1, sub from session */
 	{
-		int unsub = 0; 
+		redisAsyncContext * pubc = 0;
+		redisAsyncContext * subcs[64] = { 0 };
+		hp_redis_ev_t s_evobj, *rev = &s_evobj;
+		rev_init(rev); assert(rev);
+		r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+		assert(r == 0 && pubc);
+		for (i = 0; i < 1; ++i) {
+			r = hp_redis_init(&subcs[i], rev, cfg("redis"), cfg("redis.password"), 0);
+			assert(r == 0 && subcs[i]);
+		}
+
+		int unsub = 0;
 		subcs[0] = hp_subc(pubc, subcs[0], cfg("redis.shasub"), cfg("redis.shasup"), sids[0], test_cb_sub_from_session, &arg);
 		r = hp_sub(subcs[0], 0, 0);
 		assert(r == 0);
 
 		for(i = 0;;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 1){
 				msgs[i] = sdsnew(fmt_msg(fmts[i]));
@@ -1109,17 +1283,14 @@ int test_hp_pub_main(int argc, char ** argv)
 			if(done >= 1 && unsub)
 				break;
 		}
+		hp_redis_uninit(pubc);
+		for (i = 0; subcs[i]; ++i) { hp_redis_uninit(subcs[i]); }
+		rev_close(rev);
 
 		done = 0;
 		for(i = 0; msgs[i]; ++i) sdsfree(msgs[i]);
 		memset(msgs, 0, sizeof(msgs));
 	}
-
-	hp_redis_uninit(pubc);
-	for(i = 0; subcs[i]; ++i)
-		hp_redis_uninit(subcs[i]);
-	uv_loop_close(uvloop);
-
 	return 0;
 }
 

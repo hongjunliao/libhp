@@ -533,13 +533,22 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 			--item->n_rb;
 
 			if (nbuf > 0) {
-				item->ibuf = sdscatlen(item->ibuf, wsabuf->buf, nbuf);
 				item->ibytes += nbuf;
 
 				size_t ibufL, ibufl;
-				ibufL = ibufl= sdslen(item->ibuf);
-				rc = item->on_data(iocpctx, item->id, item->ibuf, &ibufl);
-				sdsIncrLen(item->ibuf, ibufl - ibufL);
+				if(sdslen(item->ibuf) == 0){
+					ibufL = ibufl = nbuf;
+					rc = item->on_data(iocpctx, item->id, wsabuf->buf, &ibufl);
+					if(rc >= 0 && ibufl > 0){
+						item->ibuf = sdscatlen(item->ibuf, wsabuf->buf, ibufl);
+					}
+				}
+				else{
+					item->ibuf = sdscatlen(item->ibuf, wsabuf->buf, nbuf);
+					ibufL = ibufl = sdslen(item->ibuf);
+					rc = item->on_data(iocpctx, item->id, item->ibuf, &ibufl);
+					sdsIncrLen(item->ibuf, ibufl - ibufL);
+				}
 
 				if (rc < 0)
 					hp_iocp_on_item_close(iocpctx, item);

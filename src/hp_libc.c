@@ -120,8 +120,6 @@ void hp_lreserve(void ** base, size_t * nmemb, size_t size, size_t n, size_t nre
 #include <assert.h>        /* assert */
 #include <stdint.h>	       /* SIZE_MAX */
 
-int test_fsutil_main(int argc, char ** argv);
-
 typedef union tuple_union tuple_union;
 typedef struct tuple_t tuple_t;
 typedef struct hp_tuple_t hp_tuple_t;
@@ -418,7 +416,10 @@ int test_hp_libc_main(int argc, char ** argv)
 //			hp_nfree(v[i]);
 //		cvector_free(v);
 	}
+#ifndef _MSC_VER
+	int test_fsutil_main(int argc, char ** argv);
 	rc = test_fsutil_main(argc, argv); assert(rc == 0);
+#endif /* _MSC_VER */
 
 	return rc;
 }

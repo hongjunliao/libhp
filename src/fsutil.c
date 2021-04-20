@@ -10,9 +10,16 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
+#include <dirent.h>      /* DIR */
+#endif /* _MSC_VER */
+
+#ifdef _WIN32
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+#endif
 
 #include <unistd.h>
-#include <dirent.h>      /* DIR */
 #include <sys/stat.h>    /* mkdir */
 #include <fcntl.h>       /* ioctl */
 #include <string.h> 	 /* snprintf */
@@ -23,7 +30,9 @@
 
 #include <uv.h>
 #include <sys/stat.h>
-#include "sds/sds.h"
+#include "sdsinc.h"
+
+#ifndef _MSC_VER
 /////////////////////////////////////////////////////////////////////////////////////
 
 /* mkdir -p
@@ -252,6 +261,7 @@ int hp_foreach_file(uv_loop_t * loop,
 	return rc;
 }
 
+#endif /*_MSC_VER*/
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
@@ -273,7 +283,7 @@ static int do_nothing(char const * fname) { return 0; }
 int test_fsutil_main(int argc, char ** argv)
 {
 	int rc;
-
+#ifndef _MSC_VER
 	uv_loop_t uvloopobj = { 0 }, * uvloop = &uvloopobj;
 	rc = uv_loop_init(uvloop);
 	assert(rc == 0);
@@ -291,6 +301,7 @@ int test_fsutil_main(int argc, char ** argv)
 
 	uv_loop_close(uvloop);
 
+
 	hp_fsutil_mkdir_p("/tmp/a/b/c/d/");
 	FILE * f = fopen("/tmp/a/b/c/d/e", "w");
 	assert(f);
@@ -299,8 +310,8 @@ int test_fsutil_main(int argc, char ** argv)
 	hp_fsutil_rm_r("/tmp/a/b/c/d/");
 	f = fopen("/tmp/a/b/c/d/e", "r");
 	assert(!f);
+#endif /* _MSC_VER */
 
-	return rc;
+	return 0;
 }
 #endif /* NDEBUG */
-#endif /*_MSC_VER*/

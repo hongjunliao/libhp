@@ -49,49 +49,39 @@ int test_hp_cjson_main(int argc, char ** argv);
 
 # API简要说明
 
-* 1. hp_epoll,hp_eti/eto, 事件驱动的I/O
-  * hp_curl, 使用hp_epoll等的异步curl
-  * 对比hp_uv_curl, 使用libuv的异步curl
-
-* 2. hp_iocp, 结合WIN32 IOCP,消息队列,及select的I/O
-  * select线程负责fd可读写通知
-  * IOCP线程负责I/O完成通知
-  * 用户线程调用message handle处理部分消息,发起异步读写操作,通知I/O完成等
+* 1. hp_io_t, another networking I/O, using hp_iocp on Windows and hp_epoll on Linux
 ```code
-		/* the IOCP context */
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200, 0/* user context */);
-		assert(rc == 0);
-
-		int tid = (int)GetCurrentThreadId();
-		rc = hp_iocp_run(iocpctx, tid, 0);
+		/* the IO context */
+		hp_io_ctx ioctxobj, * ioctx = &ioctxobj;
+		/* IO init options */
+		hp_ioopt ioopt = {
+				  listen_fd   /* listen fd */
+				, on_accept   /* called when new connection coming */
+				, { 0 } };
+		rc = hp_io_init(ioctx, &ioopt);
 		assert(rc == 0);
 
 		/* prepare for I/O */
-		int index = hp_iocp_add(iocpctx, 0, 0
-			, 0, on_connect  /* connect to server and return the SOCKET */
-			, on_data        /* called when data comming */
-			, on_error       /* called when error occured */
-			, 0);
-		assert(index >= 0);
+		hp_io_t ioobj, * io = &ioobj;
+		rc = hp_io_add(ioctx, io, fd
+		, on_data     /* called when data comming */
+		, on_error);  /* called when error occured */
+		assert(rc == 0);
 
 		/* write some thing async */
 		char const * data = "GET /index.html HTTP/1.1\r\nHost: %s:%d\r\n\r\n";
-		rc = hp_iocp_write(iocpctx, index, data, strlen(data), 0, 0);
+		rc = hp_io_write(ioctx, io, data, strlen(data), 0, 0);
 		assert(rc == 0);
 
-		/* handle message and process callbacks */
-		for (rc = 0; ;) {
-			MSG msgobj = { 0 }, *msg = &msgobj;
-			if (PeekMessage((LPMSG)msg, (HWND)0, (UINT)0, (UINT)0, PM_REMOVE)) {
-				rc = hp_iocp_handle_msg(iocpctx, msg->message, msg->wParam, msg->lParam);
-			}
+		/* run event loop */
+		for (; !quit;) {
+			hp_io_run(ioctx, 200, 0);
 		}
 
 		/* clear */
-		hp_iocp_uninit(iocpctx);
+		hp_io_uninit(ioctx);
 ```
-* 3. hp_pu/sub, Redis Pub/Sub增强
+* 2. hp_pu/sub, Redis Pub/Sub增强
   * 基于Redis Pub/Sub实现
   * 使用zset,hash数据结构等保存会话及发布过的消息,发布即不丢失
   * 消息需要确认,以支持离线消息及会话

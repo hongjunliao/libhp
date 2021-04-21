@@ -272,6 +272,9 @@ static void rm_item_obuf(hp_iocp_item * item)
 	if (item && item->obuf) {
 		for (; !cvector_empty(item->obuf); ) {
 			struct hp_iocp_obuf * obuf = item->obuf[0];
+			if (obuf->free)
+				obuf->free(obuf->ptr);
+
 			cvector_remove(item->obuf, item->obuf);
 			free(obuf);
 		}
@@ -324,6 +327,7 @@ static void hp_iocp_on_item_read_error(hp_iocp * iocpctx, hp_iocp_item * item
 	hp_iocp_on_item_error(iocpctx, item, 1, err, errstr);
 }
 
+/* @param obuf MUST be removed from hp_iocp_item::obuf */
 static void hp_iocp_on_item_write_error(hp_iocp * iocpctx, hp_iocp_item * item
 	, struct hp_iocp_obuf * obuf
 	, int err, char const * errstr)
@@ -440,6 +444,7 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 		return;
 
 	struct hp_iocp_obuf * obuf = item->obuf[0];
+	cvector_remove(item->obuf, item->obuf);
 
 	WSABUF bufs[1];
 	bufs[0].buf = obuf->buf.buf;
@@ -452,13 +457,14 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 
 	DWORD err = WSAGetLastError();
 	if (!(rc == 0 || err == WSA_IO_PENDING)) {
+
+		wsaoverlapped_free(overlapped);
 		hp_err_t errstr = "WSASend: %s";
 		hp_iocp_on_item_write_error(iocpctx, item, obuf, err, hp_err(err, errstr));
 	}
 	else {
 		++item->n_wb;
 	}
-	cvector_remove(item->obuf, item->obuf);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////

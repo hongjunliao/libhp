@@ -10,10 +10,9 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef LIBHP_WITHOUT_MQTT
+#ifdef LIBHP_WITH_MQTT
 
-#ifndef _MSC_VER
-#include "sds/sds.h"
+#include "sdsinc.h"
 #include "MQTTAsync.h"
 
 #ifdef __cplusplus
@@ -67,7 +66,7 @@ int hp_mqtt_init(hp_mqtt * cli
 		);
 int hp_mqtt_connect(hp_mqtt * cli);
 int hp_mqtt_sub(hp_mqtt * cli, int n_topic, char * const* topic, int * qos, MQTTAsync_token * token);
-int hp_mqtt_pub(hp_mqtt * cli, char const * topic, int qos, char const * data, MQTTAsync_token * token);
+int hp_mqtt_pub(hp_mqtt * cli, char const * topic, int qos, char const * data, int len, MQTTAsync_token * token);
 int hp_mqtt_disconnect(hp_mqtt * cli);
 void hp_mqtt_uninit(hp_mqtt * cli);
 
@@ -80,7 +79,6 @@ int test_hp_mqtt_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
-#endif /* _MSC_VER */
 
 #endif /* LIBHP_WITH_MQTT */
 #endif /* LIBHP_MQTT_H */

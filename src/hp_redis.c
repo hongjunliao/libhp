@@ -78,6 +78,8 @@ int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * s_ev, char const 
 		, host, port, c->err, c->errstr);
 		return -2;
 	}
+	c->dataCleanup = 0;
+
 #ifndef _MSC_VER
 	redisLibuvAttach(c, s_ev);
 #else

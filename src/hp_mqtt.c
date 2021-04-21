@@ -10,7 +10,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MQTT
-#ifndef _MSC_VER
+#include "sdsinc.h"
 #include "hp_mqtt.h"
 #include <search.h>  /* lfind */
 #include "MQTTAsync.h"
@@ -21,7 +21,6 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
-#include "sds/sds.h"
 #include "c-vector/cvector.h"
 #include "paho_opts.h"
 #include "string_util.h"
@@ -91,7 +90,7 @@ static int hp_mqtt__messageArrived(void *context, char *topicName, int topicLen,
 
 	if(*g_loglevel > 8){
 
-		printf("%d/%s/%s: topic='%s', payload=%d/'%s'\n", getpid(), __FILE__, __FUNCTION__
+		printf("%s: topic='%s', payload=%d/'%s'\n", __FUNCTION__
 			, topic, (int)sdslen(msg), msg);
 	}
 
@@ -390,8 +389,8 @@ int hp_mqtt_connect(hp_mqtt * cli)
 	}
 
 	if (!opts.quiet)
-		printf("%d/%s: connecting to broker='%s', username/password='%s'/'%s' ...\n"
-			, getpid(), __FUNCTION__
+		printf("%s: connecting to broker='%s', username/password='%s'/'%s' ...\n"
+			, __FUNCTION__
 			, opts.connection, opts.username, (strlen(opts.password) > 0? "***" : ""));
 
 	if ((rc = MQTTAsync_connect(cli->context, &conn_opts)) != MQTTASYNC_SUCCESS)
@@ -496,17 +495,16 @@ int hp_mqtt_sub(hp_mqtt * cli, int n_topic, char* const* topic, int * qos, MQTTA
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-int hp_mqtt_pub(hp_mqtt * cli, char const * topic, int qos, char const * data, MQTTAsync_token * token)
+int hp_mqtt_pub(hp_mqtt * cli, char const * topic, int qos, char const * data, int len, MQTTAsync_token * token)
 {
 	if(!(cli && topic && data))
 		return -1;
 
 	int rc;
 	MQTTAsync_responseOptions pub_opts = MQTTAsync_responseOptions_initializer;
+	if(len == 0) { len = strlen(data); }
 
-	int datalen = strlen(data);
-
-	rc = MQTTAsync_send(cli->context, topic, datalen, data, qos, 0, &pub_opts);
+	rc = MQTTAsync_send(cli->context, topic, len, data, qos, 0, &pub_opts);
 	if (!(rc == MQTTASYNC_SUCCESS ))
 		fprintf(stderr, "%s: Error from MQTTAsync_send: %d/%s, topic='%s'\n", __FUNCTION__
 			, rc, MQTTAsync_strerror(rc), topic);
@@ -617,7 +615,7 @@ static void test__t2_hp_mqtt_message_cb(
 		hp_mqtt * cli, char const * topic, char const * msg, int len, void * arg)
 {
 	assert(cli);
-	printf("%d/%s/%s: topic='%s', payload=%d/'%.*s'\n", getpid(), __FILE__, __FUNCTION__
+	printf("%s: topic='%s', payload=%d/'%.*s'\n", __FUNCTION__
 		, topic, len, len, msg);
 
 //	assert(strncmp(msg, "1", 1) != 0 && strncmp(msg, "2", 1) != 0 && strncmp(msg, "3", 1) != 0);
@@ -650,7 +648,6 @@ int test_hp_mqtt_main(int argc, char ** argv)
 	{
 
 		int rc;
-		MQTTAsync_token token;
 		hp_mqtt mqttcliobj, * mqttcli = &mqttcliobj;
 
 		rc = hp_mqtt_init(mqttcli, 0, on_connect, test__t1_hp_mqtt_message_cb, 0, 0
@@ -699,7 +696,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		while(mqttcli->state != XHMDM_SUB_OK)
 			usleep(200 * 1000);
 
-		rc = hp_mqtt_pub(mqttcli, t1.topics[0], t1.qoses[0], t1.message, &token);
+		rc = hp_mqtt_pub(mqttcli, t1.topics[0], t1.qoses[0], t1.message, 0, &token);
 		assert(rc == 0);
 
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
@@ -743,7 +740,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 			usleep(200 * 1000);
 
 		/* 2 topic: send message OK */
-		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], t2.message, &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], t2.message, 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
@@ -755,12 +752,12 @@ int test_hp_mqtt_main(int argc, char ** argv)
 			usleep(200 * 1000);
 
 		/* 2 topic: changed, send message1 failed, message2 OK */
-		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], "1", &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], "1", 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
 
-		rc = hp_mqtt_pub(mqttcli, t2.topics3[1], t2.qoses[0], t2.message, &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics3[1], t2.qoses[0], t2.message, 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
@@ -771,18 +768,18 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		while(mqttcli->state != XHMDM_SUB_OK)
 			usleep(200 * 1000);
 
-		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[0], "2", &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[0], "2", 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
 
-		rc = hp_mqtt_pub(mqttcli, t2.topics3[1], t2.qoses[0], "3", &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics3[1], t2.qoses[0], "3", 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
 
 		/* exit message, OK */
-		rc = hp_mqtt_pub(mqttcli, t2.topics4[0], t2.qoses[0], "done", &token);
+		rc = hp_mqtt_pub(mqttcli, t2.topics4[0], t2.qoses[0], "done", 0, &token);
 		assert(rc == 0);
 		rc = MQTTAsync_waitForCompletion(mqttcli->context, token, 8000);
 		assert(rc == MQTTASYNC_SUCCESS);
@@ -797,7 +794,6 @@ int test_hp_mqtt_main(int argc, char ** argv)
 	return 0;
 }
 
-#endif
 #endif /* NDEBUG */
 #endif /* LIBHP_WITH_MQTT */
 

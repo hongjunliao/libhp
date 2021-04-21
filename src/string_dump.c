@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h> /* isprint */
 
 void fdump_chr(FILE * f, char chr, char const * beg/* = 0*/, char const * end/* = 0*/)
 {
@@ -42,7 +43,7 @@ int sdump_chr(char * buf, char chr, char const * beg/* = 0*/, char const * end/*
 	}
 
 	switch(chr){
-	default:   { buf[n++] = chr; buf[n] = '\0'; }  break;
+	default:   { buf[n++] = (chr >= 0 && isprint(chr) ? chr : 'X'); buf[n] = '\0'; }  break;
 	case '\r': { strcpy(buf + n, "\\r"); n += 2; } break;
 	case '\n': { strcpy(buf + n, "\\n"); n += 2; } break;
 	case '\t': { strcpy(buf + n, "\\t"); n += 2; } break;

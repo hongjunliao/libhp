@@ -12,15 +12,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
 #include "hp_sock_t.h"  /* hp_sock_t */
 
 #ifdef _MSC_VER
-
-#ifdef LIBHP_WITH_WIN32_INTERROP
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include <stdint.h>      /* size_t */
 #include "libhp.h"
@@ -103,7 +98,6 @@ int hp_iocp_add(hp_iocp * iocpctx
 	, int (* on_error)(hp_iocp * iocpctx, int index, int on_error, char const * errstr)
 	, void * arg
 	);
-int hp_iocp_close(hp_iocp * iocpctx, int index);
 int hp_iocp_size(hp_iocp * iocpctx);
 void * hp_iocp_arg(hp_iocp * iocpctx, int index);
 /*

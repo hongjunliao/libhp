@@ -26,7 +26,11 @@ extern "C" {
 #ifndef _MSC_VER
 #include "sds/sds.h"		/* sds */
 #else
+#ifdef LIBHP_WITH_WIN32_INTERROP
 #include "redis/src/sds.h"  /* sds */
+#else
+#include "hiredis/sds.h"
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 #endif /* _MSC_VER */
 
 #ifdef __cplusplus

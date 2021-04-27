@@ -9,6 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
 #include "hp_net.h"
 #include "hp_sock_t.h"  /* hp_sock_t */
 #include "hp_log.h"  /* hp_log */
@@ -24,6 +25,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/ioctl.h>  /* ioctl */
+#include <sys/fcntl.h>  /* fcntl */
 #include <arpa/inet.h>	/* inet_pton */
 #include <sys/socket.h>	/* basic socket definitions */
 #include <netinet/in.h>	/* sockaddr_in{} and other Internet defns */
@@ -36,10 +38,6 @@
 #endif //_MSC_VER
 
 #define LISTENQ 512  /* for listen() */
-
-#ifdef _MSC_VER
-#define ioctl ioctlsocket
-#endif //_MSC_VER
 
 #ifndef _MSC_VER
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len)
@@ -239,12 +237,13 @@ hp_sock_t hp_net_listen(int port)
 		close(fd);
 		return -1;
 	}
-	unsigned long sockopt = 1;
-#ifdef LIBHP_WITH_WIN32_INTERROP
-	if (ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt) < 0) {
+#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 #else
-	if (ioctl(fd, FIONBIO, &sockopt) < 0) {
+	u_long sockopt = 1;
+	if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
 #endif /* LIBHP_WITH_WIN32_INTERROP */
+	{
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
 		return -1;
@@ -424,12 +423,13 @@ hp_sock_t hp_net_connect(char const * ip, int port)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(port);
 
-	unsigned long sockopt = 1;
-#if (defined _MSC_VER) && (defined LIBHP_WITH_WIN32_INTERROP)
-	if (ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt) < 0) {
+#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+		if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 #else
-	if (ioctl(fd, FIONBIO, &sockopt) < 0) {
+		u_long sockopt = 1;
+		if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
 #endif /* LIBHP_WITH_WIN32_INTERROP */
+	{
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
 		return -1;

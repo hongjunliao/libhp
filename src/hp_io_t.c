@@ -9,13 +9,11 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-/* for sds */
-#ifdef _MSC_VER
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#endif
-
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h" /* list */
+#include "sdsinc.h"		/* sds */
 #include "hp_io_t.h"
+#include "hp_err.h"
 #include <unistd.h> /* close */
 #include <assert.h> /* assert */
 #include <errno.h> /*  */
@@ -24,13 +22,10 @@
 #include "hp_log.h"
 #include "str_dump.h" /*dumpstr*/
 #include <uv.h>   /* uv_ip4_name */
-#include "redis/src/adlist.h" /* list */
 
 #ifndef _MSC_VER
-#include <sys/ioctl.h>  /* ioctl */
+#include <sys/fcntl.h>  /* fcntl */
 #include <arpa/inet.h>	/* inet_ntop */
-#else
-#define ioctl ioctlsocket
 #endif /* _MSC_VER */
 
 extern int gloglevel;
@@ -102,15 +97,27 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 	for(;;){
 		struct sockaddr_in clientaddr = { 0 };
 		socklen_t len = sizeof(clientaddr);
-		int confd = accept(fd, (struct sockaddr *)&clientaddr, &len);
-		if(confd < 0 ){
-			if(errno == EINTR || errno == EAGAIN)
-				return 0;
-
-			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__
-					, errno, strerror(errno));
+		hp_sock_t confd = accept(fd, (struct sockaddr *)&clientaddr, &len);
+#ifndef _MSC_VER
+		if(!hp_sock_is_valid(confd)){
+			if (errno == EINTR || errno == EAGAIN) { return 0; }
+			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__, errno, strerror(errno));
+#else
+		if(!hp_sock_is_valid(confd)){
+			int err = WSAGetLastError();
+			if(WSAEWOULDBLOCK == err) { return 0; }
+			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__, errno, hp_err(errno));
+#endif /* _MSC_VER */
 			return -1;
 		}
+
+#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+		if (fcntl(confd, F_SETFL, O_NONBLOCK) < 0)
+#else
+		u_long sockopt = 1;
+		if (ioctlsocket(confd, FIONBIO, &sockopt) < 0)
+#endif /* LIBHP_WITH_WIN32_INTERROP */
+		{ hp_sock_close(confd); continue; }
 
 		int is_c = !(ioctx->on_accept || ioctx->iohdl.on_new);
 		if(!is_c && ioctx->on_accept && ioctx->on_accept(confd) < 0){ is_c = 1; }
@@ -121,19 +128,13 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 				if (rc != 0) { is_c = 1; }
 
 				nio->iohdl = &ioctx->iohdl;
-			} else { is_c = 1; }
+			}
+			else { is_c = 1; }
 		}
 		if (is_c) {
-			close(confd);
+			hp_sock_close(confd);
 			continue;
 		}
-
-		unsigned long sockopt = 1;
-#ifdef LIBHP_WITH_WIN32_INTERROP
-		ioctl(FDAPI_get_ossocket(fd), FIONBIO, &sockopt);
-#else
-		ioctl(confd, FIONBIO, &sockopt);
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 		char cliaddstr[64];
 		uv_ip4_name(&clientaddr, cliaddstr, sizeof(cliaddstr));
@@ -293,32 +294,6 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 	return rc;
 }
 
-int hp_io_close(hp_io_t * io)
-{
-	if(!(io)) { return -1; }
-	int rc;
-#ifndef _MSC_VER
-	rc = close(io->ed.fd);
-#else
-	rc = hp_iocp_close(io->iocp, io->index);
-#endif /* _MSC_VER */
-	return rc;
-}
-
-int hp_io_close_sock(hp_io_ctx * ioctx, hp_sock_t fd)
-{
-	if(!(ioctx && hp_sock_is_valid(fd))) { return -1; }
-
-	hp_io_t key = { 0 };
-	key.fd = fd;
-
-	listNode * node = listSearchKey(ioctx->iolist, &key);
-	if (!node) { return -1; }
-
-	hp_io_t * io = (hp_io_t *)listNodeValue(node);
-	return hp_io_close(io);
-}
-
 int hp_io_uninit(hp_io_ctx * ioctx)
 {
 	if(!ioctx)
@@ -326,7 +301,7 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 #ifndef _MSC_VER
 	hp_epoll_del(&ioctx->efds, ioctx->epolld.fd, EPOLLIN, &ioctx->epolld);
 	hp_epoll_uninit(&ioctx->efds);
-	close(ioctx->epolld.fd);
+	hp_sock_close(ioctx->epolld.fd);
 #else
 	hp_iocp_uninit(&ioctx->iocp);
 #endif /* _MSC_VER */
@@ -402,7 +377,7 @@ static void hp_io_t__on_error(int err, char const * errstr, void * arg)
 	if(node){ listDelNode(li, node); }
 
 	hp_epoll_del(io->efds, io->ed.fd, EPOLLIN | EPOLLOUT | EPOLLET, &io->ed);
-	close(io->ed.fd);
+	hp_sock_close(io->ed.fd);
 
 	hp_eti_uninit(&io->eti);
 	hp_eto_uninit(&io->eto);

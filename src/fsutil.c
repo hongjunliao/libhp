@@ -13,12 +13,8 @@
 #include <dirent.h>      /* DIR */
 #endif /* _MSC_VER */
 
-#ifdef _WIN32
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#endif
-
+#include "Win32_Interop.h"
+#include "sdsinc.h"
 #include <unistd.h>
 #include <sys/stat.h>    /* mkdir */
 #include <fcntl.h>       /* ioctl */
@@ -27,10 +23,9 @@
 #include <stdlib.h>
 #include <errno.h>       /* errno */
 #include <assert.h>      /* define NDEBUG to disable assertion */
-
+#include "hp_fs.h"
 #include <uv.h>
 #include <sys/stat.h>
-#include "sdsinc.h"
 
 #ifndef _MSC_VER
 /////////////////////////////////////////////////////////////////////////////////////
@@ -188,6 +183,11 @@ vsf_sysutil_lock_file_read(int fd)
   return lock_internal(fd, F_RDLCK);
 }
 
+#endif /*_MSC_VER*/
+
+#ifdef _MSC_VER
+#define S_ISREG(f) (S_IFREG & (f))
+#endif /* _MSC_VER */
 /////////////////////////////////////////////////////////////////////////////////////////
 
 int hp_foreach_file(uv_loop_t * loop,
@@ -261,7 +261,7 @@ int hp_foreach_file(uv_loop_t * loop,
 	return rc;
 }
 
-#endif /*_MSC_VER*/
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
@@ -280,10 +280,16 @@ static int json_dir_only_1_json_file(char const * fname)
 
 static int do_nothing(char const * fname) { return 0; }
 
-int test_fsutil_main(int argc, char ** argv)
+static int on_file(char const * fname)
+{
+	assert(fname);
+	++n;
+	return 0;
+}
+
+int test_hp_fs_main(int argc, char ** argv)
 {
 	int rc;
-#ifndef _MSC_VER
 	uv_loop_t uvloopobj = { 0 }, * uvloop = &uvloopobj;
 	rc = uv_loop_init(uvloop);
 	assert(rc == 0);
@@ -299,8 +305,16 @@ int test_fsutil_main(int argc, char ** argv)
 	rc = hp_foreach_file(uvloop, "json/", "json/JSON", json_dir_only_1_json_file);; assert(n == 1);
 	assert(rc == 0);
 
+	n = 0;
+	rc = hp_foreach_file(uvloop, "json/2", "", on_file); assert(n == 1);
+
+	//for (; !s_test->err && !s_test->done;) {
+	//	uv_run(s_test->uvloop, UV_RUN_NOWAIT);
+	//}
+
 	uv_loop_close(uvloop);
 
+#ifndef _MSC_VER
 
 	hp_fsutil_mkdir_p("/tmp/a/b/c/d/");
 	FILE * f = fopen("/tmp/a/b/c/d/e", "w");

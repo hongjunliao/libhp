@@ -9,10 +9,6 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef _WIN32
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32fixes.h"
-#endif
 
 #ifndef _MSC_VER
 #include <dlfcn.h>			/* dlsym */

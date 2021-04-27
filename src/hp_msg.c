@@ -9,11 +9,9 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
 #ifndef WIN32
 #include <netinet/in.h>  /* ntohl */
-#else
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
 #endif /* WIN32 */
 
 

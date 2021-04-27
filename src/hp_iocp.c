@@ -9,23 +9,18 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h"
+
 #ifdef _MSC_VER
-
 #ifdef LIBHP_WITH_WIN32_INTERROP
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-
-#define WSARecv FDAPI_WSARecv
-#define WSASend FDAPI_WSASend
-#define WSAGetLastError FDAPI_WSAGetLastError
 #define closesocket close
-//#define _fd_set(fd,set) FD_SET(FDAPI_get_ossocket(fd), set) 
+#define _fd_set(fd,set) FD_SET(FDAPI_get_ossocket(fd), set) 
 #define _fd_isset(fd,set) FD_ISSET(FDAPI_get_ossocket(fd), set)
-#define _fd_set(fd,set) FD_SET((fd), set) 
-//#define _fd_isset(fd,set) FD_ISSET(fd, set) 
 #else
 #include <winsock2.h>
+#define _fd_set(fd,set) FD_SET((fd), set) 
+#define _fd_isset(fd,set) FD_ISSET(fd, set) 
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include "hp_iocp.h"    /* hp_iocp */
@@ -46,7 +41,6 @@
 //#include "getopt.h"			/* getopt_long */
 
 #include "c-vector/cvector.h"
-#include "redis/src/adlist.h"
 
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -72,7 +66,7 @@
 #define HP_IOCP_WMF_FDW         (1 << 2)
 #define HP_IOCP_WMF_FDE         (1 << 3)
 
-#define HP_IOCP_RBUF  (1024 * 512)
+#define HP_IOCP_RBUF  (1024 * 4)
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -130,6 +124,10 @@ struct hp_iocp_item {
 	 * callback for connect
 	 * */
 	hp_sock_t(* connect)(hp_iocp * iocpctx, int index);
+
+	int             err;        /* error for this I/O operation */
+	hp_err_t        errstr;
+
 	void * arg;
 };
 
@@ -266,6 +264,12 @@ static int is_item_avail(hp_iocp_item * item)
 	);
 }
 
+static int is_item_done(hp_iocp_item * item)
+{
+	assert(item);
+	return (!hp_sock_is_valid(item->sock) && item->n_rb == 0 && item->n_wb == 0);
+}
+
 static void rm_item_obuf(hp_iocp_item * item)
 {
 	assert(item);
@@ -290,55 +294,11 @@ static void hp_iocp_on_item_error(hp_iocp * iocpctx, hp_iocp_item * item
 	, int err, char const * errstr)
 {
 	hp_iocp_close_socket(iocpctx, item, flags);
+	if (item->n_wb == 0) { rm_item_obuf(item); }
 
-	if (item->n_rb == 0 && item->n_wb == 0) {
-		if (item->on_error)
-			item->on_error(iocpctx, item->id, err, errstr);
-		//listDelNode()
+	if (is_item_done(item) && item->on_error) {
+		item->on_error(iocpctx, item->id, err, errstr);
 	}
-
-	if (item->n_wb == 0) {
-		rm_item_obuf(item);
-	}
-}
-
-int hp_iocp_close(hp_iocp * iocpctx, int index)
-{
-	if (!(iocpctx && cvector_in(iocpctx->items, index)))
-		return -1;
-	hp_iocp_item * item = iocpctx->items + index;
-	if (!item->obuf)
-		return 0;
-
-	hp_iocp_on_item_error(iocpctx, item, 1, 0, "(close forwardly)");
-	return 0;
-}
-
-static void hp_iocp_on_item_close(hp_iocp * iocpctx, hp_iocp_item * item)
-{
-	assert(iocpctx && item);
-	hp_iocp_on_item_error(iocpctx, item, 1, 0, "(data incoming callback)");
-}
-
-static void hp_iocp_on_item_read_error(hp_iocp * iocpctx, hp_iocp_item * item
-	, int err, char const * errstr)
-{
-	assert(iocpctx && item);
-	hp_iocp_on_item_error(iocpctx, item, 1, err, errstr);
-}
-
-/* @param obuf MUST be removed from hp_iocp_item::obuf */
-static void hp_iocp_on_item_write_error(hp_iocp * iocpctx, hp_iocp_item * item
-	, struct hp_iocp_obuf * obuf
-	, int err, char const * errstr)
-{
-	assert(iocpctx && item && obuf);
-
-	if (obuf->free)
-		obuf->free(obuf->ptr);
-	free(obuf);
-
-	hp_iocp_on_item_error(iocpctx, item, 1, err, errstr);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -410,8 +370,9 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 {
 	assert((iocpctx && item));
 
-	if(!(item->n_rb < item->rb_max))
+	if(item->rb_max > 0 && !(item->n_rb < item->rb_max))
 		return 0;
+
 	char * buf = malloc(item->rb_size);
 	if(!buf)
 		return 0;
@@ -424,13 +385,17 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 	DWORD flags = 0;
 	int rc = WSARecv(item->sock, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
 		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
-
 	DWORD err = WSAGetLastError();
-	if (rc == 0 || err == WSA_IO_PENDING)
+
+	if (rc == 0 || err == WSA_IO_PENDING) {
 		++item->n_rb;
+	}
 	else {
 		free(buf);
-		hp_iocp_on_item_read_error(iocpctx, item, err, "WSARecv");
+		wsaoverlapped_free(overlapped);
+
+		hp_err_t errstr = "WSARecv: %s";
+		hp_iocp_on_item_error(iocpctx, item, 1, err, hp_err(err, errstr));
 		return -1;
 	}
 	return 0;
@@ -459,8 +424,11 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 	if (!(rc == 0 || err == WSA_IO_PENDING)) {
 
 		wsaoverlapped_free(overlapped);
+		if (obuf->free) { obuf->free(obuf->ptr); }
+		free(obuf);
+
 		hp_err_t errstr = "WSASend: %s";
-		hp_iocp_on_item_write_error(iocpctx, item, obuf, err, hp_err(err, errstr));
+		hp_iocp_on_item_error(iocpctx, item, 1, err, hp_err(err, errstr));
 	}
 	else {
 		++item->n_wb;
@@ -509,9 +477,7 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 					else { item->connect(iocpctx, item->id); }
 				}
 				if (iocpmsg->flags & HP_IOCP_WMF_FDW) {
-					if (item->obuf) {
-						hp_iocp_do_write(iocpctx, item);
-					}
+					hp_iocp_do_write(iocpctx, item);
 				}
 			}
 		}
@@ -556,13 +522,21 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 					sdsIncrLen(item->ibuf, ibufl - ibufL);
 				}
 
-				if (rc < 0)
-					hp_iocp_on_item_close(iocpctx, item);
+				if (rc < 0) { /* close by user */
+					hp_iocp_close_socket(iocpctx, item, 1);
+					if (item->n_wb == 0) { rm_item_obuf(item); }
+
+					item->err = 0;
+					strncpy(item->errstr, "user callback", sizeof(item->errstr));
+				}
 			}
 			else { /* read error, EOF? */
-				hp_iocp_on_item_read_error(iocpctx, item, iocpmsg->err, iocpmsg->errstr);
-			}
+				hp_iocp_close_socket(iocpctx, item, 1);
+				if (item->n_wb == 0) { rm_item_obuf(item); }
 
+				item->err = iocpmsg->err;
+				strncpy(item->errstr, iocpmsg->errstr, sizeof(item->errstr));
+			}
 			free(wsabuf->buf);
 		}
 		else { /* write done */
@@ -571,27 +545,32 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 			assert(obuf);
 			--item->n_wb;
 
-			if (nbuf > 0) {
+			if (nbuf > 0 && nbuf != wsabuf->len) {
 				item->obytes += nbuf;
 				/* write some, update for recommit */
-				if (nbuf != wsabuf->len) {
-					assert(item->n_wb == 0);
+				assert(item->n_wb == 0);
 
-					obuf->buf.buf = (char *)wsabuf->buf + nbuf;
-					obuf->buf.len = (wsabuf->len - nbuf);
-					cvector_push_back(item->obuf, obuf);
-				}
-				else {
-					if (obuf->free)
-						obuf->free(obuf->ptr);
-					free(obuf);
-				}
+				obuf->buf.buf = (char *)wsabuf->buf + nbuf;
+				obuf->buf.len = (wsabuf->len - nbuf);
+				cvector_push_back(item->obuf, obuf);
 			}
-			else { /* write error, EOF? */
-				hp_iocp_on_item_write_error(iocpctx, item, obuf, iocpmsg->err, iocpmsg->errstr);
+			else { /* write done or error, EOF? */
+				if (obuf->free) { obuf->free(obuf->ptr); }
+				free(obuf);
+
+				if (nbuf == 0) {
+					hp_iocp_close_socket(iocpctx, item, 1);
+					if (item->n_wb == 0) { rm_item_obuf(item); }
+				}
 			}
 		}
-
+		/* this is a place where we need to check if item still works fine */
+		if(!hp_sock_is_valid(item->sock) && item->n_wb == 0) { 
+			rm_item_obuf(item); 
+		}
+		if (is_item_done(item) && item->on_error) {
+			item->on_error(iocpctx, item->id, item->err, item->errstr);
+		}
 		wsaoverlapped_free(overlapped);
 	}
 	else{
@@ -634,15 +613,16 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 #endif /* NDEBUG */
 	hp_iocp * iocpctx = (hp_iocp *)arg;
 	assert(iocpctx);
-
 	int rc, exit_ = 0;
+	list * socks = listCreate();
+	listSetFreeMethod(socks, select_sock_free);
+	listSetMatchMethod(socks, select_sock_match);
+#ifndef LIBHP_WITH_WIN32_INTERROP
+
 	struct fd_set rfds_obj, wfds_obj, exceptfds_obj;
 	struct fd_set * rfds = &rfds_obj, *wfds = &wfds_obj, * exceptfds = &exceptfds_obj;
 	struct timeval timeoutobj = { 0, iocpctx->stime_out * 1000 }, * timeout = &timeoutobj;
 
-	list * socks = listCreate();
-	listSetFreeMethod(socks, select_sock_free);
-	listSetMatchMethod(socks, select_sock_match);
 	for (;;) {
 		/* reset fd_sets for select */
 		FD_ZERO(rfds);
@@ -726,8 +706,6 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 			continue; /* stop this time */
 		}
 
-		Sleep(200);
-
 		iter = listGetIterator(socks, 0);
 		for (; (node = listNext(iter));) {
 
@@ -752,10 +730,12 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 			}
 		}
 		listReleaseIterator(iter);
+
+		Sleep(iocpctx->stime_out);
 	}
+#endif /* LIBHP_WITH_WIN32_INTERROP */			
 
 	listRelease(socks);
-
 	/* post "exit" message */
 	hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_END(iocpctx), GetCurrentThread());
 
@@ -1012,7 +992,7 @@ int hp_iocp_add(hp_iocp * iocpctx
 item_done:
 	item->sock = sock;
 	item->rb_size = (rb_size <= 0 ? (int)HP_IOCP_RBUF : rb_size);
-	item->rb_max = (rb_max <= 0 ? 2 : rb_max);
+	item->rb_max = 0; //(rb_max <= 0 ? 4 : rb_max);
 	item->connect = on_connect;
 	item->on_data = on_data;
 	item->on_error = on_error;
@@ -1054,11 +1034,16 @@ void * hp_iocp_arg(hp_iocp * iocpctx, int index)
 int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
 	, hp_iocp_free_t freecb, void * ptr)
 {
-	if(!(iocpctx && cvector_in(iocpctx->items, index) && data && ndata > 0))
-		return -1;
+	int rc = 0;
+	if(!(iocpctx && cvector_in(iocpctx->items, index) && data && ndata > 0)){
+		rc = -1;
+		goto ret;
+	}
 	hp_iocp_item * item = iocpctx->items + index;
-	if(!item->obuf)
-		return -2;
+	if (!item->obuf) {
+		rc = -2;
+		goto ret;
+	}
 
 	struct hp_iocp_obuf * obuf = calloc(1, sizeof(struct hp_iocp_obuf));
 	obuf->ptr = ptr;
@@ -1086,8 +1071,9 @@ int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
 	//msg->sock = item->sock;
 	//int tid = GetThreadId(iocpctx->sthread);
 	//hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_WINC, msg);
-
-	return 0;
+ret:
+	if (rc != 0 && freecb && (freecb != (void *)-1)) { freecb(ptr ? ptr : data); }
+	return rc;
 }
 
 int hp_iocp_try_write(hp_iocp * iocpctx, int index)

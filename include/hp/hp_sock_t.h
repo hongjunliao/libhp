@@ -22,7 +22,6 @@ extern "C" {
 #ifdef LIBHP_WITH_WIN32_INTERROP
 #include "redis/src/Win32_Interop/Win32_FDAPI.h"
 typedef int hp_sock_t;
-SOCKET FDAPI_get_ossocket(int fd);
 /* invalid socket */
 #define hp_sock_invalid 0
 #define hp_sock_close close

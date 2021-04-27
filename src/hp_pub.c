@@ -9,12 +9,11 @@
 
 #ifdef LIBHP_WITH_REDIS
 
+#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #include <sys/time.h> /*gettimeofday*/
 #else
-#include "deps/redis/src/Win32_Interop/Win32_Portability.h"
-#include "deps/redis/src/Win32_Interop/Win32_Time.h"
-#include "deps/redis/src/Win32_Interop/win32fixes.h"
+#include <WinSock2.h>
 #endif /* _MSC_VER */
 
 #include "hp_pub.h"
@@ -452,9 +451,7 @@ int hp_sub(redisAsyncContext * subc, int n_topic, char * const* topic)
 	if(topic && n_topic > 0){
 
 		/* update session */
-		if(strlen(done->shasup) > 0){
-			rc = hp_sub_sup(done->c, done->shasup, done->sid, n_topic, topic);
-		}
+		rc = hp_sub_sup(done->c, done->shasup, done->sid, n_topic, topic);
 		/* subscribe */
 		rc = hp_sub_dosub(subc, n_topic, topic);
 	}
@@ -519,16 +516,6 @@ int hp_sub_ping(redisAsyncContext * subc)
 #endif /* _MSC_VER */
 #include "hp_config.h"	/* hp_config_t  */
 extern hp_config_t g_conf;
-
-#ifndef _MSC_VER
-#define rev_init(rev) do { if(uv_loop_init(rev) != 0) { rev = 0; } } while(0)
-#define rev_run(rev) do { uv_run(rev, UV_RUN_NOWAIT); } while(0)
-#define rev_close(rev) do { uv_loop_close(rev); } while(0)
-#else
-#define rev_init(rev) do { rev = aeCreateEventLoop(1024 * 10);assert(rev); } while(0)
-#define rev_run(rev) do { aeProcessEvents((rev), AE_ALL_EVENTS); } while(0)
-#define rev_close(rev) do { aeDeleteEventLoop(rev); } while(0)
-#endif /* _MSC_VER */
 
 static int done = 0, dones[64] = { 0 };
 static int s_conn_flag = 0;

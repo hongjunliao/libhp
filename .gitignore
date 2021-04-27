@@ -21,3 +21,4 @@ src/config.h
 /Debug/
 deps/
 bak/
+*.pdb

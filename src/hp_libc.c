@@ -416,11 +416,6 @@ int test_hp_libc_main(int argc, char ** argv)
 //			hp_nfree(v[i]);
 //		cvector_free(v);
 	}
-#ifndef _MSC_VER
-	int test_fsutil_main(int argc, char ** argv);
-	rc = test_fsutil_main(argc, argv); assert(rc == 0);
-#endif /* _MSC_VER */
-
 	return rc;
 }
 

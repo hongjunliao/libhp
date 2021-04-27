@@ -12,15 +12,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #include <netinet/in.h>	/* sockaddr_in */
 #include <stdlib.h>     /* uint32_t */
-#else
-#ifdef LIBHP_WITH_WIN32_INTERROP
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 #endif /* _MSC_VER */
 #include "hp_sock_t.h"  /* hp_sock_t */
  /////////////////////////////////////////////////////////////////////////////////////

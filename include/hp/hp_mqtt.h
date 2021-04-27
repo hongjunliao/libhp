@@ -42,7 +42,7 @@ struct hp_mqtt {
 	int 		state;
 	sds *       topics;
 	int *		qoses;
-
+	sds         id;
 	MQTTAsync 	context;
 	hp_mqtt_connect_cb on_connect;
 	hp_mqtt_message_cb on_message;

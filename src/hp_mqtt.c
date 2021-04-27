@@ -55,55 +55,19 @@ static struct pubsub_opts opts =
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-static int handle_cmd(char const * s){
-	if(!(s && strlen(s) > 0))
-		return -1;
-	if(s[0] == '-'){
-		int i = 0;
-		int argc = 0;
-		sds * argv = sdssplitlen(s, strlen(s), " ", 1, &argc);
-		for(i = 0; i < argc; ++i){
-			if (strcmp(argv[i], "--trace") == 0 && i + 1 < argc) {
-				int level = atoi(argv[i + 1]);
-				if(!(level >= MQTTASYNC_TRACE_MAXIMUM && level <= MQTTASYNC_TRACE_FATAL))
-					level = opts.tracelevel;
-				opts.tracelevel = level;
-				MQTTAsync_setTraceLevel(opts.tracelevel);
-				++i;
-
-				printf("%s: set --trace %d\n", __FUNCTION__, opts.tracelevel);
-			}
-		}
-		sdsfreesplitres(argv, argc);
-	}
-	return 0;
-}
-
-
 static int hp_mqtt__messageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message)
 {
 	assert(context);
 	hp_mqtt * cli = (hp_mqtt *)context;
 
-	sds topic = sdsnewlen(topicName, topicLen)
-			, msg = sdsnewlen(message->payload, message->payloadlen);
-
-	if(*g_loglevel > 8){
-
-		printf("%s: topic='%s', payload=%d/'%s'\n", __FUNCTION__
-			, topic, (int)sdslen(msg), msg);
-	}
-
-	if(sdslen(msg) > 0 && msg[0] == '$')
-		handle_cmd(msg + 1);
+	sds topic = sdsnewlen(topicName, topicLen);
 
 	if(cli->on_message)
-		cli->on_message(cli, topic, msg, sdslen(msg), cli->on_arg);
+		cli->on_message(cli, topic, message->payload, message->payloadlen, cli->on_arg);
 
 	fflush(stdout);
 
 	sdsfree(topic);
-	sdsfree(msg);
 	MQTTAsync_freeMessage(&message);
 	MQTTAsync_free(topicName);
 
@@ -258,6 +222,7 @@ int hp_mqtt_init(hp_mqtt * cli
 	/* @see MQTTAsync_connectOptions::cleansession */
 	if(opts.clientid)
 		free(opts.clientid);
+	
 	if(clientid && strlen(clientid) > 0){
 		opts.clientid = strdup(clientid);
 		conn_opts.cleansession = 0;
@@ -268,6 +233,7 @@ int hp_mqtt_init(hp_mqtt * cli
 	}
 
 	memset(cli, 0, sizeof(hp_mqtt));
+	cli->id = sdsnew(clientid);
 	cli->state = 0;
 	cvector_init(cli->topics, 2);
 	cvector_init(cli->qoses, 2);
@@ -552,6 +518,7 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 		sdsfree(cli->topics[i]);
 	cvector_free(cli->topics);
 	cvector_free(cli->qoses);
+	sdsfree(cli->id);
 	memset(cli, 0, sizeof(hp_mqtt));
 }
 

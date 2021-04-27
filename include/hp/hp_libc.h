@@ -142,32 +142,8 @@ typedef struct hp_tuple_##T { \
 	T6 _6; \
 	T7 _7; \
 } T
-/////////////////////////////////////////////////////////////////////////////////////////
-
-#ifndef _MSC_VER
-/* fsutil */
-void hp_fsutil_mkdir_p(const char *dir);
-int hp_fsutil_rm_r(const char *path);
-int hp_fsutil_chown_R(const char *dir, char const * ug);
-
-#include <uv.h>
-/**!
- * loop dir @param dirstr and for each file, call @param fn and pass the
- * filename @fname
- *
- * */
-int hp_foreach_file(uv_loop_t * loop,
-		char const * dirstr, char const * posfix, int (* fn)(char const * fname));
-#endif /* _MSC_VER */
-
 
 /////////////////////////////////////////////////////////////////////////////////////////
-
-typedef struct hp_libc hp_libc;
-struct hp_libc {
-	int (* strlen)(char const * str);
-};
-extern hp_libc const HP_LIBC;
 
 #ifndef NDEBUG
 int test_hp_libc_main(int argc, char ** argv);

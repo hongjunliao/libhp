@@ -13,12 +13,18 @@
 
 #ifdef LIBHP_WITH_REDIS
 
-#ifndef _MSC_VER
+#ifndef LIBHP_WITH_WIN32_INTERROP
 #include <uv.h>
 typedef uv_loop_t hp_redis_ev_t;
+#define rev_init(rev) do { if(uv_loop_init(rev) != 0) { rev = 0; } } while(0)
+#define rev_run(rev) do { uv_run(rev, UV_RUN_NOWAIT); } while(0)
+#define rev_close(rev) do { uv_loop_close(rev); } while(0)
 #else
 #include "redis/src/ae.h" /* aeEventLoop */
 typedef aeEventLoop hp_redis_ev_t;
+#define rev_init(rev) do { rev = aeCreateEventLoop(1024 * 10);assert(rev); } while(0)
+#define rev_run(rev) do { aeProcessEvents((rev), AE_ALL_EVENTS); } while(0)
+#define rev_close(rev) do { aeDeleteEventLoop(rev); } while(0)
 #endif /* _MSC_VER */
 #include <hiredis/async.h>
 

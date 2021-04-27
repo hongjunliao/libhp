@@ -20,7 +20,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <hiredis/async.h>
-#ifndef _MSC_VER
+#ifndef LIBHP_WITH_WIN32_INTERROP
 #include <hiredis/adapters/libuv.h>
 #else
 #include <hiredis/adapters/ae.h>
@@ -80,7 +80,7 @@ int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * s_ev, char const 
 	}
 	c->dataCleanup = 0;
 
-#ifndef _MSC_VER
+#ifndef LIBHP_WITH_WIN32_INTERROP
 	redisLibuvAttach(c, s_ev);
 #else
 	redisAeAttach(s_ev, c);
@@ -115,17 +115,6 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 
 #ifndef NDEBUG
 #include "hp_config.h"
-
-#ifndef _MSC_VER
-#define rev_init(s_ev) do { if(uv_loop_init(s_ev) != 0) { s_ev = 0; } } while(0)
-#define rev_run(s_ev) do { uv_run(s_ev, UV_RUN_NOWAIT); } while(0)
-#define rev_close(s_ev) do { uv_loop_close(s_ev); } while(0)
-#else
-#define rev_init(s_ev) do { s_ev = aeCreateEventLoop(1024 * 10);assert(s_ev); } while(0)
-#define rev_run(s_ev) do { aeProcessEvents((s_ev), AE_ALL_EVENTS); } while(0)
-#define rev_close(s_ev) do { aeDeleteEventLoop(s_ev); } while(0)
-#endif /* _MSC_VER */
-
 extern hp_config_t g_conf;
 static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;
 

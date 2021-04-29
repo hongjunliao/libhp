@@ -7,26 +7,18 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef _MSC_VER
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#include "redis/src/Win32_Interop/Win32_ThreadControl.h"
-//#define QFORK_MAIN_IMPL
+#include "Win32_Interop.h"
+#include "redis/src/dict.h"
+#ifdef LIBHP_WITH_WIN32_INTERROP
 #include "redis/src/Win32_Interop/Win32_QFork.h"
-#endif /* _MSC_VER */
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include <assert.h>
+#include <sys/time.h>
 #include "hphdrs.h"
 #include "c-vector/cvector.h"
 #include "inih/ini.h"
-#include "redis/src/dict.h"
 #include "zlog.h"
-
-int hiredis_exmaple_ae_main(int argc, char **argv);
-
-#ifdef _MSC_VER
-#define strcasecmp  _stricmp
-#endif /* _MSC_VER */
 
 int gloglevel = 0;
 
@@ -161,8 +153,13 @@ int main(int argc, char ** argv)
 	else return -1;
 
 #ifdef LIBHP_WITH_REDIS
-//	rc = hiredis_exmaple_ae_main(argc, argv); assert(rc == 0);
-	
+#ifdef LIBHP_WITH_WIN32_INTERROP
+	int hiredis_exmaple_ae_main(int argc, char **argv);
+	rc = hiredis_exmaple_ae_main(argc, argv); assert(rc == 0);
+#endif
+	int hiredis_exmaple_uv_main(int argc, char **argv);
+	rc = hiredis_exmaple_uv_main(argc, argv); assert(rc == 0);
+
 	rc = test_hp_redis_main(argc, argv); assert(rc == 0);
 	rc = test_hp_pub_main(argc, argv); assert(rc == 0);
 #endif

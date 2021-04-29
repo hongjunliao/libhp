@@ -106,7 +106,8 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 		if(!hp_sock_is_valid(confd)){
 			int err = WSAGetLastError();
 			if(WSAEWOULDBLOCK == err) { return 0; }
-			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__, errno, hp_err(errno));
+			hp_err_t errstr = "accept: %s";
+			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__, errno, hp_err(errno, errstr));
 #endif /* _MSC_VER */
 			return -1;
 		}

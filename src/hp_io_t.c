@@ -69,6 +69,7 @@ static int hp_io_internal_on_error(hp_io_t * io, int err, char const * errstr)
 	assert(io->iocp && io->iocp->user);
 	li = (list *)io->iocp->user;
 #endif /* _MSC_VER */
+
 	hp_log((err != 0 ? stderr : stdout), "%s: close session, fd=%d, err=%d/'%s', total=%d\n"
 		, __FUNCTION__, io->fd
 		, err, errstr, listLength(li));
@@ -315,6 +316,8 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 
 #ifndef _MSC_VER
 
+static void hp_io_t__on_error(int err, char const * errstr, void * arg);
+
 static int hp_io_t_io_cb(struct epoll_event * ev)
 {
 	assert(ev);
@@ -323,9 +326,7 @@ static int hp_io_t_io_cb(struct epoll_event * ev)
 		hp_io_t * io = (hp_io_t *)hp_epoll_arg(ev);
 		assert(io);
 
-		ev->events = 0;
-		io->on_error(io, EPOLLERR, "EPOLLERR");
-
+		hp_io_t__on_error(EPOLLERR, "EPOLLERR", ev);
 		return 0;
 	}
 

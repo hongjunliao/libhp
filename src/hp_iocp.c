@@ -370,12 +370,11 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 {
 	assert((iocpctx && item));
 
-	if(item->rb_max > 0 && !(item->n_rb < item->rb_max))
-		return 0;
+	if(item->rb_max > 0 && !(item->n_rb < item->rb_max)) { return 0; }
+	if (!hp_sock_is_valid(item->sock)) { return 0; }
 
 	char * buf = malloc(item->rb_size);
-	if(!buf)
-		return 0;
+	if(!buf) { return 0; }
 
 	WSABUF bufs[1];
 	bufs[0].buf = buf;
@@ -387,16 +386,20 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
 	DWORD err = WSAGetLastError();
 
-	if (rc == 0 || err == WSA_IO_PENDING) {
-		++item->n_rb;
-	}
-	else {
+	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
 		free(buf);
 		wsaoverlapped_free(overlapped);
 
 		hp_err_t errstr = "WSARecv: %s";
 		hp_iocp_on_item_error(iocpctx, item, 1, err, hp_err(err, errstr));
 		return -1;
+	}
+	else {
+		++item->n_rb;
+		if (rc == 0) {
+			hp_iocp_close_socket(iocpctx, item, 1);
+			if (item->n_wb == 0) { rm_item_obuf(item); }
+		}
 	}
 	return 0;
 }
@@ -405,8 +408,8 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 {
 	assert ((iocpctx && item && item->obuf));
 
-	if(cvector_empty(item->obuf))
-		return;
+	if (!hp_sock_is_valid(item->sock)) { return; }
+	if(cvector_empty(item->obuf)) { return; }
 
 	struct hp_iocp_obuf * obuf = item->obuf[0];
 	cvector_remove(item->obuf, item->obuf);
@@ -419,9 +422,9 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 	int rc = WSASend(item->sock, (LPWSABUF)wsaoverlapped_bufs(overlapped)
 		, (DWORD)wsaoverlapped_n_bufs(overlapped)
 		, (LPDWORD)0, flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
-
 	DWORD err = WSAGetLastError();
-	if (!(rc == 0 || err == WSA_IO_PENDING)) {
+
+	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
 
 		wsaoverlapped_free(overlapped);
 		if (obuf->free) { obuf->free(obuf->ptr); }
@@ -432,6 +435,9 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 	}
 	else {
 		++item->n_wb;
+		if (rc == 0) {
+			hp_iocp_close_socket(iocpctx, item, 1);
+		}
 	}
 }
 

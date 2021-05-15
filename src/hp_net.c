@@ -608,7 +608,9 @@ size_t readv_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t
 	return nread;
 }
 
-size_t read_a(int fd, int * err, char * buf, size_t len, size_t bytes)
+#endif
+#ifndef _MSC_VER
+size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if (!(fd >= 0 && err && buf && len > 0))
 		return 0;
@@ -636,6 +638,34 @@ size_t read_a(int fd, int * err, char * buf, size_t len, size_t bytes)
 	}
 	return nread;
 }
+#else
+int read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
+{
+	if(!(buf && err)) { return -1; }
+	int nread = 0;
+
+	*err = 0;
+	for (;;) {
+		int r = (int)recv(fd, buf + nread, len - nread, 0);
+		if (SOCKET_ERROR == r) {
+			*err = WSAGetLastError();
+			if (*err == WSAEWOULDBLOCK) {
+				*err = EAGAIN;
+			}
+			break;
+		}
+		else if (r == 0) { /* EOF */
+			break;
+		}
+		nread += r;
+		if (bytes > 0 && nread == bytes) {
+			break;
+		}
+	}
+	return nread;
+}
+#endif
+#ifndef _MSC_VER
 /*
  * Write "n" bytes to a descriptor.
  * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e

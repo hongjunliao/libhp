@@ -28,6 +28,7 @@
 #include "hp_log.h"  /* hp_log */
 #include "hp_libc.h" /* hp_tuple2_t */
 #include "hp_err.h"	 /* hp_err */
+#include "hp_net.h"	 /* read_a */
 #include <process.h>    /* _beginthreadex */
 //#include <sysinfoapi.h> /* GetSystemInfo */
 #include <stdio.h>
@@ -363,6 +364,9 @@ static void hp_iocp_overlapped_free(WSAOVERLAPPED * overlapped)
 #define wsaoverlapped_arg(overlapped) ((hp_iocp_overlapped_get(overlapped))->arg)
 
 /////////////////////////////////////////////////////////////////////////////////////
+/* for WSARecv */
+static char zreadchar[1];
+
 /*
  * the actual I/O functions
  * */
@@ -370,15 +374,14 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 {
 	assert((iocpctx && item));
 
-	if(item->rb_max > 0 && !(item->n_rb < item->rb_max)) { return 0; }
 	if (!hp_sock_is_valid(item->sock)) { return 0; }
 
-	char * buf = malloc(item->rb_size);
-	if(!buf) { return 0; }
-
+	// Use zero length read with overlapped to get notification
+	// of when data is available
+	// see redis.win\src\Win32_Interop\win32_wsiocp.c\WSIOCP_QueueNextRead
 	WSABUF bufs[1];
-	bufs[0].buf = buf;
-	bufs[0].len = item->rb_size;
+	bufs[0].buf = zreadchar;
+	bufs[0].len = 0;
 
 	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->sock, 0, bufs, 1, 0);
 	DWORD flags = 0;
@@ -387,7 +390,6 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 	DWORD err = WSAGetLastError();
 
 	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
-		free(buf);
 		wsaoverlapped_free(overlapped);
 
 		hp_err_t errstr = "WSARecv: %s";
@@ -396,10 +398,6 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 	}
 	else {
 		++item->n_rb;
-		if (rc == 0) {
-			hp_iocp_close_socket(iocpctx, item, 1);
-			if (item->n_wb == 0) { rm_item_obuf(item); }
-		}
 	}
 	return 0;
 }
@@ -435,9 +433,6 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 	}
 	else {
 		++item->n_wb;
-		if (rc == 0) {
-			hp_iocp_close_socket(iocpctx, item, 1);
-		}
 	}
 }
 
@@ -506,34 +501,27 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 		assert(wsaoverlapped_n_bufs(overlapped) == 1);
 
 		if (wsaoverlapped_io(overlapped) == 0) { /* read done */
-			assert(wsabuf && wsabuf->buf && wsabuf->len == item->rb_size);
-			assert(nbuf <= item->rb_size);
+			assert(wsabuf && wsabuf->buf && wsabuf->len == 0 && nbuf == 0);
+			int err = 0;
 			--item->n_rb;
+			nbuf = (int)read_a(item->sock, &err, item->ibuf + sdslen(item->ibuf), sdsavail(item->ibuf), 0);
+			if (EAGAIN == err) {
+				if (nbuf > 0) {
+					sdsIncrLen(item->ibuf, nbuf);
+					item->ibytes += nbuf;
 
-			if (nbuf > 0) {
-				item->ibytes += nbuf;
-
-				size_t ibufL, ibufl;
-				if(sdslen(item->ibuf) == 0){
-					ibufL = ibufl = nbuf;
-					rc = item->on_data(iocpctx, item->id, wsabuf->buf, &ibufl);
-					if(rc >= 0 && ibufl > 0){
-						item->ibuf = sdscatlen(item->ibuf, wsabuf->buf, ibufl);
-					}
-				}
-				else{
-					item->ibuf = sdscatlen(item->ibuf, wsabuf->buf, nbuf);
+					size_t ibufL, ibufl;
 					ibufL = ibufl = sdslen(item->ibuf);
 					rc = item->on_data(iocpctx, item->id, item->ibuf, &ibufl);
 					sdsIncrLen(item->ibuf, ibufl - ibufL);
-				}
 
-				if (rc < 0) { /* close by user */
-					hp_iocp_close_socket(iocpctx, item, 1);
-					if (item->n_wb == 0) { rm_item_obuf(item); }
+					if (rc < 0) { /* close by user */
+						hp_iocp_close_socket(iocpctx, item, 1);
+						if (item->n_wb == 0) { rm_item_obuf(item); }
 
-					item->err = 0;
-					strncpy(item->errstr, "user callback", sizeof(item->errstr));
+						item->err = 0;
+						strncpy(item->errstr, "user callback", sizeof(item->errstr));
+					}
 				}
 			}
 			else { /* read error, EOF? */
@@ -543,7 +531,6 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 				item->err = iocpmsg->err;
 				strncpy(item->errstr, iocpmsg->errstr, sizeof(item->errstr));
 			}
-			free(wsabuf->buf);
 		}
 		else { /* write done */
 			assert(nbuf <= wsabuf->len);    /* finished bytes should NOT bigger than committed */
@@ -1003,6 +990,7 @@ item_done:
 	item->on_data = on_data;
 	item->on_error = on_error;
 	item->arg = arg;
+	item->ibuf = sdsMakeRoomFor(item->ibuf, 1024 * 128);
 	/* connect */
 	if (hp_sock_is_valid(item->sock)) {
 		rc = hp_iocp_do_socket(iocpctx, item);

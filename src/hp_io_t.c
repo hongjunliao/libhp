@@ -259,9 +259,9 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 #else
 	for (;;) {
 		MSG msgobj = { 0 }, *msg = &msgobj;
-		if (PeekMessage((LPMSG)msg, (HWND)-1
+		for (; PeekMessage((LPMSG)msg, (HWND)-1
 				, (UINT)HP_IOCP_WM_FIRST(&ioctx->iocp), (UINT)HP_IOCP_WM_LAST(&ioctx->iocp)
-				, PM_REMOVE | PM_NOYIELD)) {
+				, PM_REMOVE | PM_NOYIELD); ) {
 
 			rc = hp_iocp_handle_msg(&ioctx->iocp, msg->message, msg->wParam, msg->lParam);
 		}
@@ -269,6 +269,15 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 		/* user loop */
 		listIter * iter = 0;
 		listNode * node;
+
+		iter = listGetIterator(ioctx->iolist, 0);
+		for (node = 0; (node = listNext(iter));) {
+			hp_io_t * io = (hp_io_t *)listNodeValue(node);
+			assert(io);
+			hp_iocp_try_write(&ioctx->iocp, io->index);
+		}
+		listReleaseIterator(iter);
+
 		iter = listGetIterator(ioctx->iolist, 0);
 		for (node = 0; (node = listNext(iter));) {
 			hp_io_t * io = (hp_io_t *)listNodeValue(node);
@@ -277,14 +286,6 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 			if (io->iohdl && io->iohdl->on_loop) {
 				io->iohdl->on_loop(io);
 			}
-		}
-		listReleaseIterator(iter);
-
-		iter = listGetIterator(ioctx->iolist, 0);
-		for (node = 0; (node = listNext(iter));) {
-			hp_io_t * io = (hp_io_t *)listNodeValue(node);
-			assert(io);
-			hp_iocp_try_write(&ioctx->iocp, io->index);
 		}
 		listReleaseIterator(iter);
 

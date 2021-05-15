@@ -55,9 +55,8 @@ int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip);
 ssize_t
 hp_net_recvfrom_flags(int fd, void *ptr, size_t nbytes, int *flagsp,
 			   struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origdst);
-#else
-SOCKET hp_net_connect2(char const * ip, int port);
 #endif /* _MSC_VER */
+int read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes);
 
 #ifndef NDEBUG
 int test_hp_net_main(int argc, char ** argv);

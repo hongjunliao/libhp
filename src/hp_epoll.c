@@ -10,7 +10,7 @@
 
 #ifndef LIBXHH_WITHOUT_EPOLL
 
-#ifndef _MSC_VER
+#ifdef __linux__
 
 #include "hp_epoll.h"   /*  */
 #include "hp_log.h"     /* hp_log */

@@ -6,7 +6,7 @@ if(COMMAND cmake_policy)
 cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 
-if(WIN32)
+if(MSVC)
 set(BUILD_SHARED_LIBS OFF)
 add_compile_options(/MTd)
 #set(LIBHP_WITH_WIN32_INTERROP 0 cache bool "using microsoftarchive/redis.git")
@@ -39,7 +39,7 @@ target_compile_options(libhp PUBLIC
     -DcJSON_FREE_PRINT
 	)
 add_compile_options(-DcJSON_FREE_PRINT)
-if(NOT WIN32)
+if(NOT MSVC)
 	target_compile_options(libhp PUBLIC  -O0 -g3  -Wall)
 else()
 	target_compile_options(libhp PUBLIC -D_CRT_SECURE_NO_WARNINGS /MTd)
@@ -47,7 +47,9 @@ endif()
 
 # deps using cmake build system
 add_subdirectory(deps/cJSON EXCLUDE_FROM_ALL)
+if(WIN32 AND MSVC)
 add_subdirectory(deps/dlfcn-win32 EXCLUDE_FROM_ALL)
+endif()
 if(WIN32)
 add_subdirectory(deps/hiredis) 
 add_subdirectory(deps/paho.mqtt.c EXCLUDE_FROM_ALL)

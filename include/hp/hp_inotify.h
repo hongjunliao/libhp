@@ -10,7 +10,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifndef _MSC_VER
+#ifdef __linux__
 
 #include "hp_epoll.h"    /* hp_epoll */
 #include "sds/sds.h"

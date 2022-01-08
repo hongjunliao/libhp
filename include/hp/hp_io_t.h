@@ -14,7 +14,9 @@
 
 #include "redis/src/adlist.h" /* list */
 #include "hp_sock_t.h"  /* hp_sock_t */
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#include "hp_poll.h"   /* hp_poll */
+#elif !defined(_MSC_VER)
 #include "hp_io.h"      /* hp_eti,... */
 #include "hp_epoll.h"   /* hp_epolld */
 #else
@@ -44,7 +46,9 @@ typedef int(* hp_io_on_error)(hp_io_t * io, int err, char const * errstr);
 struct hp_io_t {
 	/* ID for this I/O, more safe than fd? */
 	int id;
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	hp_poll fds;
+#elif !defined(_MSC_VER)
 	hp_eti 	eti; /* for in data */
 	hp_eto 	eto; /* for out data */
 	hp_epolld ed;/* context */

@@ -15,9 +15,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
-
-#include <sys/epoll.h>  /* epoll_event */
+#ifdef __linux__
+#include <sys/poll.h>  /* epoll_event */
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,5 +71,5 @@ int test_hp_epoll_main(int argc, char ** argv);
 }
 #endif
 
-#endif /*_MSC_VER*/
+#endif /*__linux__*/
 #endif /* LIBHP_EPOLL_H__ */

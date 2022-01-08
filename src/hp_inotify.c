@@ -8,7 +8,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifndef _MSC_VER
+#ifdef __linux__
 #include "hp_inotify.h"
 #include <unistd.h>
 #include <sys/inotify.h> /* inotify */

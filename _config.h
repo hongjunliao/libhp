@@ -9,6 +9,10 @@
 #ifndef HP_CONFIG_H
 #define HP_CONFIG_H
 
+#if !defined(__linux__) && !defined(_MSC_VER)
+#define LIBHP_HAVE_POLL
+#endif
+
 #ifdef HAVE_CONFIG_H
 
 /* define to enable GNU extension */

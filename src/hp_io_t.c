@@ -23,7 +23,9 @@
 #include "str_dump.h" /*dumpstr*/
 #include <uv.h>   /* uv_ip4_name */
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#include <poll.h>  /* poll */
+#elif !defined(_MSC_VER)
 #include <sys/fcntl.h>  /* fcntl */
 #include <arpa/inet.h>	/* inet_ntop */
 #endif /* _MSC_VER */
@@ -62,7 +64,8 @@ static int hp_io_internal_on_error(hp_io_t * io, int err, char const * errstr)
 {
 	assert(io && io->iohdl);
 	list * li = 0;
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
 	assert(io->efds && io->efds->arg);
 	li = (list *)io->efds->arg;
 #else
@@ -79,13 +82,19 @@ static int hp_io_internal_on_error(hp_io_t * io, int err, char const * errstr)
 	return 0;
 }
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+static int hp_io_internal_on_accept(void * arg, struct pollfd * pfd)
+#elif !defined(_MSC_VER)
 static int hp_io_internal_on_accept(struct epoll_event * ev)
 #else
 static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 #endif /* _MSC_VER */
 {
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	assert(pfd);
+	hp_io_ctx * ioctx = 0;
+	hp_sock_t fd = pfd->fd;
+#elif !defined(_MSC_VER)
 	hp_io_ctx * ioctx = (hp_io_ctx * )hp_epoll_arg(ev);
 	hp_sock_t fd = hp_epoll_fd(ev);
 #else
@@ -170,7 +179,13 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 	ioctx->iolist = listCreate();
 	listSetMatchMethod(ioctx->iolist, iolist_match);
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	if(hp_poll_init(&ioctx->fds, 65535) != 0)
+		return -5;
+	if (opt->listen_fd >= 0) {
+		rc = hp_poll_add(&ioctx->fds, opt->listen_fd, POLLIN, hp_io_internal_on_accept, ioctx); assert(rc == 0);
+	}
+#elif !defined(_MSC_VER)
 	/* init epoll */
 	if (hp_epoll_init(&ioctx->efds, 65535) != 0)
 		return -5;
@@ -211,7 +226,8 @@ int hp_io_write(hp_io_t * io, void * buf, size_t len, hp_io_free_t free, void * 
 	return rc;
 }
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
 static int hp_io_epoll_before_wait(struct hp_epoll * efds)
 {
 	assert(efds && efds->arg);
@@ -253,7 +269,10 @@ static int hp_io_epoll_before_wait(struct hp_epoll * efds)
 int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 {
 	int rc = 0;
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	rc = hp_poll_run(&ioctx->fds, interval, (mode != 0? /*hp_io_epoll_before_wait*/0 : (void *)-1));
+//	if(mode == 0) { hp_io_epoll_before_wait(&ioctx->efds); }
+#elif !defined(_MSC_VER)
 	rc = hp_epoll_run(&ioctx->efds, interval, (mode != 0? hp_io_epoll_before_wait : (void *)-1));
 	if(mode == 0) { hp_io_epoll_before_wait(&ioctx->efds); }
 #else
@@ -301,7 +320,9 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 {
 	if(!ioctx)
 		return -1;
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	hp_poll_uninit(&ioctx->fds);
+#elif !defined(_MSC_VER)
 	hp_epoll_del(&ioctx->efds, ioctx->epolld.fd, EPOLLIN, &ioctx->epolld);
 	hp_epoll_uninit(&ioctx->efds);
 	hp_sock_close(ioctx->epolld.fd);
@@ -315,7 +336,9 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
+
 
 static void hp_io_t__on_error(int err, char const * errstr, void * arg);
 
@@ -431,7 +454,7 @@ int hp_io_t__on_data(hp_iocp * iocpctx, int index, char * buf, size_t * len)
 int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 	, hp_io_on_data on_data, hp_io_on_error on_error)
 {
-	int rc;
+	int rc = 0;
 	if(!(ioctx && io))
 		return -1;
 	memset(io, 0, sizeof(hp_io_t));
@@ -443,7 +466,8 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 
 	if(ioctx->ioid == INT_MAX - 1)
 		ioctx->ioid = 0;
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
 	io->efds = &ioctx->efds;
 
 	hp_eti_init(&io->eti, 1024 * 128);

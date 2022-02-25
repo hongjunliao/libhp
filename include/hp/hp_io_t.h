@@ -14,7 +14,9 @@
 
 #include "redis/src/adlist.h" /* list */
 #include "hp_sock_t.h"  /* hp_sock_t */
+#include <stddef.h> 	/* size_t */
 #if !defined(__linux__) && !defined(_MSC_VER)
+#include "hp_io.h"      /* hp_eti,... */
 #include "hp_poll.h"   /* hp_poll */
 #elif !defined(_MSC_VER)
 #include "hp_io.h"      /* hp_eti,... */
@@ -47,6 +49,8 @@ struct hp_io_t {
 	/* ID for this I/O, more safe than fd? */
 	int id;
 #if !defined(__linux__) && !defined(_MSC_VER)
+	hp_eti 	eti; /* for in data */
+	hp_eto 	eto; /* for out data */
 	hp_poll fds;
 #elif !defined(_MSC_VER)
 	hp_eti 	eti; /* for in data */
@@ -99,7 +103,9 @@ struct hp_ioopt {
 };
 
 struct hp_io_ctx {
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+	hp_poll fds;
+#elif !defined(_MSC_VER)
 	hp_epoll efds;
 	hp_epolld epolld; /* for listen_fd */
 #else

@@ -9,7 +9,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
-
+#ifndef LIBHP_WITHOUT_CJSON
 #include "hp_var.h"        /* hp_var */
 #include <string.h>	       /* strncpy */
 #include <stdlib.h>	       /* free */
@@ -259,4 +259,5 @@ int test_hp_var_main(int argc, char ** argv)
 	return 0;
 }
 #endif /* NDEBUG */
+#endif //LIBHP_WITHOUT_CJSON
 #endif /* _MSC_VER */

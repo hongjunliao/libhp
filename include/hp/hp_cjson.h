@@ -5,6 +5,8 @@
  * cjson utils
  *
  * */
+#ifndef LIBHP_WITHOUT_CJSON
+
 #ifndef LIBHP_CJSON_H
 #define LIBHP_CJSON_H
 
@@ -94,3 +96,4 @@ int test_hp_cjson_main(int argc, char ** argv);
 }
 #endif
 #endif /* LIBHP_CJSON_H */
+#endif //LIBHP_WITHOUT_CJSON

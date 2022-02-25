@@ -20,6 +20,9 @@
 #define _GNU_SOURCE
 #endif
 
+/* define to disable cJSON cjson_XXX */
+#define LIBHP_WITHOUT_CJSON
+
 /* define to use zlib, hp_zc_XXX */
 #define LIBHP_WITH_ZLIB
 /* define to use libcurl, hp_curl_XXX */

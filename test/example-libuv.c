@@ -1,3 +1,9 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
+#ifdef LIBHP_WITH_REDIS
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,3 +59,4 @@ int hiredis_exmaple_uv_main(int argc, char **argv) {
     uv_run(loop, UV_RUN_DEFAULT);
     return 0;
 }
+#endif

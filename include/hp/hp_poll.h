@@ -24,41 +24,37 @@ extern "C" {
 typedef struct hp_poll hp_poll;
 typedef struct hp_polld hp_polld;
 typedef struct hp_bwait hp_bwait;
-typedef int (* hp_poll_cb_t)(struct pollfd * ev);
+typedef int (* hp_poll_cb_t)(void * arg, struct pollfd * pfd);
 
 struct hp_polld {
-	int                  fd;
-	hp_poll_cb_t        fn;
-	void *               arg;
-	int                  n;    /* index when fired */
+	hp_poll_cb_t  fn;
+	void *        arg;
 };
 
 struct hp_poll {
-	struct pollfd * 	 fd;
-	int                  nfd;
+	/* do NOT use cvector_size, use nfd instead */
+	struct pollfd* fds;
+	hp_polld * 	  ed;
+	int           nfd;
 
-	hp_bwait **          bwaits;
-
-	int                  stop; /* stop loop? */
-	void *               arg;  /* ignored by hp_poll */
+	hp_bwait **   bwaits;
+	int           stop; /* stop loop? */
+	void *        arg;  /* ignored by hp_poll */
 };
 
-int hp_poll_init(struct hp_poll * fds, int n);
-void hp_poll_uninit(struct hp_poll * fds);
-int hp_poll_add(struct hp_poll * fds, int fd, int events, struct hp_polld * ed);
-int hp_poll_del(struct hp_poll * fds, int fd, int events, struct hp_polld * ed);
+int hp_poll_init(struct hp_poll * po, int n);
+void hp_poll_uninit(struct hp_poll * po);
+int hp_poll_add(struct hp_poll * po, int fd, int events, hp_poll_cb_t  fn, void const * arg);
+int hp_poll_del(struct hp_poll * po, int fd);
 
-int hp_poll_add_before_wait(struct hp_poll * fds
-		, int (* before_wait)(struct hp_poll * fds, void * arg), void * arg);
+int hp_poll_add_before_wait(struct hp_poll * po
+		, int (* before_wait)(struct hp_poll * po, void * arg), void * arg);
 
-int hp_poll_run(hp_poll * fds, int timeout, int (* before_wait)(struct hp_poll * fds));
+int hp_poll_run(hp_poll * po, int timeout, int (* before_wait)(hp_poll * po));
 char * hp_poll_e2str(int events, char * buf, int len);
 
-#define hp_poll_arg(ev) (((struct hp_polld *)(ev)->data.ptr)->arg)
-#define hp_poll_fd(ev)  (((struct hp_polld *)(ev)->data.ptr)->fd)
-
-#define hp_polld_set(ed, _fd, _fn, _arg)  \
-	(ed)->fd = _fd; (ed)->fn = _fn; (ed)->arg = _arg; (ed)->n = 0
+#define hp_polld_set(ed, _fn, _arg)  \
+	(ed)->fn = _fn; (ed)->arg = _arg;
 
 #ifndef NDEBUG
 int test_hp_poll_main(int argc, char ** argv);

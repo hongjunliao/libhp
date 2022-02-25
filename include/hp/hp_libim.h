@@ -12,7 +12,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
+#ifdef __linux__
 #include "sds/sds.h"    /* sds */
 #include <hiredis/async.h>
 #include "klist.h"

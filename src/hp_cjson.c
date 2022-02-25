@@ -9,6 +9,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+#ifndef LIBHP_WITHOUT_CJSON
 
 #include <stdio.h>
 #include <stdlib.h>	       /* malloc */
@@ -760,3 +761,4 @@ int test_hp_cjson_main(int argc, char ** argv)
 }
 
 #endif /* NDEBUG */
+#endif //LIBHP_WITHOUT_CJSON

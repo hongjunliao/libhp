@@ -39,7 +39,8 @@
 
 #define LISTENQ 512  /* for listen() */
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len)
 {
 	if (!(ip && buf))
@@ -265,7 +266,8 @@ hp_sock_t hp_net_listen(int port)
 	return fd;
 	}
 
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
 int hp_net_udp_bind(char const * ip, int port)
 {
 	int fd;
@@ -639,7 +641,7 @@ size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 	return nread;
 }
 #else
-int read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
+size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if(!(buf && err)) { return -1; }
 	int nread = 0;

@@ -136,9 +136,10 @@ int main(int argc, char ** argv)
 	gloglevel = 9;
 	config = dictCreate(&configTableDictType, 0);
 	sds conf = sdsnew("config.ini");
-
+#ifdef LIBHP_WITH_ZLOG
 	rc = zlog_init("zlog.conf"); assert(rc == 0);
 	rc = dzlog_set_category("libhp"); assert(rc == 0);
+#endif
 
 	fprintf(stdout, "%s: using %s as config for libhp tests\n", __FUNCTION__, conf);
 
@@ -167,7 +168,6 @@ int main(int argc, char ** argv)
 	rc = test_hp_io_t_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_main(argc, argv); assert(rc == 0);
 	rc = test_cvector_cpp_main(argc, argv); assert(rc == 0);
-	rc = test_cjson_main(argc, argv);
 	rc = test_hp_libc_main(argc, argv);
 	rc = test_hp_cache_main(argc, argv); assert(rc == 0);
 	rc = test_hp_err_main(argc, argv); assert(rc == 0);
@@ -204,11 +204,15 @@ int main(int argc, char ** argv)
 #ifndef _MSC_VER
 	rc = test_hp_stat_main(argc, argv); assert(rc == 0);
 	rc = test_hp_io_main(argc, argv); assert(rc == 0);
-	rc = test_hp_var_main(argc, argv);
-
+#ifndef LIBHP_WITHOUT_CJSON
+	rc = test_cjson_main(argc, argv);
 	rc = test_hp_cjson_main(argc, argv); assert(rc == 0);
+	rc = test_hp_var_main(argc, argv);
+#endif
+#if defined(__linux__)
 	rc = test_hp_inotify_main(argc, argv);
 	rc = test_hp_epoll_main(argc, argv); assert(rc == 0);
+#endif
 	rc = test_hp_io_main(argc, argv); assert(rc == 0);
 #ifdef LIBHP_WITH_CURL
 	rc = test_hp_curl_main(argc, argv); assert(rc == 0);

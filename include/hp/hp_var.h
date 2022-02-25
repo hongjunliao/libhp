@@ -13,7 +13,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
-
+#ifndef LIBHP_WITHOUT_CJSON
 #include "sdsinc.h"		/* sds */
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -44,6 +44,7 @@ int test_hp_var_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
+#endif //LIBHP_WITHOUT_CJSON
 
 #endif /* _MSC_VER */
 #endif /* LIBHP_VAR_H__ */

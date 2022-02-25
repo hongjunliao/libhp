@@ -8,7 +8,9 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifndef _MSC_VER
+#if !defined(__linux__) && !defined(_MSC_VER)
+#elif !defined(_MSC_VER)
+
 
 #include <unistd.h>
 #include <sys/time.h>   /* gettimeofday */

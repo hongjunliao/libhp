@@ -18,7 +18,9 @@
 #include "hphdrs.h"
 #include "c-vector/cvector.h"
 #include "inih/ini.h"
+#ifdef LIBHP_WITH_ZLOG
 #include "zlog.h"
+#endif
 
 int gloglevel = 0;
 

@@ -79,6 +79,7 @@ target_link_libraries(libhp cjson)
 endif()
 # message(STATUS ${CMAKE_C_FLAGS})
 
+if(LIBHP_BUILD_TEST_EXECUTABLE)
 # test-libhp 
 project(test-libhp)
 file(GLOB SRCS test/test.c test/example-libuv.c deps/inih/*.c)
@@ -126,4 +127,5 @@ elseif(WIN32 AND NOT MSVC)
 target_link_libraries(test-libhp uv libhp dl)
 else()
 target_link_libraries(test-libhp uv_a libhp dl hiredis_static)
+endif()
 endif()

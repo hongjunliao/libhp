@@ -9,6 +9,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#if !defined(_MSC_VER)  && !defined(_WIN32)
+
 #include "Win32_Interop.h"
 #include "hp_net.h"
 #include "hp_sock_t.h"  /* hp_sock_t */
@@ -16,7 +18,6 @@
 #include <stdio.h>
 #include <assert.h>     /* define NDEBUG to disable assertion */
 
-#ifndef _MSC_VER
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -33,14 +34,11 @@
 #include <stdlib.h>     /* free */
 #include <string.h>     /* strerror */
 #include <errno.h>
-#else
+#if defined(_MSC_VER)
 #include <WS2tcpip.h>   /* inet_pton */
-#endif //_MSC_VER
-
+#endif
 #define LISTENQ 512  /* for listen() */
 
-#if !defined(__linux__) && !defined(_MSC_VER)
-#elif !defined(_MSC_VER)
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len)
 {
 	if (!(ip && buf))
@@ -105,6 +103,7 @@ ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, str
 	return n;
 }
 
+#if defined(_MSC_VER)
 /*
  * NOTE: the source code is mainly from book <unpv13e>,
  * sample url: https://github.com/k84d/unpv13e
@@ -169,8 +168,7 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 	}
 	return(n);
 }
-#endif /* _MSC_VER */
-
+#endif
 /*
  * NOTE: code from hiredis/net.c
  * */
@@ -210,7 +208,6 @@ int hp_net_set_alive(hp_sock_t fd, int interval)
 		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPCNT): %s\n", __FUNCTION__, strerror(errno));
 		return -1;
 	}
-#endif
 #endif //_OSX
 
 	return 0;
@@ -266,8 +263,7 @@ hp_sock_t hp_net_listen(int port)
 	return fd;
 	}
 
-#if !defined(__linux__) && !defined(_MSC_VER)
-#elif !defined(_MSC_VER)
+#if defined(_MSC_VER)
 int hp_net_udp_bind(char const * ip, int port)
 {
 	int fd;
@@ -322,7 +318,7 @@ int hp_net_udp_bind(char const * ip, int port)
 
 	return fd;
 }
-
+#endif
 int hp_net_socketpair(int mwfd[2])
 {
 	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, mwfd) < 0) {
@@ -344,7 +340,6 @@ int hp_net_socketpair(int mwfd[2])
 	}
 	return 0;
 }
-#endif /* _MSC_VER */
 
 char * get_ipport_cstr(int sockfd, char * buf)
 {
@@ -473,7 +468,6 @@ hp_sock_t hp_net_connect(char const * ip, int port)
 
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 	}
-#ifndef _MSC_VER
 
 int hp_net_connect_addr(char const * addr)
 {
@@ -610,8 +604,6 @@ size_t readv_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t
 	return nread;
 }
 
-#endif
-#ifndef _MSC_VER
 size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if (!(fd >= 0 && err && buf && len > 0))
@@ -640,7 +632,7 @@ size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 	}
 	return nread;
 }
-#else
+#if defined(_MSC_VER)
 size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if(!(buf && err)) { return -1; }
@@ -667,7 +659,6 @@ size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 	return nread;
 }
 #endif
-#ifndef _MSC_VER
 /*
  * Write "n" bytes to a descriptor.
  * NOTE: from book <unpv13e>, sample url: https://github.com/k84d/unpv13e
@@ -836,10 +827,8 @@ int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
 	}
 	return 0;
 }
-#endif /* _MSC_VER */
 
 /////////////////////////////////////////////////////////////////////////////////////////
-#ifndef NDEBUG
 #include "hp_log.h"   /* hp_log */
 #include <string.h>   /* memset */
 #include <sys/stat.h> /* stat */
@@ -848,7 +837,6 @@ int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
 
 int test_hp_net_main(int argc, char ** argv)
 {
-#ifndef _MSC_VER
 	{
 		struct sockaddr_in addr = { 0 };
 		char ip[64];
@@ -959,8 +947,8 @@ int test_hp_net_main(int argc, char ** argv)
 		hp_log(stdout, "%s: recv response from '%s', content='%p', len=%zu\n"
 			, __FUNCTION__, host, buf, strlen(buf));
 	}
-#endif /* _MSC_VER */
 	return 0;
 }
 #endif /* NDEBUG */
+#endif /* _MSC_VER */
 

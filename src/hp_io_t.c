@@ -14,7 +14,6 @@
 #include "sdsinc.h"		/* sds */
 #include "hp_io_t.h"
 #include "hp_err.h"
-#include <unistd.h> /* close */
 #include <assert.h> /* assert */
 #include <errno.h> /*  */
 #include <stdio.h>
@@ -23,9 +22,8 @@
 #include "str_dump.h" /*dumpstr*/
 #include <uv.h>   /* uv_ip4_name */
 
-#if !defined(__linux__) && !defined(_MSC_VER)
+#if !defined(_WIN32) && !defined(_MSC_VER)
 #include <poll.h>  /* poll */
-#elif !defined(_MSC_VER)
 #include <sys/fcntl.h>  /* fcntl */
 #include <arpa/inet.h>	/* inet_ntop */
 #endif /* _MSC_VER */
@@ -122,7 +120,7 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 			return -1;
 		}
 
-#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+#if (!defined(_WIN32) && !defined(_MSC_VER)) || (defined LIBHP_WITH_WIN32_INTERROP)
 		if (fcntl(confd, F_SETFL, O_NONBLOCK) < 0)
 #else
 		u_long sockopt = 1;
@@ -179,13 +177,7 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 	ioctx->iolist = listCreate();
 	listSetMatchMethod(ioctx->iolist, iolist_match);
 
-#if !defined(__linux__) && !defined(_MSC_VER)
-	if(hp_poll_init(&ioctx->fds, 65535) != 0)
-		return -5;
-	if (opt->listen_fd >= 0) {
-		rc = hp_poll_add(&ioctx->fds, opt->listen_fd, POLLIN, hp_io_internal_on_accept, ioctx); assert(rc == 0);
-	}
-#elif !defined(_MSC_VER)
+#if defined(__linux__)
 	/* init epoll */
 	if (hp_epoll_init(&ioctx->efds, 65535) != 0)
 		return -5;
@@ -195,7 +187,7 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 		hp_epolld_set(&ioctx->epolld, opt->listen_fd, hp_io_internal_on_accept, ioctx);
 		rc = hp_epoll_add(&ioctx->efds, opt->listen_fd, EPOLLIN, &ioctx->epolld); assert(rc == 0);
 	}
-#else
+#elif defined(_MSC_VER)
 	ioctx->fd = opt->listen_fd;
 
 	rc = hp_iocp_init(&(ioctx->iocp), 0, WM_USER + opt->wm_user, 200, ioctx->iolist);
@@ -209,7 +201,14 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 		int index = hp_iocp_add(&ioctx->iocp, 0, 0, opt->listen_fd, hp_io_internal_on_accept, 0, 0, ioctx);
 		rc = (index >= 0 ? 0 : index);
 	}
-
+#elif !defined(_WIN32)
+	if(hp_poll_init(&ioctx->fds, 65535) != 0)
+		return -5;
+	if (opt->listen_fd >= 0) {
+		rc = hp_poll_add(&ioctx->fds, opt->listen_fd, POLLIN, hp_io_internal_on_accept, ioctx); assert(rc == 0);
+	}
+#else
+	//select
 #endif /* _MSC_VER */
 
 	return rc;
@@ -218,9 +217,9 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt)
 int hp_io_write(hp_io_t * io, void * buf, size_t len, hp_io_free_t free, void * ptr)
 {
 	int rc;
-#ifndef _MSC_VER
+#if (!defined(_MSC_VER) && !defined(_WIN32))
 	rc = hp_eto_add(&io->eto, buf, len,  free, ptr);
-#else
+#elif defined(_MSC_VER)
 	rc = hp_iocp_write(io->iocp, io->index, buf, len, free, ptr);
 #endif /* _MSC_VER */
 	return rc;
@@ -269,13 +268,10 @@ static int hp_io_epoll_before_wait(struct hp_epoll * efds)
 int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 {
 	int rc = 0;
-#if !defined(__linux__) && !defined(_MSC_VER)
-	rc = hp_poll_run(&ioctx->fds, interval, (mode != 0? /*hp_io_epoll_before_wait*/0 : (void *)-1));
-//	if(mode == 0) { hp_io_epoll_before_wait(&ioctx->efds); }
-#elif !defined(_MSC_VER)
+#if defined(__linux__)
 	rc = hp_epoll_run(&ioctx->efds, interval, (mode != 0? hp_io_epoll_before_wait : (void *)-1));
 	if(mode == 0) { hp_io_epoll_before_wait(&ioctx->efds); }
-#else
+#elif defined(_MSC_VER)
 	for (;;) {
 		MSG msgobj = { 0 }, *msg = &msgobj;
 		for (; PeekMessage((LPMSG)msg, (HWND)-1
@@ -311,6 +307,10 @@ int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
 		if(mode == 0)
 			break;
 	}
+#elif !defined(_WIN32) && !defined(_MSC_VER)
+	rc = hp_poll_run(&ioctx->fds, interval, (mode != 0? /*hp_io_epoll_before_wait*/0 : (void *)-1));
+//	if(mode == 0) { hp_io_epoll_before_wait(&ioctx->efds); }
+#else
 #endif /* _MSC_VER */
 
 	return rc;
@@ -320,14 +320,15 @@ int hp_io_uninit(hp_io_ctx * ioctx)
 {
 	if(!ioctx)
 		return -1;
-#if !defined(__linux__) && !defined(_MSC_VER)
-	hp_poll_uninit(&ioctx->fds);
-#elif !defined(_MSC_VER)
+#if defined(__linux__)
 	hp_epoll_del(&ioctx->efds, ioctx->epolld.fd, EPOLLIN, &ioctx->epolld);
 	hp_epoll_uninit(&ioctx->efds);
 	hp_sock_close(ioctx->epolld.fd);
-#else
+#elif defined(_MSC_VER)
 	hp_iocp_uninit(&ioctx->iocp);
+#elif !defined(_WIN32) && !defined(_MSC_VER)
+	hp_poll_uninit(&ioctx->fds);
+#else
 #endif /* _MSC_VER */
 	listRelease(ioctx->iolist);
 

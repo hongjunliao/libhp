@@ -9,6 +9,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+#ifdef LIBHP_DEPRECADTED
 
 #include "sdsinc.h"
 #include <string.h>
@@ -172,3 +173,4 @@ int test_hp_cache_main(int argc, char ** argv)
 #ifndef _MSC_VER
 
 #endif /*_MSC_VER*/
+#endif //LIBHP_DEPRECADTED

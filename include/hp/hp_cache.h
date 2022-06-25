@@ -11,6 +11,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+#ifdef LIBHP_DEPRECADTED
 
 #include <stdlib.h>
 #include <time.h>
@@ -49,3 +50,4 @@ int test_hp_cache_main(int argc, char ** argv);
 #endif
 
 #endif /* LIBHP_CACHE_H__ */
+#endif //LIBHP_DEPRECADTED

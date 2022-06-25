@@ -1,5 +1,5 @@
 /*!
- * This file is PART of libxhhp project
+ * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2018/12/3
  *
  * sds
@@ -23,14 +23,12 @@
 extern "C" {
 #endif
 
-#ifndef _MSC_VER
-#include "sds/sds.h"		/* sds */
-#else
-#ifdef LIBHP_WITH_WIN32_INTERROP
+#if defined(_WIN32) && defined(LIBHP_WITH_WIN32_INTERROP)
 #include "redis/src/sds.h"  /* sds */
+#elif defined(_MSC_VER)
+#include "../../deps/hiredis/sds.h"
 #else
-#include "hiredis/sds.h"
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+#include "sds/sds.h"		/* sds */
 #endif /* _MSC_VER */
 
 #ifdef __cplusplus

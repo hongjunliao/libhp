@@ -12,11 +12,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#if !defined(_MSC_VER)  && !defined(_WIN32)
 #include "Win32_Interop.h"
-#ifndef _MSC_VER
 #include <netinet/in.h>	/* sockaddr_in */
 #include <stdlib.h>     /* uint32_t */
-#endif /* _MSC_VER */
 #include "hp_sock_t.h"  /* hp_sock_t */
  /////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,7 +24,7 @@ extern "C" {
 #define new __new
 #endif
 
-#ifndef _MSC_VER
+#if !defined(_MSC_VER)  && !defined(_WIN32)
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len);
 ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, struct iovec * iov, size_t iovlen);
 ssize_t hp_net_sendmsg1(struct sockaddr_in * origaddr, socklen_t olen
@@ -34,12 +33,10 @@ ssize_t hp_net_sendmsg1(struct sockaddr_in * origaddr, socklen_t olen
 ssize_t
 hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 			   struct sockaddr_in *sa, socklen_t *salenptr, struct sockaddr_in * origdst);
-#endif /*_MSC_VER*/
 hp_sock_t hp_net_listen(int port);
 hp_sock_t hp_net_connect(char const * ip, int port);
 int hp_net_connect_addr(char const * addr);
 int hp_net_set_alive(hp_sock_t fd, int interval);
-#ifndef _MSC_VER
 int hp_net_udp_bind(char const * ip, int port);
 
 int hp_net_socketpair(int mwfd[2]);
@@ -66,5 +63,6 @@ int test_hp_net_main(int argc, char ** argv);
 }
 #endif
 
+#endif /*_MSC_VER*/
 
 #endif /* LIBHP_NET_H__ */

@@ -9,7 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#if !defined(__linux__) && !defined(_MSC_VER)
+#if !defined(_WIN32) && !defined(_MSC_VER)
 
 #include "hp_poll.h"   /*  */
 #include "stdio.h"     /* fprintf */

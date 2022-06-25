@@ -13,7 +13,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#if !defined(__linux__) && !defined(_MSC_VER)
+#ifndef _MSC_VER
+#ifndef _WIN32
 #include <poll.h>  /* poll */
 
 #ifdef __cplusplus
@@ -64,5 +65,6 @@ int test_hp_poll_main(int argc, char ** argv);
 }
 #endif
 
-#endif /*_MSC_VER*/
+#endif  /* _WIN32 */
+#endif /* _MSC_VER */
 #endif /* LIBHP_POLL_H__ */

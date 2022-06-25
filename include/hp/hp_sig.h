@@ -15,7 +15,8 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifndef _MSC_VER
+#if !defined(_WIN32) && !defined(_MSC_VER)
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus

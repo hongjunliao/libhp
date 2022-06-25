@@ -10,11 +10,10 @@
 #endif /* HAVE_CONFIG_H */
 
 
-#ifndef _MSC_VER
+#if !defined(_WIN32) && !defined(_MSC_VER)
 #include <dlfcn.h>			/* dlsym */
-#else
+#elif defined(_MSC_VER)
 #include <windows.h>		/* GetProcAddress */
-#include "dlfcn-win32/src/dlfcn.h"
 #endif //_MSC_VER
 
 #include <stdio.h>
@@ -45,11 +44,11 @@ int hp_test(char const * test, int argc, char ** argv, int (* all)(int argc, cha
 		if(sdslen(tests[i]) == 0)
 			continue;
 
-//#ifndef _MSC_VER
+#if !defined(_WIN32) && !defined(_MSC_VER)
 		void * fn = dlsym(RTLD_DEFAULT, tests[i]);
-//#else
-//		void * fn = GetProcAddress(hmodule, tests[i]);
-//#endif //_MSC_VER
+#else
+		void * fn = GetProcAddress(0, tests[i]);
+#endif //_MSC_VER
 
 		if(fn){
 			int (* test_fn)(int argc, char *argv[]) = fn;

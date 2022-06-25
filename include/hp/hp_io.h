@@ -15,6 +15,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
+#ifndef _WIN32
 #include "hp_iostat.h"  /* hp_iostat */
 #include <stddef.h>
 #include <sys/uio.h>    /* iovec */
@@ -129,5 +130,6 @@ int test_hp_io_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
+#endif  /* _WIN32 */
 #endif /* _MSC_VER */
 #endif /* LIBHP_IO_H__ */

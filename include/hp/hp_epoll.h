@@ -16,7 +16,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifdef __linux__
-#include <sys/poll.h>  /* epoll_event */
+#include <sys/epoll.h>  /* epoll_event */
 
 #ifdef __cplusplus
 extern "C" {

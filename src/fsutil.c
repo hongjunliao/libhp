@@ -9,7 +9,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
+#ifdef LIBHP_DEPRECADTED
+#ifdef _MSC_VER
 #include <dirent.h>      /* DIR */
 #endif /* _MSC_VER */
 
@@ -329,3 +330,4 @@ int test_hp_fs_main(int argc, char ** argv)
 	return 0;
 }
 #endif /* NDEBUG */
+#endif //LIBHP_DEPRECADTED

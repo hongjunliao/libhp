@@ -9,6 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 #ifndef _MSC_VER
+#ifndef _WIN32
 #include "hp_io.h"
 #include "hp_log.h"     /* hp_log */
 #include "hp_libc.h"    /* hp_min */
@@ -435,6 +436,7 @@ int test_hp_io_main(int argc, char ** argv)
 	return rc;
 }
 #endif /* NDEBUG */
+#endif  /* _WIN32 */
 #endif /* _MSC_VER */
 
 

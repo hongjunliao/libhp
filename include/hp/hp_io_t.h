@@ -48,18 +48,20 @@ typedef int(* hp_io_on_error)(hp_io_t * io, int err, char const * errstr);
 struct hp_io_t {
 	/* ID for this I/O, more safe than fd? */
 	int id;
-#if !defined(__linux__) && !defined(_MSC_VER)
-	hp_eti 	eti; /* for in data */
-	hp_eto 	eto; /* for out data */
-	hp_poll fds;
-#elif !defined(_MSC_VER)
+#if defined(_MSC_VER)
+	hp_iocp *iocp;	    /* hp_io_ctx::iocp */
+	int	   index;
+#elif defined(__linux__)
 	hp_eti 	eti; /* for in data */
 	hp_eto 	eto; /* for out data */
 	hp_epolld ed;/* context */
 	hp_epoll * efds;     /* hp_io_ctx::efds */
+#elif !defined(_WIN32)
+	hp_eti 	eti; /* for in data */
+	hp_eto 	eto; /* for out data */
+	hp_poll fds;
 #else
-	hp_iocp *iocp;	    /* hp_io_ctx::iocp */
-	int	   index;
+						/* select() */
 #endif /* _MSC_VER */
 	hp_sock_t fd;		/* the socket */
 	hp_io_on_data on_data;
@@ -103,14 +105,16 @@ struct hp_ioopt {
 };
 
 struct hp_io_ctx {
-#if !defined(__linux__) && !defined(_MSC_VER)
-	hp_poll fds;
-#elif !defined(_MSC_VER)
-	hp_epoll efds;
-	hp_epolld epolld; /* for listen_fd */
-#else
+
+#if defined(_MSC_VER)
 	hp_iocp iocp;
 	hp_sock_t fd;     /* listen_fd */
+#elif defined(__linux__)
+	hp_epoll efds;
+	hp_epolld epolld; /* for listen_fd */
+#elif !defined(_WIN32)
+	hp_poll fds;
+#else
 #endif /* _MSC_VER */
 	hp_iohdl iohdl;
 	hp_io_on_accept on_accept;

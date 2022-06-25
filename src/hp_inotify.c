@@ -22,6 +22,7 @@
 #include "hp_epoll.h"    /* hp_epoll */
 #include "sds/sds.h"     /* sds */
 #include "c-vector/cvector.h"
+#include <sys/epoll.h>  /* epoll_event */
 
 extern int gloglevel;
 /////////////////////////////////////////////////////////////////////////////////////

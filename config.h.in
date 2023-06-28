@@ -8,8 +8,6 @@
 #ifndef HP_CONFIG_H
 #define HP_CONFIG_H
 
-#ifdef HAVE_CONFIG_H
-
 /* define to enable GNU extension */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -65,7 +63,5 @@
  * Deprecated code is no longer actively maintained !
  * */
 #cmakedefine LIBHP_DEPRECADTED
-
-#endif /* HAVE_CONFIG_H */
 
 #endif /* HP_CONFIG_H */

@@ -7,10 +7,11 @@ cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 set(CMAKE_LEGACY_CYGWIN_WIN32 1)
 
-configure_file(
-  "config.h.in"
-  "config.h"
-)
+configure_file("config.h.in" "config.h")
+
+###########################################################################################
+# libhp
+project(libhp)
 
 if(MSVC)
 set(BUILD_SHARED_LIBS OFF)
@@ -18,23 +19,21 @@ add_compile_options(/MTd)
 #set(LIBHP_WITH_WIN32_INTERROP 0 cache bool "using microsoftarchive/redis.git")
 endif()
 
-# libhp
-project(libhp)
+# sources
+file(GLOB SRCS deps/libyuarel/*.c)
 
-# deps: sds etc
-file(GLOB SRCS deps/libyuarel/*.c deps/c-vector/*.c deps/c-vector/*.cc)
 file(GLOB SRCS ${SRCS} deps/redis/src/adlist.c deps/redis/src/zmalloc.c 
-	deps/redis/src/dict.c deps/redis/src/siphash.c)
-if(WIN32 AND NOT MSVC)
-file(GLOB SRCS ${SRCS} deps/redis/src/mt19937-64.c)
-endif()
+	deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c
+	deps/hiredis/sds.c deps/hiredis/alloc.c)
 	
 if(WIN32 AND LIBHP_WITH_WIN32_INTERROP)
-file(GLOB SRCS ${SRCS} deps/redis/src/sds.c )
+	file(GLOB SRCS ${SRCS} deps/redis/src/sds.c )
 elseif(MSVC)
-file(GLOB SRCS ${SRCS} deps/hiredis/sds.c deps/hiredis/alloc.c )
+	file(GLOB SRCS ${SRCS}  )
 else()
-file(GLOB SRCS ${SRCS} deps/sds/*.c)
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(hiredis REQUIRED hiredis)
+	file(GLOB SRCS ${SRCS} deps/sds/*.c)
 endif()
 
 file(GLOB SRCS ${SRCS}
@@ -42,7 +41,9 @@ file(GLOB SRCS ${SRCS}
 file(GLOB_RECURSE SRCS ${SRCS} src/*.c src/*.cpp)
 file(GLOB SRCS ${SRCS} README.md)
 
+#build as library
 add_library(libhp STATIC ${SRCS})
+
 target_compile_options(libhp PUBLIC
     -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
     # for redis
@@ -50,7 +51,6 @@ target_compile_options(libhp PUBLIC
     # for cJSON
     -DcJSON_FREE_PRINT
 	)
-add_compile_options(-DcJSON_FREE_PRINT)
 if(NOT MSVC)
 	target_compile_options(libhp PUBLIC  -O0 -g3  -Wall)
 else()
@@ -58,11 +58,15 @@ else()
 endif()
 
 # deps using cmake build system
+# cjson
 if(NOT LIBHP_WITHOUT_CJSON)
 add_subdirectory(deps/cJSON EXCLUDE_FROM_ALL)
 endif()
+
 if(MSVC)
 add_subdirectory(deps/hiredis) 
+else()
+
 endif()
 
 if(LIBHP_WITH_MQTT)
@@ -73,8 +77,7 @@ if(WIN32 AND MSVC)
 add_subdirectory(deps/libuv EXCLUDE_FROM_ALL)
 endif()
 
-target_include_directories(libhp PRIVATE include/hp/ include/ deps/ deps/libuv/include/ deps/libc/ 
-	"${PROJECT_BINARY_DIR}/")
+target_include_directories(libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ deps/libuv/include/ deps/libc/  include/ deps/)
 if(MSVC)
 target_include_directories(libhp PRIVATE include/win/ deps/hiredis/)
 endif()
@@ -87,12 +90,13 @@ endif()
 if(NOT LIBHP_WITHOUT_CJSON)
 target_link_libraries(libhp cjson)
 endif()
-# message(STATUS ${CMAKE_C_FLAGS})
 
+target_link_libraries(libhp hiredis)
+##########################################################################################
 if(LIBHP_BUILD_TEST_EXECUTABLE)
 # test-libhp 
 project(test-libhp)
-file(GLOB SRCS test/test.c test/example-libuv.c deps/inih/*.c)
+file(GLOB SRCS test/test.c test/example-libuv.c deps/inih/*.c deps/c-vector/*.c deps/c-vector/*.cc)
 if(LIBHP_WITH_WIN32_INTERROP)
 file(GLOB SRCS ${SRCS} test/example-ae.c)
 endif()
@@ -130,7 +134,7 @@ target_link_libraries(test-libhp libhp dl zlog)
 target_link_libraries(test-libhp paho-mqtt3a)
 endif()
 if(NOT WIN32)
-target_link_libraries(test-libhp uuid uv curl hiredis z ssl crypto pthread mysqlclient db)
+target_link_libraries(test-libhp uuid z ssl crypto pthread mysqlclient db)
 elseif(LIBHP_WITH_WIN32_INTERROP)
 target_link_libraries(test-libhp Win32_Interop lua jemalloc redis-server uv_a)
 elseif(WIN32 AND NOT MSVC)

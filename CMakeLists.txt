@@ -7,6 +7,11 @@ cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 set(CMAKE_LEGACY_CYGWIN_WIN32 1)
 
+configure_file(
+  "config.h.in"
+  "config.h"
+)
+
 if(MSVC)
 set(BUILD_SHARED_LIBS OFF)
 add_compile_options(/MTd)
@@ -68,7 +73,8 @@ if(WIN32 AND MSVC)
 add_subdirectory(deps/libuv EXCLUDE_FROM_ALL)
 endif()
 
-target_include_directories(libhp PRIVATE include/hp/ include/ deps/ deps/libuv/include/ deps/libc/ ./)
+target_include_directories(libhp PRIVATE include/hp/ include/ deps/ deps/libuv/include/ deps/libc/ 
+	"${PROJECT_BINARY_DIR}/")
 if(MSVC)
 target_include_directories(libhp PRIVATE include/win/ deps/hiredis/)
 endif()

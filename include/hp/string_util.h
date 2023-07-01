@@ -123,9 +123,15 @@ int hp_strcasecmp(const void * a, const void * b);
  * @return: >0 for 2.2.1.0 > 2.1.3.7; =0 for 2.1.3.7=2.1.3.7; <0 for 2.1.3.7 < 2.1.3.8
  * */
 int hp_vercmp(char const * ver, char const * cmp);
+
+/**
+ * return time str, e.g. 2023-7-1 12:20:34
+ * if @param fmt was NULL, then use default "%Y-%m-%d %H:%M:%S"
+ */
+sds hp_timestr(time_t t, char const * fmt);
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
-int test_string_util_main(int argc, char ** argv);
+int test_hp_str_main(int argc, char ** argv);
 #endif /* NDEBUG */
 
 #ifdef __cplusplus

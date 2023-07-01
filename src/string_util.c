@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <math.h>          /* pow */
 #include <string.h>        /* strcmp */
-
+#include <time.h>       /* time.h */
 #include <stdlib.h>        /* qsort */
 #include <ctype.h>         /* toupper */
 #include <assert.h>        /* define NDEBUG to disable assertion */
@@ -452,10 +452,41 @@ int hp_vercmp(char const * ver, char const * cmp)
 
 	return rc;
 }
+
+sds hp_timestr(time_t t, char const * fmt)
+{
+	if(!fmt) fmt = "%Y-%m-%d %H:%M:%S";
+	sds s = sdsempty();
+	s = sdsMakeRoomFor(s, 128);
+
+	int off1 = strftime(s, sdsavail(s), fmt, localtime(&t));
+	sdsIncrLen(s, off1);
+
+	return s;
+}
+
 //////////////////////////////////////////////////////////////
 #ifndef NDEBUG
-int test_string_util_main(int argc, char ** argv)
+int test_hp_str_main(int argc, char ** argv)
 {
+	int i;
+	//hp_timestr
+	{
+		sds s[] = { hp_timestr(0, 0), hp_timestr(1688225233, 0),
+				 hp_timestr(1688225233, "%Y-%m-%d"), hp_timestr(1688225233, "%H:%M:%S"),
+				 hp_timestr(1688225233, "day=%d/hour=%H"),
+				 hp_timestr(1688225233, "%E"), hp_timestr(1688225233, "hello")
+			};
+		char const * v[] = { "1970-01-01 08:00:00", "2023-07-01 23:27:13",
+				 	 	 	 "2023-07-01", "23:27:13",
+							 "day=01/hour=23",
+							 "%E", "hello"
+					};
+		for(i = 0; i < sizeof(s) / sizeof(s[0]); ++i) {
+			assert(strncmp(s[i], v[i], strlen(v[i])) == 0);
+			sdsfree(s[i]);
+		}
+	}
 	//hp_vercmp
 	{
 		assert(hp_vercmp(0, 0) == 0);

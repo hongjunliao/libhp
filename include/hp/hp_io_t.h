@@ -12,6 +12,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "redis/src/adlist.h" /* list */
 #include "hp_sock_t.h"  /* hp_sock_t */
 #include <stddef.h> 	/* size_t */
@@ -139,5 +143,9 @@ int hp_io_uninit(hp_io_ctx * ioctx);
 #ifndef NDEBUG
 int test_hp_io_t_main(int argc, char ** argv);
 #endif //
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBHP_IO_T_H__ */

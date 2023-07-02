@@ -16,11 +16,15 @@
 #include "hp_err.h"
 #include <assert.h> /* assert */
 #include <errno.h> /*  */
+#include <limits.h> /* INT_MAX */
 #include <stdio.h>
 #include <string.h>
 #include "hp_log.h"
 #include "str_dump.h" /*dumpstr*/
+#ifdef LIBHP_WITH_LIBUV
 #include <uv.h>   /* uv_ip4_name */
+#endif
+
 
 #if !defined(_WIN32) && !defined(_MSC_VER)
 #include <poll.h>  /* poll */
@@ -145,9 +149,10 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 			continue;
 		}
 
-		char cliaddstr[64];
+		char cliaddstr[64]="";
+#ifdef LIBHP_WITH_LIBUV
 		uv_ip4_name(&clientaddr, cliaddstr, sizeof(cliaddstr));
-
+#endif
 		if(gloglevel > 2){
 			hp_log(stdout, "%s: new connect from '%s', fd=%d, total=%d\n"
 				, __FUNCTION__, cliaddstr, confd, listLength(ioctx->iolist));
@@ -506,12 +511,15 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 #include "sdsinc.h" /* sds */
 #include "hp_config.h"
 
+static char const * cfg(char const * id) {
+	return strcmp("tcp-keepalive", id) == 0? "60" : "null";
+}
+/////////////////////////////////////////////////////////////////////////////////////
 static char server_ip[128] = "127.0.0.1";
 static char s_url[1024] = "/";
 static int server_port = 7006;
-extern hp_config_t g_conf;
 
-#define cfgi(k) atoi(g_conf(k))
+#define cfgi(k) atoi(cfg(k))
 
 struct client {
 	hp_io_t io;

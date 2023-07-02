@@ -14,6 +14,7 @@
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <sys/stat.h>	/*fstat*/
 #include "hp_libc.h"
+#include "hp_log.h"
 
 #ifdef _MSC_VER
 #define strcasecmp  _stricmp
@@ -470,6 +471,17 @@ sds hp_timestr(time_t t, char const * fmt)
 int test_hp_str_main(int argc, char ** argv)
 {
 	int i;
+	//hp_assert
+	{
+		//uncomment to run this test
+		int a = 1, b = 2;
+//		hp_assert(a==1, 0);
+//		hp_assert(a==1, "yes");
+//		hp_assert(a==2, 0);
+//		hp_assert(a==2,	"1==%i!");
+//		hp_assert(a==2,	"a==%i!", a);
+		hp_assert(a==b,	"a==%i, b==%i", a, b);
+	}
 	//hp_timestr
 	{
 		sds s[] = { hp_timestr(0, 0), hp_timestr(1688225233, 0),

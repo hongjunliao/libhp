@@ -129,6 +129,20 @@ int hp_vercmp(char const * ver, char const * cmp);
  * if @param fmt was NULL, then use default "%Y-%m-%d %H:%M:%S"
  */
 sds hp_timestr(time_t t, char const * fmt);
+
+/**
+ * print a formated message before calling assert
+ * using sdscatfmt
+ */
+#ifndef NDEBUG
+#define hp_assert(expre, fmt, args...) do { \
+		if(!(expre) && fmt) { sds hp_assert_s = sdscatfmt(sdsempty(), fmt, ##args); \
+			hp_log(stdout, "assert(%s) failed: '%s'\n", #expre, hp_assert_s); sdsfree(hp_assert_s); assert(expre); } \
+		else assert(expre); } while(0)
+#else
+#	define hp_assert(expre, fmt, args...) assert(expre)
+#endif
+
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 int test_hp_str_main(int argc, char ** argv);

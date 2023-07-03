@@ -365,7 +365,7 @@ char * get_ipport_cstr2(struct sockaddr_in * addr, char const * sep, char * buf,
 
 	char ip[64];
 	inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
-	snprintf(buf, 64, "%s%s%d", ip, sep, ntohs(addr->sin_port));
+	snprintf(buf, len, "%s%s%d", ip, sep, ntohs(addr->sin_port));
 
 	return buf;
 }

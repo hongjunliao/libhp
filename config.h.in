@@ -13,6 +13,10 @@
 #define _GNU_SOURCE
 #endif
 
+#ifndef HAVE_CONFIG_H
+#define HAVE_CONFIG_H
+#endif
+
 /* define to disable cJSON cjson_XXX */
 #cmakedefine LIBHP_WITHOUT_CJSON
 

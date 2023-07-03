@@ -45,7 +45,7 @@ struct hp_poll {
 
 int hp_poll_init(struct hp_poll * po, int n);
 void hp_poll_uninit(struct hp_poll * po);
-int hp_poll_add(struct hp_poll * po, int fd, int events, hp_poll_cb_t  fn, void const * arg);
+int hp_poll_add(struct hp_poll * po, int fd, int events, hp_poll_cb_t  fn, void * arg);
 int hp_poll_del(struct hp_poll * po, int fd);
 
 int hp_poll_add_before_wait(struct hp_poll * po

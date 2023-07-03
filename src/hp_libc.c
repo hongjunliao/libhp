@@ -164,7 +164,7 @@ int test_hp_libc_main(int argc, char ** argv)
 	int rc;
 	{
 		struct student sobj = { 0 }, * s = &sobj;
-		assert(s == &s->p);
+		assert(s == (struct student *)&s->p);
 
 		struct person * p = &(s->p);
 

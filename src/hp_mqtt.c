@@ -570,7 +570,7 @@ static struct resub_test t2 = {
 };
 
 static void test__t1_hp_mqtt_message_cb(
-		hp_mqtt * cli, char const * topic, char const * msg, int len, void * arg)
+		hp_mqtt * cli, char const * topic, char * msg, int len, void * arg)
 {
 	assert(cli);
 	assert(strcmp(topic, t1.topics[0]) == 0);
@@ -579,7 +579,7 @@ static void test__t1_hp_mqtt_message_cb(
 }
 
 static void test__t2_hp_mqtt_message_cb(
-		hp_mqtt * cli, char const * topic, char const * msg, int len, void * arg)
+		hp_mqtt * cli, char const * topic, char * msg, int len, void * arg)
 {
 	assert(cli);
 	printf("%s: topic='%s', payload=%d/'%.*s'\n", __FUNCTION__
@@ -607,9 +607,9 @@ int test_hp_mqtt_main(int argc, char ** argv)
 {
 	assert(g_conf);
 
-	char * mqtt_addr=g_conf("mqtt.addr");
-	char * mqtt_user=g_conf("mqtt.user");;
-	char * mqtt_pwd=g_conf("mqtt.pwd");;
+	char const * mqtt_addr=g_conf("mqtt.addr");
+	char const * mqtt_user=g_conf("mqtt.user");;
+	char const * mqtt_pwd=g_conf("mqtt.pwd");;
 
 	/* check if connect OK */
 	{

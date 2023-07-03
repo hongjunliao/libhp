@@ -25,7 +25,7 @@ typedef struct hp_mqtt hp_mqtt;
 typedef void (* hp_mqtt_connect_cb)
 		(hp_mqtt * cli, int err, char const * errstr, void * arg);
 typedef void (* hp_mqtt_message_cb)
-		(hp_mqtt * cli, char const * topic, char const * msg, int len, void * arg);
+		(hp_mqtt * cli, char const * topic, char * msg, int len, void * arg);
 typedef void (* hp_mqtt_disconnect_cb)
 		(hp_mqtt * cli, void * arg);
 typedef void (* hp_mqtt_sub_cb)

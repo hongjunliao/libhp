@@ -34,6 +34,7 @@ typedef SOCKET hp_sock_t;
 #define hp_sock_is_valid(fd) (((fd) && (fd) != hp_sock_invalid))
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 #else
+#include <unistd.h>
 typedef int hp_sock_t;
 #define hp_sock_invalid (-1)
 #define hp_sock_close close

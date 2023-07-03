@@ -32,6 +32,13 @@ extern "C" {
 # define LIBHP_EXT /* nothing */
 #endif
 
+/**
+ * this is a test function that calls almost all libhp test_XXX_main() functions
+ * make sure a file named 'config.ini' exists when you run these tests, see libhp/test/config.ini
+ * for more details
+ */
+int libhp_all_tests_main(int argc, char ** argv);
+
 #ifdef __cplusplus
 }
 #endif

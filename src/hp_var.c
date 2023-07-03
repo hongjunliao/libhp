@@ -8,8 +8,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
-#ifndef LIBHP_WITHOUT_CJSON
+#ifdef LIBHP_WITH_CJSON
 #include "hp_var.h"        /* hp_var */
 #include <string.h>	       /* strncpy */
 #include <stdlib.h>	       /* free */
@@ -112,7 +111,7 @@ struct HP_VAR_PKG_TOOL_ const HP_VAR_PKG_TOOL = {
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 #include <assert.h>
-#include "cJSON/cJSON.h"
+#include "cjson/cJSON.h"
 #include "hp_cjson.h"
 #define Var HP_VAR_PKG_TOOL
 
@@ -259,5 +258,4 @@ int test_hp_var_main(int argc, char ** argv)
 	return 0;
 }
 #endif /* NDEBUG */
-#endif //LIBHP_WITHOUT_CJSON
-#endif /* _MSC_VER */
+#endif //LIBHP_WITH_CJSON

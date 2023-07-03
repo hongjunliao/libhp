@@ -5,10 +5,10 @@
  * cjson utils
  *
  * */
-#ifndef LIBHP_WITHOUT_CJSON
-
 #ifndef LIBHP_CJSON_H
 #define LIBHP_CJSON_H
+
+#ifdef LIBHP_WITH_CJSON
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -16,7 +16,7 @@
 
 #include <string.h>
 #include <assert.h>
-#include "cJSON/cJSON.h"	/* cJSON */
+#include "cjson/cJSON.h"	/* cJSON */
 #include "sdsinc.h"        /* sds */
 #ifdef __cplusplus
 extern "C" {
@@ -96,4 +96,4 @@ int test_hp_cjson_main(int argc, char ** argv);
 }
 #endif
 #endif /* LIBHP_CJSON_H */
-#endif //LIBHP_WITHOUT_CJSON
+#endif //LIBHP_WITH_CJSON

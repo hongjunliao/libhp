@@ -9,7 +9,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifndef LIBHP_WITHOUT_CJSON
+#ifdef LIBHP_WITH_CJSON
 
 #include <stdio.h>
 #include <stdlib.h>	       /* malloc */
@@ -24,7 +24,7 @@
 #include <limits.h>	       /* INT_MAX, IOV_MAX */
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include "sdsinc.h"        /* sds */
-#include "cJSON/cJSON.h"	/* cJSON */
+#include "cjson/cJSON.h"	/* cJSON */
 #include "hp_cjson.h"
 #include "string_util.h"
 
@@ -761,4 +761,4 @@ int test_hp_cjson_main(int argc, char ** argv)
 }
 
 #endif /* NDEBUG */
-#endif //LIBHP_WITHOUT_CJSON
+#endif //LIBHP_WITH_CJSON

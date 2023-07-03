@@ -102,10 +102,10 @@ deps/目录为项目依赖的第三库,感谢原作者们! 为节约时间, 已�
 * libyuarel: https://github.com/jacketizer/libyuarel.git
 * zlog: https://github.com/HardySimpson/zlog.git
 
-注意! cJSON,c-vector使用的是"升级"版本:
+注意! cJSON,c-vector使用的是修改版本:
 cJSON: https://gitee.com/docici/cJSON
 c-vector:https://gitee.com/jun/c-vector
 # build
 mkdir build
 cd build
-rm -rf * && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLIBHP_WITHOUT_CJSON=1 -DHAVE_CONFIG_H=1 .. && make -j 2
+rm -rf * && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLIBHP_WITH_CJSON=1 .. && make -j 2

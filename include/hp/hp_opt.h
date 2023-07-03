@@ -12,6 +12,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_WITH_OPTPARSE
+
 #include "libhp.h"
 
 #ifdef __cplusplus
@@ -32,5 +34,5 @@ LIBHP_EXT int test_hp_opt_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
-
+#endif //LIBHP_WITH_OPTPARSE
 #endif /* HP_OPT_H__ */

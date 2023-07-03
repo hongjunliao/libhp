@@ -17,7 +17,7 @@
 #include <string.h>
 #include <assert.h>        	/* define NDEBUG to disable assertion */
 #include "sds/sds.h"        /* sds */
-#include "cJSON/cJSON.h"	/* cJSON */
+#include "cjson/cJSON.h"	/* cJSON */
 #include "mysql/mysql.h"
 #include "mysql/errmsg.h"
 #include "zlog.h"

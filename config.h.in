@@ -17,8 +17,8 @@
 #define HAVE_CONFIG_H
 #endif
 
-/* define to disable cJSON cjson_XXX */
-#cmakedefine LIBHP_WITHOUT_CJSON
+/* define to enable cJSON cjson_XXX */
+#cmakedefine LIBHP_WITH_CJSON
 
 /* define to use zlib, hp_zc_XXX */
 #cmakedefine  LIBHP_WITH_ZLIB
@@ -62,6 +62,12 @@
 
 /* define to use Berkeley DB, hp_bdb_XXX */
 #cmakedefine  LIBHP_WITH_BDB
+
+/* define to use dlfcn-win32 */
+#cmakedefine LIBHP_WITH_DLFCN
+
+/* define to use optparse */
+#cmakedefine LIBHP_WITH_OPTPARSE
 
 /* define if you want using libhp DEPRECADTED API
  * Deprecated code is no longer actively maintained !

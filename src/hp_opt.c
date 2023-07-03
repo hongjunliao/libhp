@@ -9,6 +9,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_WITH_OPTPARSE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -144,3 +146,4 @@ int test_hp_opt_main(int argc, char ** argv)
 	return rc;
 }
 #endif //NDEBUG
+#endif //LIBHP_WITH_OPTPARSE

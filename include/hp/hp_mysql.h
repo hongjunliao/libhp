@@ -14,7 +14,7 @@
 
 #ifdef LIBHP_WITH_MYSQL
 
-#include "cJSON/cJSON.h"	/* cJSON */
+#include "cjson/cJSON.h"	/* cJSON */
 #include "sds/sds.h"		/* sds */
 #include "mysql/mysql.h"
 

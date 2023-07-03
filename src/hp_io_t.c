@@ -21,18 +21,12 @@
 #include <string.h>
 #include "hp_log.h"
 #include "str_dump.h" /*dumpstr*/
-#ifdef LIBHP_WITH_LIBUV
-#include <uv.h>   /* uv_ip4_name */
-#endif
-
 
 #if !defined(_WIN32) && !defined(_MSC_VER)
 #include <poll.h>  /* poll */
 #include <sys/fcntl.h>  /* fcntl */
 #include <arpa/inet.h>	/* inet_ntop */
 #endif /* _MSC_VER */
-
-extern int gloglevel;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -147,15 +141,6 @@ static hp_sock_t hp_io_internal_on_accept(hp_iocp * iocpctx, int index)
 		if (is_c) {
 			hp_sock_close(confd);
 			continue;
-		}
-
-		char cliaddstr[64]="";
-#ifdef LIBHP_WITH_LIBUV
-		uv_ip4_name(&clientaddr, cliaddstr, sizeof(cliaddstr));
-#endif
-		if(gloglevel > 2){
-			hp_log(stdout, "%s: new connect from '%s', fd=%d, total=%d\n"
-				, __FUNCTION__, cliaddstr, confd, listLength(ioctx->iolist));
 		}
 	}
 	

@@ -22,7 +22,7 @@
 #include "zlog.h"
 #endif
 
-int gloglevel = 0;
+static int gloglevel = 0;
 
 static dict * config = 0;
 static char const * cfg(char const * id) {

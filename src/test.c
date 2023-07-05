@@ -7,6 +7,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifndef NDEBUG
+
 #include "Win32_Interop.h"
 #include "redis/src/dict.h"
 #ifdef LIBHP_WITH_WIN32_INTERROP
@@ -166,7 +168,9 @@ int libhp_all_tests_main(int argc, char ** argv)
 	rc = test_hp_msg_main(argc, argv); assert(rc == 0);
 	rc = test_hp_net_main(argc, argv); assert(rc == 0);
 	rc = test_hp_str_main(argc, argv); assert(rc == 0);
+#ifdef LIBHP_WITH_OPTPARSE
 	rc = test_hp_opt_main(argc, argv); assert(rc == 0);
+#endif
 
 #ifdef LIBHP_WITH_MYSQL
 	rc = test_hp_mysql_main(argc, argv);
@@ -243,4 +247,7 @@ int libhp_all_tests_main(int argc, char ** argv)
 	return rc;
 }
 
+#else
+int libhp_all_tests_main(int argc, char ** argv) { return 0; }
+#endif //NDEBUG
 /////////////////////////////////////////////////////////////////////////////////////////

@@ -8,10 +8,6 @@
 ###########################################################################################
 
 cmake_minimum_required(VERSION 2.8.12)
-if(COMMAND cmake_policy)
-cmake_policy(SET CMP0003 NEW)
-endif(COMMAND cmake_policy)
-set(CMAKE_LEGACY_CYGWIN_WIN32 1)
 
 # libhp
 project(libhp)
@@ -25,147 +21,132 @@ endif()
 # https://clangd.llvm.org/installation.html
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# show build type
-message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} Options are: Debug|Release")
-
 ###########################################################################################
-configure_file("config.h.in" "config.h")
+# deps from deps/ 
+# pkg_check_modules(openssl REQUIRED openssl)
 
-###########################################################################################
-# deps from deps/ for from pkg-config
-if(NOT MSVC)
-	find_package(PkgConfig REQUIRED)
-	if(LIBHP_WITH_SSL) 
-		pkg_check_modules(openssl REQUIRED openssl) 
-	endif()
-	if(LIBHP_WITH_ZLIB) 
-		pkg_check_modules(zlib REQUIRED zlib)	   
-	endif()
-	if(LIBHP_WITH_BDB)
-		#pkg_check_modules(LIBHP_WITH_BDB REQUIRED bdb)
-		find_path(bdb db.h )
-		if(NOT bdb AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/bdb") 
-			message(FATAL_ERROR "LIBHP_WITH_BDB defined but ${CMAKE_CURRENT_SOURCE_DIR}/deps/bdb NOT found")
-		endif()
-	endif()
-	if(LIBHP_WITH_CURL)
-		pkg_check_modules(libcurl REQUIRED libcurl)
-	endif()
-	if(LIBHP_WITH_REDIS)
-		#fixme:
-		# cause pkg-config/hiredis has no redisAsyncContext::dataCleanup member, using deps/hiredis instead
-		# pkg_check_modules(hiredis REQUIRED hiredis)
+# FIXME:
+# cause pkg-config/hiredis has no redisAsyncContext::dataCleanup member, using deps/hiredis instead
+# pkg_check_modules(hiredis REQUIRED hiredis)
 
-		if( NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/hiredis") 
-			message(FATAL_ERROR "LIBHP_WITH_REDIS defined but ${CMAKE_CURRENT_SOURCE_DIR}/deps/hiredis NOT found")
-		else()
-			file(GLOB SRCS ${SRCS} deps/hiredis/alloc.c)
-		endif()
+# 为数字的表示不受LIBHP_WITH_XXX选项开关的控制
+set(withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
+	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP HTTP 1 1 1 
+	)
+# 为.nullfilesub.h或.nullfilesrc.h的表示不要查找系统目录来定位库
+#	.nullfilesub.h: 通过add_subdirectory()
+#	.nullfilesrc.h: 通过file(GLOB)
+set(hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h 
+		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
+		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
+	)
+#.src表示项目源目录,不需要查检deps/下相应目录是否存在
+set(deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson 
+		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
+		gbk-utf8 libyuarel c-vector inih .src
+	)
+# 空格隔开的表示实际为数组
+set(libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson 
+			c uuid uv dl zlog http_parser hiredis 
+			"deps/redis/src/adlist.c deps/redis/src/zmalloc.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c"
+			deps/sds/*.c
+			deps/gbk-utf8/utf8.c 
+			deps/libyuarel/*.c
+			"deps/c-vector/*.c deps/c-vector/*.cc"
+			deps/inih/*.c
+			src/*.c
+	)
 
-	endif()
-	if(LIBHP_WITH_MYSQL)
-		pkg_check_modules(mysqlclient REQUIRED mysqlclient)
-	endif()
-	if(LIBHP_WITH_MQTT) 
-		#pkg_check_modules(LIBHP_WITH_MQTT REQUIRED paho-mqtt)
-		#find_package(paho-mqtt REQUIRED paho-mqtt)
-		find_path(paho_mqtt_c MQTTAsync.h )
-		if(NOT paho_mqtt_c AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/paho.mqtt.c") 
-			message(FATAL_ERROR "LIBHP_WITH_MQTT defined but ${CMAKE_CURRENT_SOURCE_DIR}/deps/paho.mqtt.c NOT found")
+
+#function(hp_find_deps SRCS withs hdrs deps libs)
+	list(LENGTH hdrs hdrs_len)
+	math( EXPR hdrs_len "${hdrs_len} - 1")
+
+foreach(index RANGE ${hdrs_len} )
+
+	list(GET withs ${index} with)
+	list(GET hdrs ${index} hdr)
+	list(GET deps ${index} dep)
+	list(GET libs ${index} lib_)
+
+	# string "ssl crypto" to list "ssl;crypto"
+	string(REPLACE " " ";" lib_ ${lib_})	
+
+	if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesub.h ))
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
+			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
 		endif()
-	endif()
-	if(LIBHP_WITH_CJSON) 
-		pkg_check_modules(libcjson REQUIRED libcjson) 
+		
+		add_subdirectory(deps/${dep})
+		set(${dep}_INCLUDE_DIRS "deps/${dep}")	
+		set(${dep}_LIBRARIES ${lib_})
+		message("libhp: lib added, add_subdirectory(deps/${dep}),${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
+		continue()
 	endif()	
-	if(LIBHP_WITH_OPTPARSE AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/optparse")
-		message(FATAL_ERROR "LIBHP_WITH_OPTPARSE defined but ${CMAKE_CURRENT_SOURCE_DIR}/deps/optparse NOT found")
+
+	if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesrc.h ))
+		if((NOT (${dep} STREQUAL .src) ) AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
+			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+		endif()
+		
+		file(GLOB SRCS ${SRCS} ${lib_})
+
+		file(GLOB files ${lib_})
+		#		message("libhp: lib added using file(GLOB), GLOB='${lib_}', files='${files}'")
+		continue()
+	endif()	
+
+	if(LIBHP_WITH_${with} AND (${hdr} STREQUAL .nullfilesrc.h ))
+		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
+			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+		endif()
+		
+		file(GLOB SRCS ${SRCS} ${lib_})
+
+		file(GLOB files ${lib_})
+		message("libhp: lib enabled by LIBHP_WITH_${with}, using file(GLOB), GLOB='${lib_}', files='${files}'")
+		continue()
 	endif()
-	if(LIBHP_WITH_DLFCN)	#nothing need to do 
-	endif()
-	#pkg_check_modules(LIBHP_WITH_PROC_SYSINFO REQUIRED openssl)
-	#pkg_check_modules(LIBHP_WITH_AMQP REQUIRED openssl)
-	#pkg_check_modules(LIBHP_WITH_TIMERFD REQUIRED openssl)
-	#pkg_check_modules(LIBHP_WITH_JNI REQUIRED openssl)
-	#pkg_check_modules(LIBHP_DEPRECADTED REQUIRED openssl)
+
+	if((${with} EQUAL 1) OR LIBHP_WITH_${with})
+		find_path(${dep}_INCLUDE_DIRS ${hdr} )
 	
-	pkg_check_modules(uuid REQUIRED uuid)	   
-
-else() # Windows/msvc specific
-	if(LIBHP_WITH_DLFCN)
-		add_subdirectory(deps/dlfcn-win32)	
-	endif()
-
-endif()
-
-if(LIBHP_WITH_ZLOG)
-	find_path(zlog zlog.h )
-	if(NOT zlog AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/zlog") 
-		message(FATAL_ERROR "LIBHP_WITH_ZLOG defined but
-			${CMAKE_CURRENT_SOURCE_DIR}/deps/zlog NOT found")
-	elseif(NOT zlog)
-		add_subdirectory(deps/zlog)
+		if(NOT ${dep}_INCLUDE_DIRS) 
+			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
+				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+			endif()
+			
+			add_subdirectory(deps/${dep})
+			set(${dep}_INCLUDE_DIRS "deps/${dep}")	
+			message("libhp: lib enabled by LIBHP_WITH_${with}, add_subdirectory(deps/${dep})" )
+			continue()
+		endif()
+		
+		set(${dep}_LIBRARIES ${lib_})	
+		message("libhp: lib added by searching, ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'" )
 	endif()
 	
-endif()
-pkg_check_modules(libuv REQUIRED libuv) 
 
+endforeach() 
+#	message("libhp: SRCS='${SRCS}'")
+	set(${sources} ${SRCS} PARENT_SCOPE)
+#endfunction()
 ###########################################################################################
-# 3thrd party sources
-
-#deps/redis
-#pkg_check_modules(LIBHP_WITH_REDIS REQUIRED LIBHP_WITH_REDIS)
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/redis")
-	message(FATAL_ERROR "Redis source dir ${CMAKE_CURRENT_SOURCE_DIR}/deps/redis NOT found")
-else()
-	file(GLOB SRCS ${SRCS} deps/redis/src/adlist.c deps/redis/src/zmalloc.c 
-		deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c)
-endif()
-
-# Redis/sds
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/sds")
-	message(FATAL_ERROR "Redis/sds source ${CMAKE_CURRENT_SOURCE_DIR}/deps/sds NOT found")
-else()
-	file(GLOB SRCS ${SRCS} deps/sds/*.c )
-endif()
-
-# deps/http-parser ...
-#pkg_check_modules(LIBHP_WITH_HTTP REQUIRED openssl)
-if(LIBHP_WITH_HTTP)
-	#pkg_check_modules(http-parser REQUIRED http-parser)
-	find_path(http-parser http_parser.h )
-	if(NOT http-parser AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/http-parser") 
-		message(FATAL_ERROR "LIBHP_WITH_HTTP defined but ${CMAKE_CURRENT_SOURCE_DIR}/deps/http-parser NOT found")
-	endif()
-
-	if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/gbk-utf8" OR
-			NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/libyuarel")
-		message(FATAL_ERROR "LIBHP_WITH_HTTP defined buf source dirs ${CMAKE_CURRENT_SOURCE_DIR}/deps/gbk-utf8,
-			${CMAKE_CURRENT_SOURCE_DIR}/deps/libyuarel	NOT found")
-	else()
-		file(GLOB SRCS ${SRCS} deps/gbk-utf8/utf8.c deps/libyuarel/*.c) 
-	endif()
-   	
-endif()
-
-#deps/inih
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/inih")
-	message(FATAL_ERROR "source dir ${CMAKE_CURRENT_SOURCE_DIR}/deps/inih NOT found")
-else()
-	file(GLOB SRCS ${SRCS} deps/inih/*.c)
-endif()
-
-#deps/c-vector
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	file(GLOB SRCS ${SRCS} deps/c-vector/*) 
-endif()
-###########################################################################################
-# souces
-file(GLOB_RECURSE SRCS ${SRCS} src/*.c src/*.cpp)
 
 #build as library
-add_library(libhp STATIC ${SRCS})
+#message("libhp: SRCS='${SRCS}'")
+add_library(libhp ${SRCS})
 
-###########################################################################################
+foreach(dep IN LISTS deps  )
+	message("libhp: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
+	if(NOT (${dep} STREQUAL .src))
+		target_include_directories(libhp PRIVATE ${${dep}_INCLUDE_DIRS} )
+		target_link_libraries(libhp ${${dep}_LIBRARIES} ) 
+	
+		
+	endif()
+endforeach() 
+target_include_directories(libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/ )
 
 target_compile_options(libhp PUBLIC
 	-DHAVE_CONFIG_H
@@ -182,92 +163,11 @@ if(MSVC)
 endif()
 
 ###########################################################################################
+add_executable(test-libhp src/test.c test/test.c )
+target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/ )
+target_link_libraries(test-libhp libhp ) 
 
-target_include_directories(libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/
-	deps/http-parser/)
-if(MSVC AND LIBHP_WITH_DLFCN)
-	target_include_directories(libhp PRIVATE deps/dlfcn-win32/)
-endif()
+###########################################################################################
+configure_file("config.h.in" "config.h")
 
-if(LIBHP_WITH_ZLOG)
-	target_include_directories(libhp PRIVATE ${zlog_INCLUDE_DIRS})
-endif()
-
-##########################################################################################
-
-target_link_libraries(libhp ${libuv_LIBRARIES} ${uuid_LIBRARIES}) 
-if(LIBHP_WITH_SSL) 
-	target_link_libraries(libhp ${openssl_LIBRARIES}) 
-endif()
-if(LIBHP_WITH_ZLIB) 
-	target_link_libraries(libhp ${zlib_LIBRARIES}) 
-endif()
-if(LIBHP_WITH_CURL)
-	target_link_libraries(libhp ${libcurl_LIBRARIES}) 
-endif()
-if(LIBHP_WITH_REDIS)
-endif()
-if(LIBHP_WITH_MYSQL)
-	target_link_libraries(libhp ${mysqlclient_LIBRARIES}) 
-endif()
-if(LIBHP_WITH_MQTT) 
-	target_link_libraries(libhp paho-mqtt3a) 
-endif()
-if(LIBHP_WITH_CJSON) 
-	target_link_libraries(libhp ${libcjson_LIBRARIES} ) 
-endif()	
-if(LIBHP_WITH_HTTP) 
-	target_link_libraries(libhp http_parser ) 
-endif()	
-if(LIBHP_WITH_DLFCN)
-	target_link_libraries(libhp dl ) 
-endif()
-if(LIBHP_WITH_ZLOG)
-	target_link_libraries(libhp zlog ) 
-endif()
-
-if(LIBHP_WITH_REDIS)
-	target_link_libraries(libhp hiredis) 
-endif()
-##########################################################################################
-# test executable: test-libhp 
-
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-	project(test-libhp)
-
-	file(GLOB SRCS ${SRCS} deps/sds/*.c )
-	file(GLOB SRCS ${SRCS} test/test.c test/example-libuv.c deps/inih/*.c deps/c-vector/*.c deps/c-vector/*.cc)
-
-	if(LIBHP_WITH_WIN32_INTERROP)
-		file(GLOB SRCS ${SRCS} test/example-ae.c)
-	endif()
-
-	########################################################################################## 
-
-	add_executable(test-libhp ${SRCS} )
-
-	##########################################################################################
-
-	target_compile_options(test-libhp PUBLIC
-		-DHAVE_CONFIG_H
-		-DCMAKE_EXPORT_COMPILE_COMMANDS
-		# for mongoose
-		-DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING
-		# for redis
-		-DDICT_BENCHMARK_MAIN
-		# for cJSON
-		-DcJSON_FREE_PRINT
-	)
-	if(MSVC)
-		target_compile_options(libhp PUBLIC -D_CRT_SECURE_NO_WARNINGS /MTd)
-	endif()
-
-	##########################################################################################
-
-	target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/ deps/ include/hp/)
-	target_link_libraries(test-libhp ${libuv_LIBRARIES} ${uuid_LIBRARIES}
-		${openssl_LIBRARIES}  ${zlib_LIBRARIES} ${libcurl_LIBRARIES}
-		${mysqlclient_LIBRARIES} paho-mqtt3a ${libcjson_LIBRARIES} http_parser dl zlog
-		hiredis db)
-endif()
 

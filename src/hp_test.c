@@ -38,7 +38,7 @@ int hp_test(char const * test, int argc, char ** argv, int (* all)(int argc, cha
 		if(sdslen(tests[i]) == 0)
 			continue;
 
-		void * fn = dlsym(RTLD_DEFAULT, tests[i]);
+		void * fn = dlsym(0/*RTLD_DEFAULT*/, tests[i]);
 
 		if(fn){
 			int (* test_fn)(int argc, char *argv[]) = fn;

@@ -9,6 +9,7 @@
 
 cmake_minimum_required(VERSION 2.8.12)
 
+include(cmakefiles/libhp.cmake) # hp_cmake_find_deps
 # libhp
 project(libhp)
 
@@ -30,23 +31,23 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # pkg_check_modules(hiredis REQUIRED hiredis)
 
 # 为数字的表示不受LIBHP_WITH_XXX选项开关的控制
-set(withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
+set(g_withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
 	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP HTTP 1 1 1 
 	)
 # 为.nullfilesub.h或.nullfilesrc.h的表示不要查找系统目录来定位库
 #	.nullfilesub.h: 通过add_subdirectory()
 #	.nullfilesrc.h: 通过file(GLOB)
-set(hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h 
+set(g_hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h 
 		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
 		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 	)
 #.src表示项目源目录,不需要查检deps/下相应目录是否存在
-set(deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson 
+set(g_deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson 
 		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
 		gbk-utf8 libyuarel c-vector inih .src
 	)
 # 空格隔开的表示实际为数组
-set(libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson 
+set(g_libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson 
 			c uuid uv dl zlog http_parser hiredis 
 			"deps/redis/src/adlist.c deps/redis/src/zmalloc.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c"
 			deps/sds/*.c
@@ -56,94 +57,17 @@ set(libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson
 			deps/inih/*.c
 			src/*.c
 	)
-
-
-#function(hp_find_deps SRCS withs hdrs deps libs)
-	list(LENGTH hdrs hdrs_len)
-	math( EXPR hdrs_len "${hdrs_len} - 1")
-
-foreach(index RANGE ${hdrs_len} )
-
-	list(GET withs ${index} with)
-	list(GET hdrs ${index} hdr)
-	list(GET deps ${index} dep)
-	list(GET libs ${index} lib_)
-
-	# string "ssl crypto" to list "ssl;crypto"
-	string(REPLACE " " ";" lib_ ${lib_})	
-
-	if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesub.h ))
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
-		endif()
-		
-		add_subdirectory(deps/${dep})
-		set(${dep}_INCLUDE_DIRS "deps/${dep}")	
-		set(${dep}_LIBRARIES ${lib_})
-		message("libhp: lib added, add_subdirectory(deps/${dep}),${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
-		continue()
-	endif()	
-
-	if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesrc.h ))
-		if((NOT (${dep} STREQUAL .src) ) AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
-		endif()
-		
-		file(GLOB SRCS ${SRCS} ${lib_})
-
-		file(GLOB files ${lib_})
-		#		message("libhp: lib added using file(GLOB), GLOB='${lib_}', files='${files}'")
-		continue()
-	endif()	
-
-	if(LIBHP_WITH_${with} AND (${hdr} STREQUAL .nullfilesrc.h ))
-		if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-			message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
-		endif()
-		
-		file(GLOB SRCS ${SRCS} ${lib_})
-
-		file(GLOB files ${lib_})
-		message("libhp: lib enabled by LIBHP_WITH_${with}, using file(GLOB), GLOB='${lib_}', files='${files}'")
-		continue()
-	endif()
-
-	if((${with} EQUAL 1) OR LIBHP_WITH_${with})
-		find_path(${dep}_INCLUDE_DIRS ${hdr} )
-	
-		if(NOT ${dep}_INCLUDE_DIRS) 
-			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
-			endif()
-			
-			add_subdirectory(deps/${dep})
-			set(${dep}_INCLUDE_DIRS "deps/${dep}")	
-			message("libhp: lib enabled by LIBHP_WITH_${with}, add_subdirectory(deps/${dep})" )
-			continue()
-		endif()
-		
-		set(${dep}_LIBRARIES ${lib_})	
-		message("libhp: lib added by searching, ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'" )
-	endif()
-	
-
-endforeach() 
-#	message("libhp: SRCS='${SRCS}'")
-	set(${sources} ${SRCS} PARENT_SCOPE)
-#endfunction()
 ###########################################################################################
 
+hp_cmake_find_deps(SRCS g_withs g_hdrs g_deps g_libs)
 #build as library
-#message("libhp: SRCS='${SRCS}'")
 add_library(libhp ${SRCS})
 
-foreach(dep IN LISTS deps  )
+foreach(dep IN LISTS g_deps  )
 	message("libhp: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
 	if(NOT (${dep} STREQUAL .src))
 		target_include_directories(libhp PRIVATE ${${dep}_INCLUDE_DIRS} )
 		target_link_libraries(libhp ${${dep}_LIBRARIES} ) 
-	
-		
 	endif()
 endforeach() 
 target_include_directories(libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/ )

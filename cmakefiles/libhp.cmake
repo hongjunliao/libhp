@@ -19,6 +19,11 @@
 #		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
 #		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 #	)
+# 为.find_path的表示使用之前查找返回的目录
+#set(g_incs .find_path  .find_path .find_path .find_path .find_path .find_path .find_path
+#		.find_path .find_path .find_path .find_path .find_path .find_path .find_path .find_path .find_path 
+#		.find_path .find_path .find_path .find_path .find_path
+#	)
 #.src表示项目源目录,不需要查检deps/下相应目录是否存在
 #set(g_deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson 
 #		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
@@ -50,7 +55,7 @@ function(hp_cmake_copy_cmakefile dep)
 	
 endfunction()
 
-function(hp_cmake_find_deps SRCS_ withs hdrs deps libs)
+function(hp_cmake_find_deps SRCS_ withs hdrs incs deps libs)
 	list(LENGTH ${hdrs} hdrs_len)
 	math( EXPR hdrs_len "${hdrs_len} - 1")
 
@@ -58,11 +63,17 @@ function(hp_cmake_find_deps SRCS_ withs hdrs deps libs)
 
 		list(GET ${withs} ${index} with)
 		list(GET ${hdrs} ${index} hdr)
+		list(GET ${incs} ${index} inc)
 		list(GET ${deps} ${index} dep)
 		list(GET ${libs} ${index} lib_)
 	
 		# string "ssl crypto" to list "ssl;crypto"
 		string(REPLACE " " ";" lib_ ${lib_})	
+		if((${inc} STREQUAL .find_path))
+			unset(inc)
+		else()
+			string(REPLACE " " ";" inc ${inc})	
+		endif()
 	
 		if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesub.h ))
 			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
@@ -72,21 +83,23 @@ function(hp_cmake_find_deps SRCS_ withs hdrs deps libs)
 			hp_cmake_copy_cmakefile(${dep})
 
 			add_subdirectory(deps/${dep})
-			set(${dep}_INCLUDE_DIRS "deps/${dep}" PARENT_SCOPE)	
+			set(${dep}_INCLUDE_DIRS "deps/${dep}" ${inc} PARENT_SCOPE)	
 			set(${dep}_LIBRARIES ${lib_} PARENT_SCOPE)
 			message("hp_cmake_find_deps: lib added, add_subdirectory(deps/${dep}),${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
 			continue()
 		endif()	
 	
 		if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesrc.h ))
-			if((NOT (${dep} STREQUAL .src) ) AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
+			if(${dep} STREQUAL .src)
+				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)	
+			elseif(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
 				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
 			endif()
 			
 			file(GLOB SRCS ${SRCS} ${lib_})
 	
 			file(GLOB files ${lib_})
-			#		message("hp_cmake_find_deps: lib added using file(GLOB), GLOB='${lib_}', files='${files}'")
+			message("hp_cmake_find_deps: lib added using file(GLOB), GLOB='${lib_}', files='${files}'")
 			continue()
 		endif()	
 	
@@ -113,7 +126,7 @@ function(hp_cmake_find_deps SRCS_ withs hdrs deps libs)
 				hp_cmake_copy_cmakefile(${dep})
 				
 				add_subdirectory(deps/${dep})
-				set(${dep}_INCLUDE_DIRS "deps/${dep}" PARENT_SCOPE)	
+				set(${dep}_INCLUDE_DIRS "deps/${dep}" ${inc} PARENT_SCOPE)	
 				message("hp_cmake_find_deps: lib enabled by LIBHP_WITH_${with}, add_subdirectory(deps/${dep})" )
 				continue()
 			endif()
@@ -131,6 +144,6 @@ endfunction()
 ###########################################################################################
 
 #测试 
-#hp_cmake_find_deps(SRCS g_withs g_hdrs g_deps g_libs)
+#hp_cmake_find_deps(SRCS g_withs g_hdrs g_incs g_deps g_libs)
 #message("hp_cmake_find_deps: SRCS='${SRCS}'")
 

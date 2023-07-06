@@ -20,7 +20,18 @@
 #include "cjson/cJSON.h"	/* cJSON */
 #include "mysql/mysql.h"
 #include "mysql/errmsg.h"
+
+#ifdef LIBHP_WITH_ZLOG
 #include "zlog.h"
+#else
+#include "hp/hp_log.h"
+#define zlog_get_category(c) stdout
+#define dzlog_error hp_log
+#define zlog_info hp_log
+#define zlog_warn hp_log
+#define zlog_debug hp_log
+#define dzlog_error hp_log
+#endif
 
 extern int gloglevel;
 
@@ -39,6 +50,7 @@ static MYSQL * connect_mysql(MYSQL *mysql)
 {
 	if(gloglevel > 0){
 	    zlog_info(zlog_get_category("main"), "connecting to MySql, --mysql='%s@%s:%d:%s', password='%s' ...\n",
+
 	    		mysql_user, mysql_ip,
 	    		mysql_port_, mysql_db, (strlen(mysql_pwd) > 0? "***" : ""));
 	}

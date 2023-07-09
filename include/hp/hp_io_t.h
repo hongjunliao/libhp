@@ -129,7 +129,7 @@ struct hp_io_ctx {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int hp_io_init(hp_io_ctx * io, hp_ioopt * opt);
+int hp_io_init(hp_io_ctx * ioctx, hp_ioopt * opt);
 
 int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd
 	, hp_io_on_data on_data, hp_io_on_error on_error);

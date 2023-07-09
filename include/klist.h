@@ -1,5 +1,5 @@
 /*!
- * This file is PART of xhhp project
+ * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2018/4/8
  *
  * a list from kernel:

@@ -32,7 +32,6 @@
 extern "C" {
 #endif
 
-extern int gloglevel;
 /////////////////////////////////////////////////////////////////////////////////////////
 
 static void auth_cb(redisAsyncContext *c, void *r, void *privdata)
@@ -92,7 +91,7 @@ int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * s_ev, char const 
 	if(passwd && strlen(passwd) > 0)
 		redisAsyncCommand(c, auth_cb, /* privdata */0, "AUTH %s", passwd);
 
-	if(gloglevel > 0){
+	if(hp_log_level > 0){
 		hp_log(stdout, "%s: connecting to Redis, host='%s:%d', password='%s' ...\n", __FUNCTION__
 			, host, port, (strlen(passwd) > 0? "***" : ""));
 	}
@@ -107,7 +106,7 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 	if(redisc)
 		redisAsyncDisconnect(redisc);
 
-	if(gloglevel > 0)
+	if(hp_log_level > 0)
 		hp_log(stdout, "%s: disconneted Redis\n", __FUNCTION__);
 }
 
@@ -115,7 +114,6 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 
 #ifndef NDEBUG
 #include "hp_config.h"
-extern hp_config_t g_conf;
 static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;
 
 static int done = 0;
@@ -152,8 +150,8 @@ static void test_hp_redis_on_connect_2(const redisAsyncContext *c, int status) {
 
 int test_hp_redis_main(int argc, char ** argv)
 {
-	assert(g_conf);
-	hp_config_t cfg = g_conf;
+	assert(hp_config_test);
+	hp_config_t cfg = hp_config_test;
 
 	int r, rc;
 	/* test if connect OK */

@@ -25,7 +25,6 @@
 #define IOV_MAX 1024
 #endif
  
-#define gloglevel(etio) ((etio)->loglevel? *((etio)->loglevel) : XH_ETIO_LOG_LEVEL)
 /////////////////////////////////////////////////////////////////////////////////////
 
 size_t iovec_total_bytes(struct iovec * vec, int count)
@@ -144,7 +143,7 @@ int hp_eto_add(struct hp_eto * eto, void * iov_base, size_t iov_len, hp_eto_free
 		return -1;
 
 	if(eto->O_ITEMS_LEN - eto->o_items_len <= 3){
-		if(gloglevel(eto) > 8)
+		if(hp_log_level > 8)
 			hp_log(stdout, "%s: hp_eto::o_items_len reached max, MAX=%d, realloc\n"
 				, __FUNCTION__, eto->O_ITEMS_LEN);
 
@@ -277,7 +276,7 @@ size_t hp_eto_write(struct hp_eto * eto, int fd, void * arg)
 		}
 		else {
 #ifndef NDEBUG
-			if(gloglevel(eto) > 0)
+			if(hp_log_level > 0)
 				hp_log(stderr, "%s: writev_a ERROR, fd=%d, return=%d, errno=%d/'%s'\n", __FUNCTION__
 					, fd, err, errno, strerror(errno));
 #endif /* NDEBUG */
@@ -311,7 +310,7 @@ size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg)
 			eti->I_BUF_MAX *= 2;
 			eti->i_buf = realloc(eti->i_buf, eti->I_BUF_MAX);
 
-			if(gloglevel(eti) > 0)
+			if(hp_log_level > 0)
 				hp_log(stdout, "%s: realloc to %d\n", __FUNCTION__, eti->I_BUF_MAX);
 		}
 
@@ -331,7 +330,7 @@ size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg)
 			}
 			else{
 #ifndef NDEBUG
-			if(gloglevel(eti) > 0)
+			if(hp_log_level > 0)
 				hp_log(stderr, "%s: read ERROR, fd=%d, return=%d, errno=%d/'%s'\n", __FUNCTION__
 					, fd, n, errno, strerror(errno));
 #endif /* NDEBUG */
@@ -345,7 +344,7 @@ size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg)
 		}
 		else if(n == 0){ /* EOF */
 #ifndef NDEBUG
-			if(gloglevel(eti) > 9)
+			if(hp_log_level > 9)
 				hp_log(stdout, "%s: read EOF, fd=%d, return=%d, errno=%d/'%s'\n", __FUNCTION__
 					, fd, n, errno, strerror(errno));
 #endif /* NDEBUG */

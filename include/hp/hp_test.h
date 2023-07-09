@@ -31,6 +31,8 @@ extern "C" {
  */
 int hp_test(char const * test, int argc, char ** argv, int (* all)(int argc, char *argv[]), int flags);
 
+//int hp_test_prepare(char const  * dirs[], char const * files[]);
+
 #ifndef NDEBUG
 LIBHP_EXT int test_hp_test_main(int argc, char ** argv);
 #endif //NDEBUG

@@ -376,6 +376,7 @@ static int hp_io_t__on_data(char* buf, size_t* len, void * arg)
 	return (rc >= 0? EAGAIN : rc);
 }
 
+//FIXME: io->on_error
 static void hp_io_t__on_error(int err, char const * errstr, void * arg)
 {
 	struct epoll_event * ev = (struct epoll_event *)arg;
@@ -398,7 +399,6 @@ static void hp_io_t__on_error(int err, char const * errstr, void * arg)
 
 	hp_eti_uninit(&io->eti);
 	hp_eto_uninit(&io->eto);
-
 	io->on_error(io, err, errstr);
 }
 

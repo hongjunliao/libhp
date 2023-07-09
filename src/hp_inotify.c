@@ -24,7 +24,6 @@
 #include "c-vector/cvector.h"
 #include <sys/epoll.h>  /* epoll_event */
 
-extern int gloglevel;
 /////////////////////////////////////////////////////////////////////////////////////
 
 struct hp_inotify_ient {

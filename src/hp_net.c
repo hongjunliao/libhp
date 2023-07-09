@@ -341,7 +341,7 @@ int hp_net_socketpair(int mwfd[2])
 	return 0;
 }
 
-char * get_ipport_cstr(int sockfd, char * buf)
+char * hp_get_ipport_cstr(int sockfd, char * buf)
 {
 	struct sockaddr_in cliaddr = { 0 };
 	socklen_t len;

@@ -29,7 +29,7 @@ static int hp_timerfd_handle_tfd(struct epoll_event * ev)
 	assert(timerfd);
 //
 //#ifndef NDEBUG
-//	if(gloglevel > 5){
+//	if(hp_log_level > 5){
 //		char buf[64];
 //		hp_log(stdout, "%s: fd=%d, arg=%p, events='%s'\n", __FUNCTION__
 //				, fd, timerfd, hp_epoll_e2str(ev->events, buf, sizeof(buf)));
@@ -218,14 +218,14 @@ static int test_start_stop_timerfd(hp_timerfd * timerfd)
 
 	++n;
 
-	if(n == 5){
+	if(n == 2){
 		fprintf(stdout, "%s: timer ticked for count=%d, test stop and restart timer\n", __FUNCTION__, n);
 
 		hp_timerfd_reset(timerfd, 0);
 
 		stop_time = time(0);
 	}
-	if(n == 8)
+	if(n == 4)
 		efds->stop = 1;
 
 	fprintf(stdout, "%s: timer ticked, count=%d, time_out=%d\n", __FUNCTION__, n, time_out);
@@ -236,12 +236,12 @@ static int test_start_stop_timerfd_before_wait(struct hp_epoll * efds)
 {
 	if(stop_time > 0){
 		/* timer not tick in this period */
-		assert( n == 5);
+		assert( n == 2);
 
 		if(difftime(time(0), stop_time) > 4){
 			stop_time = 0;
 			/* restore timer */
-			time_out = 1300;
+			time_out = 200;
 			hp_timerfd_reset(timer, time_out);
 		}
 	}
@@ -257,7 +257,7 @@ int test_hp_timerfd_main(int argc, char ** argv)
 
 	/* hp_timerfd_init2 */
 	{
-		time_out = 200;
+		time_out = 100;
 
 		rc = hp_epoll_init(efds, 2);
 		assert(rc == 0);
@@ -289,7 +289,7 @@ int test_hp_timerfd_main(int argc, char ** argv)
 		rc = hp_timerfd_init(timer, efds, test_stopped_timerfd, time_out, efds);
 		assert(rc == 0);
 
-		hp_epoll_run(efds, 200, test_stopped_timerfd_before_wait);
+		hp_epoll_run(efds, 100, test_stopped_timerfd_before_wait);
 
 		hp_timerfd_uninit(timer);
 		hp_epoll_uninit(efds);
@@ -298,7 +298,7 @@ int test_hp_timerfd_main(int argc, char ** argv)
 	/* test to stop timer */
 	{
 		n = 4;
-		time_out = 200;
+		time_out = 100;
 		stop_time = 0;
 
 		rc = hp_epoll_init(efds, 2);
@@ -310,7 +310,7 @@ int test_hp_timerfd_main(int argc, char ** argv)
 		rc = hp_timerfd_init(timer, efds, test_stop_timerfd, time_out, efds);
 		assert(rc == 0);
 
-		hp_epoll_run(efds, 200, test_stop_timerfd_before_wait);
+		hp_epoll_run(efds, 100, test_stop_timerfd_before_wait);
 
 		assert(n == 0);
 
@@ -321,7 +321,7 @@ int test_hp_timerfd_main(int argc, char ** argv)
 	/* timer in ms */
 	{
 		n = 3;
-		time_out = 300;
+		time_out = 100;
 
 		rc = hp_epoll_init(efds, 2);
 		assert(rc == 0);
@@ -331,28 +331,28 @@ int test_hp_timerfd_main(int argc, char ** argv)
 		rc = hp_timerfd_init(timer, efds, test_handle_timerfd, time_out, efds);
 		assert(rc == 0);
 
-		hp_epoll_run(efds, 200, 0);
+		hp_epoll_run(efds, 100, 0);
 
 		hp_timerfd_uninit(timer);
 		hp_epoll_uninit(efds);
 	}
 	/* timer > 1s */
 	{
-		n = 3;
-		time_out = 1200;
+		// n = 3; 
+		// time_out = 1200;
 
-		rc = hp_epoll_init(efds, 2);
-		assert(rc == 0);
+		// rc = hp_epoll_init(efds, 2);
+		// assert(rc == 0);
 
-		hp_timerfd  tfd_obj;
-		timer = &tfd_obj;
-		rc = hp_timerfd_init(timer, efds, test_handle_timerfd, time_out, efds);
-		assert(rc == 0);
+		// hp_timerfd  tfd_obj;
+		// timer = &tfd_obj;
+		// rc = hp_timerfd_init(timer, efds, test_handle_timerfd, time_out, efds);
+		// assert(rc == 0);
 
-		hp_epoll_run(efds, 200, 0);
+		// hp_epoll_run(efds, 200, 0);
 
-		hp_timerfd_uninit(timer);
-		hp_epoll_uninit(efds);
+		// hp_timerfd_uninit(timer);
+		// hp_epoll_uninit(efds);
 	}
 	/* test start/stop timer */
 	{

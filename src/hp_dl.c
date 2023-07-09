@@ -39,7 +39,6 @@ struct hp_dl_ient {
 	sds                      reload;      /* function name while reloading so */
 };
 
-#define gloglevel(dl) ((dl)->loglevel? *((dl)->loglevel) : XH_DL_LOG_LEVEL)
 /////////////////////////////////////////////////////////////////////////////////////
 
 static void * hp_dl_open(char const * file, int mode, int timeout)
@@ -97,7 +96,7 @@ static int hp_dl_reopen(hp_dl * dl, hp_dl_ient * ient)
 	ient->hdl = hdl;
 
 	if(ient->reload){
-		if(gloglevel(dl) > 0)
+		if(hp_log_level > 0)
 			hp_log(stdout, "%s: reload dl='%s', mtime=%zu/%zu\n"
 					, __FUNCTION__, ient->file, ient->mtime1, ient->mtime2);
 
@@ -157,7 +156,7 @@ static int hp_dl_iread_event(hp_dl * dl)
 			for(i  = 0; dl->ients[i].file; ++i){
 				if ((event->wd == dl->ients[i].wd)){
 #ifndef NDEBUG
-					if(gloglevel(dl) > 0){
+					if(hp_log_level > 0){
 						char ievbuf[1024];
 						ievbuf[0] = '\0';
 						hp_log(stdout, "%s: inotify: dl='%s', name='%s', event='%s'\n"
@@ -191,7 +190,7 @@ static int epoll_dl_handle_ii(struct epoll_event * ev)
 	if(!(ev && hp_epoll_arg(ev)))
 		return -1;
 #ifndef NDEBUG
-	if(gloglevel(dl) > 6){
+	if(hp_log_level > 6){
 		char buf[128];
 		hp_log(stdout, "%s: fd=%d, events='%s'\n", __FUNCTION__
 				, hp_epoll_fd(ev), hp_epoll_e2str(ev->events, buf, sizeof(buf)));
@@ -276,7 +275,7 @@ static int hp_dl_add(hp_dl * dl, char const * dlpath, char const * dlname
 
 	ent->wd = wd;
 
-	if(gloglevel(dl) > 3){
+	if(hp_log_level > 3){
 		hp_log(stdout, "%s: inotify watch added, file='%s'\n", __FUNCTION__, ent->file);
 	}
 
@@ -296,7 +295,7 @@ static int hp_dl_del(hp_dl * dl, char const * dlname)
 
 		inotify_rm_watch(dl->ifd, ient->wd);
 		if(ient->hdl){
-			if(gloglevel(dl) > 3)
+			if(hp_log_level > 3)
 				hp_log(stdout, "%s: unload dl='%s', mtime=%zu/%zu\n"
 					, __FUNCTION__, ient->file, ient->mtime1, ient->mtime2);
 			dlclose(ient->hdl);

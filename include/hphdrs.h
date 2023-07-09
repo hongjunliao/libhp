@@ -56,6 +56,7 @@ extern "C" {
 #include "hp/hp_ssl.h"  /*  */
 #include "hp/hp_io_t.h"  /*  */
 #include "hp/hp_fs.h"  /*  */
+#include "hp/hp_assert.h"
 
 #ifdef __cplusplus
 }

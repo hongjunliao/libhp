@@ -26,14 +26,11 @@
 #else
 #include "hp/hp_log.h"
 #define zlog_get_category(c) stdout
-#define dzlog_error hp_log
 #define zlog_info hp_log
 #define zlog_warn hp_log
 #define zlog_debug hp_log
-#define dzlog_error hp_log
+#define zlog_error hp_log
 #endif
-
-extern int gloglevel;
 
 static MYSQL * (* g_connect_cb)(MYSQL *mysql) = 0;
 
@@ -48,7 +45,7 @@ static int mysql_port_ = 0;
 
 static MYSQL * connect_mysql(MYSQL *mysql)
 {
-	if(gloglevel > 0){
+	if(hp_log_level > 0){
 	    zlog_info(zlog_get_category("main"), "connecting to MySql, --mysql='%s@%s:%d:%s', password='%s' ...\n",
 
 	    		mysql_user, mysql_ip,
@@ -58,7 +55,7 @@ static MYSQL * connect_mysql(MYSQL *mysql)
 	mysql = mysql_real_connect(mysql, mysql_ip
     		, mysql_user, mysql_pwd, mysql_db, mysql_port_, NULL, CLIENT_FOUND_ROWS);
 	if(!mysql){
-		dzlog_error("%s: connect failed, --mysql='%s@%s:%d:%s'/'%s'\n",
+		zlog_error(zlog_get_category("main"), "%s: connect failed, --mysql='%s@%s:%d:%s'/'%s'\n",
 				__FUNCTION__, mysql_user, mysql_ip,
 				mysql_port_, mysql_db, mysql_pwd);
 	}
@@ -320,7 +317,7 @@ ret:
 	ojson = result_cb(rc, errstr, jrow_count, jrows);
 	assert(ojson);
 
-	if(gloglevel > 0)
+	if(hp_log_level > 0)
 		zlog_debug(zlog_get_category("libxhmdm"), "%s: out_json='%s', in_json='%s'\n"
 			, __FUNCTION__, cJSON_PrintUnformatted(ojson), (flags && json? cJSON_PrintUnformatted(json) : (char const *)json));
 
@@ -339,12 +336,11 @@ ret:
 #ifndef NDEBUG
 #include "hp_cjson.h"
 #include "hp_config.h"
-extern hp_config_t g_conf;
 
 int test_hp_mysql_main(int argc, char ** argv)
 {
 	int i, j, rc;
-	assert(g_conf);
+	assert(hp_config_test);
 
 	MYSQL mysqlopbj, * mysql = &mysqlopbj;
 
@@ -354,9 +350,9 @@ int test_hp_mysql_main(int argc, char ** argv)
 	assert(mysql);
 
 	fprintf(stdout, "%s: connecting to MySQL, --mysql='%s', password='%s' ...\n",
-			__FUNCTION__, g_conf("mysql"), (strlen(g_conf("mysql.password")) > 0? "***" : ""));
+			__FUNCTION__, hp_config_test("mysql"), (strlen(hp_config_test("mysql.password")) > 0? "***" : ""));
 
-	rc = hp_mysql_connect_addr(&mysql, g_conf("mysql"), g_conf("mysql.password"), "set names utf8");
+	rc = hp_mysql_connect_addr(&mysql, hp_config_test("mysql"), hp_config_test("mysql.password"), "set names utf8");
 	if(!(rc == 0 && mysql)){
 		fprintf(stdout, "%s: connect to MySQL failed, skip this test\n", __FUNCTION__);
 		return 0;

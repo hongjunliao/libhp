@@ -12,8 +12,6 @@
 #include <hiredis/adapters/ae.h>
 #include "hp/hp_config.h"
 
-extern hp_config_t g_conf;
-
 /* Put event loop in the global scope, so it can be explicitly stopped */
 static aeEventLoop *loop;
 static int done = 0;
@@ -60,7 +58,7 @@ static void  disconnectCallback(const redisAsyncContext *c, int status) {
 
 int hiredis_exmaple_ae_main(int argc, char **argv) 
 {
-	assert(g_conf);
+	assert(hp_config_test);
 #ifndef _WIN32
 	signal(SIGPIPE, SIG_IGN);
 #endif
@@ -73,7 +71,7 @@ int hiredis_exmaple_ae_main(int argc, char **argv)
 	char host[64] = "";
 	int port = 0;
 
-	int n = sscanf(g_conf("redis"), "%[^:]:%d", host, &port);
+	int n = sscanf(hp_config_test("redis"), "%[^:]:%d", host, &port);
 	if (n != 2)
 		return -2;
 	redisAsyncContext *c = redisAsyncConnect(host, port);

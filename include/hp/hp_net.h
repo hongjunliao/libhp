@@ -41,7 +41,7 @@ int hp_net_udp_bind(char const * ip, int port);
 
 int hp_net_socketpair(int mwfd[2]);
 
-char * get_ipport_cstr(int sockfd, char * buf);
+char * hp_get_ipport_cstr(int sockfd, char * buf);
 char * get_ipport_cstr2(struct sockaddr_in * addr, char const * sep, char * buf, int len);
 char * hp_net_get_ipport2(struct sockaddr_in * addr, char * ip, int iplen, int * port);
 

@@ -31,7 +31,6 @@
 //#include <search.h>     /* hsearch_r,hsearch_data, ... */
 
 /////////////////////////////////////////////////////////////////////////////////////
-extern int gloglevel;
 
 #define ENTRY_MAX         10
 struct htab_entry {
@@ -72,7 +71,7 @@ int hp_cache_get(char const * key, char const * dir, struct hp_cache_entry ** en
 	snprintf(path, sizeof(path), "%s%s", dir, key);
 
 	if(stat(path, &fs) < 0){
-		if(gloglevel > 5)
+		if(hp_log_level > 5)
 			hp_log(stderr, "%s: stat('%s') failed, errno=%d, error='%s'\n"
 				, __FUNCTION__, path, errno, strerror(errno));
 		return 1;

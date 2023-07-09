@@ -16,6 +16,10 @@
 extern "C" {
 #endif
 
+/*!
+ * libhp global log level
+ * */
+extern int hp_log_level;
 /*
  * you can simply replace
  *  hp_log(f, fmt, ...); to fprintf(f, fmt, ...);

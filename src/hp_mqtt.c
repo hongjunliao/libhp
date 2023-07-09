@@ -39,8 +39,6 @@
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-static int l_loglevel = 0, * g_loglevel = &l_loglevel;
-
 static MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer;
 
 static struct pubsub_opts opts =
@@ -242,8 +240,6 @@ int hp_mqtt_init(hp_mqtt * cli
 	cli->on_disconnect = disconnect_cb;
 	cli->on_sub = sub_cb;
 	cli->on_arg = arg;
-	if(loglevel)
-		g_loglevel = loglevel;
 
 	MQTTAsync_createOptions create_opts = MQTTAsync_createOptions_initializer;
 	int rc = 0;
@@ -534,7 +530,7 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 #include <assert.h>
 #include "MQTTClient.h"
 #include "hp_config.h"
-extern hp_config_t g_conf;
+extern hp_config_t hp_config_test;
 
 struct basic_test {
 	char * topics[1];
@@ -605,11 +601,11 @@ static void on_connect(hp_mqtt * cli, int err, char const * errstr, void * arg)
 
 int test_hp_mqtt_main(int argc, char ** argv)
 {
-	assert(g_conf);
+	assert(hp_config_test);
 
-	char const * mqtt_addr=g_conf("mqtt.addr");
-	char const * mqtt_user=g_conf("mqtt.user");;
-	char const * mqtt_pwd=g_conf("mqtt.pwd");;
+	char const * mqtt_addr=hp_config_test("mqtt.addr");
+	char const * mqtt_user=hp_config_test("mqtt.user");;
+	char const * mqtt_pwd=hp_config_test("mqtt.pwd");;
 
 	/* check if connect OK */
 	{

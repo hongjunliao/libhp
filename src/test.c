@@ -81,6 +81,10 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_hp_expire_main);
 #endif
 #endif
+#if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
+	run_test(test_hp_http_main);
+#endif
+
 #ifdef LIBHP_WITH_CURL
 	run_test(test_hp_uv_curl_main);
 	run_test(test_hp_curl_main);
@@ -101,10 +105,6 @@ int libhp_all_tests_main(int argc, char ** argv)
 
 #ifdef LIBHP_WITH_MYSQL
 	run_test(test_hp_mysql_main);
-#endif
-
-#if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
-	run_test(test_hp_http_main);
 #endif
 
 #ifdef LIBHP_WITH_MQTT

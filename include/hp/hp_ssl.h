@@ -11,6 +11,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+#include "sdsinc.h"
 
 #ifdef LIBHP_WITH_SSL
 #ifdef __cplusplus
@@ -20,6 +21,7 @@ extern "C" {
 /////////////////////////////////////////////////////////////////////////////////////////
 int hp_ssl_rsa128(char const * pubkey, char const * msg, char ** outbuf);
 char * hp_ssl_base64(const unsigned char *input, int length);
+sds hp_ssl_sha256(const unsigned char *d, size_t n);
 
 #ifndef NDEBUG
 int test_hp_ssl_main(int argc, char ** argv);

@@ -1,3 +1,4 @@
+
 /*!
  * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2017/12/28
@@ -15,14 +16,15 @@
 #ifdef LIBHP_WITH_SSL
 
 #include <openssl/rsa.h>
-#include "openssl/pem.h"
-#include "openssl/err.h"
+#include <openssl/crypto.h>
+#include <openssl/sha.h>
+#include <openssl/pem.h>
+#include <openssl/err.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #include "str_dump.h"   /* dumpstr */
 #include "hp_ssl.h"
-
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 
@@ -178,11 +180,37 @@ char * hp_ssl_base64(const unsigned char *input, int length)
 	return buff;
 }
 
+sds hp_ssl_sha256(const unsigned char *d, size_t n)
+{
+	int rc;
+	if(!(d)) return 0;
+
+	unsigned char hashbuf[SHA256_DIGEST_LENGTH]  = "";
+	SHA256(d, n, hashbuf);
+
+	sds hash = sdsMakeRoomFor(sdsempty(), 65);
+	size_t buflen = sdsavail(hash);
+	rc = OPENSSL_buf2hexstr_ex(hash, buflen, &buflen, hashbuf, sizeof(hashbuf), '\0');
+	if(!rc) buflen = 0;
+	sdsIncrLen(hash, buflen);
+
+	return hash;
+}
 /////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
-
+#include "hp_assert.h"	//hp_assert
 int test_hp_ssl_main(int argc, char ** argv)
 {
+	int rc;
+	{
+		sds fc = sdsnew("hello\n");
+		sds hex_string = hp_ssl_sha256(fc, sdslen(fc));
+#define TEST_HASH "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03"
+		hp_assert(strncasecmp(hex_string, TEST_HASH, strlen(TEST_HASH)) == 0,
+				"hash NOT match: data/sha256='%s'/'%s' but hp_ssl_sha256 returns '%s'", fc, TEST_HASH, hex_string);
+		sdsfree(hex_string);
+		sdsfree(fc);
+	}
 	char const * data = "hello";
 	if(argc > 1){
 		int i = 1;

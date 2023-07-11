@@ -8,7 +8,7 @@
 ###########################################################################################
 # libhp依赖查找
 
-# 为数字的表示不受LIBHP_WITH_XXX选项开关的控制
+# 为数字的表示不受${withprefix}XXX选项开关的控制
 #set(g_withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
 #	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP HTTP 1 1 1 
 #	)
@@ -55,7 +55,7 @@ function(hp_cmake_copy_cmakefile dep)
 	
 endfunction()
 
-function(hp_cmake_find_deps SRCS_ withs hdrs incs deps libs)
+function(hp_cmake_find_deps SRCS_ withprefix withs hdrs incs deps libs)
 	list(LENGTH ${hdrs} hdrs_len)
 	math( EXPR hdrs_len "${hdrs_len} - 1")
 
@@ -102,8 +102,8 @@ function(hp_cmake_find_deps SRCS_ withs hdrs incs deps libs)
 			message("hp_cmake_find_deps: lib added using file(GLOB), GLOB='${lib_}', files='${files}'")
 			continue()
 		endif()	
-	
-		if(LIBHP_WITH_${with} AND (${hdr} STREQUAL .nullfilesrc.h ))
+
+		if(${withprefix}${with} AND (${hdr} STREQUAL .nullfilesrc.h ))
 			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
 				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
 			endif()
@@ -111,11 +111,11 @@ function(hp_cmake_find_deps SRCS_ withs hdrs incs deps libs)
 			file(GLOB SRCS ${SRCS} ${lib_})
 	
 			file(GLOB files ${lib_})
-			message("hp_cmake_find_deps: lib enabled by LIBHP_WITH_${with}, using file(GLOB), GLOB='${lib_}', files='${files}'")
+			message("hp_cmake_find_deps: lib enabled by ${withprefix}${with}, using file(GLOB), GLOB='${lib_}', files='${files}'")
 			continue()
 		endif()
 	
-		if((${with} EQUAL 1) OR LIBHP_WITH_${with})
+		if((${with} EQUAL 1) OR (${withprefix}${with}))
 			find_path(${dep}_INCLUDE_DIRS ${hdr} )
 		
 			if(NOT ${dep}_INCLUDE_DIRS) 
@@ -127,7 +127,7 @@ function(hp_cmake_find_deps SRCS_ withs hdrs incs deps libs)
 				
 				add_subdirectory(deps/${dep})
 				set(${dep}_INCLUDE_DIRS "deps/${dep}" ${inc} PARENT_SCOPE)	
-				message("hp_cmake_find_deps: lib enabled by LIBHP_WITH_${with}, add_subdirectory(deps/${dep})" )
+				message("hp_cmake_find_deps: lib enabled by ${withprefix}${with}, add_subdirectory(deps/${dep})" )
 				continue()
 			endif()
 			
@@ -144,6 +144,6 @@ endfunction()
 ###########################################################################################
 
 #测试 
-#hp_cmake_find_deps(SRCS g_withs g_hdrs g_incs g_deps g_libs)
+#hp_cmake_find_deps(SRCS LIBHP_WITH_ g_withs g_hdrs g_incs g_deps g_libs)
 #message("hp_cmake_find_deps: SRCS='${SRCS}'")
 

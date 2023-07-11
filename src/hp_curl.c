@@ -399,56 +399,24 @@ void hp_curlm_uninit(hp_curlm * curlm)
 /* tests */
 #ifndef NDEBUG
 
-#include <unistd.h>
-#include <sys/stat.h>	/*fstat*/
+#include "hp_assert.h"
+#include "hp_ssl.h"
+#include "string_util.h"
 
-#define MULTI_REQ_HTTP "http://mirrors.163.com/centos/filelist.gz"
-#define MULTI_REQ_FILE "download/filelist.gz"
-
-static int queue_done = 0;
-
-static int hp_curl_multi_test_on_done2(hp_curlm * curlm, char const * url, sds str, void * arg)
-{
-	assert(curlm);
-	assert(strcmp(url, MULTI_REQ_HTTP) == 0);
-	assert(arg == curlm);
-
-	++queue_done;
-
-	if(queue_done == 30)
-		curlm->efds->stop = 1;
-
-	return 0;
-}
+#define TEST_URL "https://mirrors.163.com/cygwin/x86_64/release/git/git-2.33.0-1-src.tar.xz"
+#define TEST_SHA256 "764baee2c61abd836722ad059cec69557812923a1aad7f3440b30eb1c706111f"
+#define TEST_FSIZE 10340424
 
 static int hp_curl_multi_test_on_done(hp_curlm * curlm, char const * url, sds str, void * arg)
 {
-	assert(curlm);
-	assert(strcmp(url, MULTI_REQ_HTTP) == 0);
-	assert(arg == curlm);
-
-	struct stat fsobj, * fs = &fsobj;
-	int rc = stat(MULTI_REQ_FILE, fs);
-	assert(rc == 0);
-
-	FILE * f = fopen(MULTI_REQ_FILE, "r");
-	assert(f);
-
-	char * buf = malloc(fs->st_size);
-	size_t size = fread(buf, sizeof(char), fs->st_size, f);
-	assert(size == fs->st_size);
-	fclose(f);
-
-	size_t slen = sdslen(str);
-	assert(slen == size);
-
-	assert(strncmp(str, buf, size) == 0);
-	free(buf);
-
-	sdsfree(str);
-
-	if(curlm->n == 0)
-		curlm->efds->stop = 1;
+	assert(str);
+	hp_assert(sdslen(str) == TEST_FSIZE, "%i!=%i", sdslen(str), TEST_FSIZE);
+#ifdef LIBHP_WITH_SSL
+	sds hash = hp_ssl_sha256(str, sdslen(str));
+	hp_assert(strncasecmp(hash, TEST_SHA256, strlen(TEST_SHA256)) == 0,
+		"len=%i, hash='%s', TEST_SHA256='%s'", sdslen(str), hash, TEST_SHA256);
+	sdsfree(hash);
+#endif //LIBHP_WITH_SSL
 
 	return 0;
 }
@@ -457,10 +425,10 @@ int test_hp_curl_main(int argc, char ** argv)
 {
 	/* easy mode */
 	{
-		sds buf = 0;
+		sds str = 0;
 
 		curl_global_init(CURL_GLOBAL_ALL);
-		char const * url = MULTI_REQ_HTTP;
+		char const * url = TEST_URL;
 		fprintf(stdout, "%s: request url='%s' ...\n", __FUNCTION__, url);
 
 		struct curl_slist * hdrs = 0;
@@ -471,82 +439,20 @@ int test_hp_curl_main(int argc, char ** argv)
 //		hp_curl_append_header_from_qeury_str(&hdrs, defhdrstr);
 //		assert(hdrs);
 
-		buf = hp_curl_easy_perform(url, hdrs, 0, 0);
+		str = hp_curl_easy_perform(url, hdrs, 0, 0);
 
-		assert(buf);
-		fprintf(stdout, "%s: from url='%s', reponse='%s'\n", __FUNCTION__, url, buf);
-		sdsfree(buf);
-		curl_global_cleanup();
-	}
-
-	/* TODO: update tests */
-	return 0;
-
-	{
-		curl_global_init(CURL_GLOBAL_ALL);
-		char const * url = MULTI_REQ_HTTP;
-		fprintf(stdout, "%s: request url='%s' ...\n", __FUNCTION__, url);
-
-
-		struct curl_slist * hdrs = 0;
-		hdrs = curl_slist_append(hdrs, "accessToken:89c36d5cc305482aa082a40fb4c0ac47");
-
-		sds buf = hp_curl_easy_perform(url, hdrs, "deptCode=440300000000", 0);
-//		fprintf(stdout, "%s: from url='%s', reponse='%s'\n", __FUNCTION__, url, buf);
-		sdsfree(buf);
-		curl_global_cleanup();
-	}
-	{
-		char const * url = MULTI_REQ_HTTP;
-		curl_global_init(CURL_GLOBAL_ALL);
-		fprintf(stdout, "%s: request url='%s' ...\n", __FUNCTION__, url);
-
-
-		struct curl_slist * hdrs = 0;
-		hdrs = curl_slist_append(hdrs, "accessToken:89c36d5cc305482aa082a40fb4c0ac47");
-
-		sds buf = hp_curl_easy_perform(url, hdrs, 0, 0);
-		fprintf(stdout, "%s: from url='%s', reponse='%s'\n", __FUNCTION__, url, buf);
-		sdsfree(buf);
+		assert(str);
+		fprintf(stdout, "%s: from url='%s', reponse='%d'\n", __FUNCTION__, url, (int)sdslen(str));
+#ifdef LIBHP_WITH_SSL
+		sds hash = hp_ssl_sha256(str, sdslen(str));
+		hp_assert(strncasecmp(hash, TEST_SHA256, strlen(TEST_SHA256)) == 0,
+			"len=%i, hash='%s', TEST_SHA256='%s'", sdslen(str), hash, TEST_SHA256);
+		sdsfree(hash);
+#endif //LIBHP_WITH_SSL
+		sdsfree(str);
 		curl_global_cleanup();
 	}
 	/* with huge size json file */
-	{
-		char const * url = MULTI_REQ_HTTP;
-		curl_global_init(CURL_GLOBAL_ALL);
-		fprintf(stdout, "%s: request url='%s' ...\n", __FUNCTION__, url);
-
-
-		struct curl_slist * hdrs = 0;
-		hdrs = curl_slist_append(hdrs, "accessToken:89c36d5cc305482aa082a40fb4c0ac47");
-
-		sds str = hp_curl_easy_perform(url, hdrs, 0, 0);
-
-		struct stat fsobj, * fs = &fsobj;
-		int rc = stat(MULTI_REQ_FILE, fs);
-		assert(rc == 0);
-
-		FILE * f = fopen(MULTI_REQ_FILE, "r");
-		assert(f);
-
-		char * buf = malloc(fs->st_size);
-		size_t size = fread(buf, sizeof(char), fs->st_size, f);
-		assert(size == fs->st_size);
-		fclose(f);
-
-		size_t slen = sdslen(str);
-		assert(slen == size);
-
-		if(strncmp(str, buf, size) != 0)
-			fprintf(stdout, "%s: %s", __FUNCTION__, str);
-		assert(strncmp(str, buf, size) == 0);
-		free(buf);
-
-		fprintf(stdout, "%s: from url='%s', reponse=%zu\n", __FUNCTION__, url, slen);
-		sdsfree(str);
-
-		curl_global_cleanup();
-	}
 	////////////////////////////////////////////////
 	/* multi mode */
 	{
@@ -561,18 +467,19 @@ int test_hp_curl_main(int argc, char ** argv)
 
 		assert(hp_curlm_add);
 
-		rc = hp_curlm_add(curlm, MULTI_REQ_HTTP, 0, 0, hp_curl_multi_test_on_done, curlm);
+		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, hp_curl_multi_test_on_done, curlm);
 		assert(rc == 0);
 
-		rc = hp_curlm_add(curlm, MULTI_REQ_HTTP, 0, 0, hp_curl_multi_test_on_done, curlm);
+		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, hp_curl_multi_test_on_done, curlm);
 		assert(rc == 0);
 
-		rc = hp_curlm_add(curlm, MULTI_REQ_HTTP, 0, 0, hp_curl_multi_test_on_done, curlm);
+		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, hp_curl_multi_test_on_done, curlm);
 		assert(rc == 0);
 
 		assert(curlm->n == 3);
 
-		hp_epoll_run(efds, 200, 0);
+		for(;curlm->n > 0;)
+			hp_epoll_run(efds, 200, (void *)-1);
 
 		assert(curlm->n == 0);
 
@@ -592,12 +499,13 @@ int test_hp_curl_main(int argc, char ** argv)
 
 		size_t i;
 		for(i = 0; i < 30; ++i){
-			rc = hp_curlm_queue(curlm, MULTI_REQ_HTTP, 0, 0, hp_curl_multi_test_on_done2, curlm);
+			rc = hp_curlm_queue(curlm, TEST_URL, 0, 0, hp_curl_multi_test_on_done, curlm);
 			assert(rc == 0);
 
 		}
 
-		hp_epoll_run(efds, 200, 0);
+		for(;curlm->n > 0;)
+			hp_epoll_run(efds, 200, (void *)-1);
 
 		assert(curlm->n == 0);
 

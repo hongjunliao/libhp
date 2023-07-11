@@ -11,6 +11,8 @@
 #ifdef LIBHP_WITH_CURL
 
 #include "hp_uv_curl.h"  /* hp_uv_curlm */
+#include "hp_log.h"
+#include "hp_fs.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -21,7 +23,7 @@
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-struct hp_uv_curlm_easy {
+typedef struct hp_uv_curlm_easy {
 	CURL * 		curl;
 	uv_poll_t 	poll_handle;
 	curl_socket_t fd;
@@ -45,11 +47,11 @@ struct hp_uv_curlm_easy {
 #else
 	struct curl_httppost * form;
 #endif /* LIBCURL_VERSION_MINOR */
-};
+} hp_uv_curlm_easy;
 
 static size_t multi_write_data(void *ptr, size_t size, size_t nmemb, void *userdata)
 {
-	struct hp_uv_curlm_easy * citem = (struct hp_uv_curlm_easy *)userdata;
+	hp_uv_curlm_easy * citem = (hp_uv_curlm_easy *)userdata;
 
 	if(citem->f){
 		size_t w = fwrite(ptr, size, nmemb, citem->f);
@@ -75,11 +77,32 @@ static size_t multi_write_data(void *ptr, size_t size, size_t nmemb, void *userd
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+static void destroy_curl_context(hp_uv_curlm_easy * citem)
+{
+	assert(citem);
+
+#if (LIBCURL_VERSION_MAJOR >=7 && LIBCURL_VERSION_MINOR >= 56)
+	/* then cleanup the form */
+	if(citem->form)
+		curl_mime_free(citem->form);
+#else
+	/* cleanup the formpost chain */
+	if(citem->form)
+		curl_formfree(citem->form);
+#endif /* LIBCURL_VERSION_MINOR */
+	/* free slist */
+	if(citem->hdrs)
+		curl_slist_free_all(citem->hdrs);
+
+	if(citem->resp)
+		sdsfree(citem->resp);
+}
+
 static void check_multi_info(hp_uv_curlm * curlm) {
     char *done_url;
     CURLMsg *message;
     int pending;
-    struct hp_uv_curlm_easy * citem = 0;
+    hp_uv_curlm_easy * citem = 0;
 
     while ((message = curl_multi_info_read(curlm->curl_handle, &pending))) {
         switch (message->msg) {
@@ -89,13 +112,11 @@ static void check_multi_info(hp_uv_curlm * curlm) {
 			curl_easy_getinfo(message->easy_handle, CURLINFO_PRIVATE, &citem);
 			assert(citem);
 
-			if(citem->f){
-				fclose(citem->f);
-				citem->f = 0;
-			}
-
+			if(citem->f) fclose(citem->f);
 			if(citem->on_done)
 				citem->on_done(curlm, done_url, citem->resp, citem->arg);
+
+			destroy_curl_context(citem);
 
             curl_multi_remove_handle(curlm->curl_handle, message->easy_handle);
 
@@ -113,7 +134,7 @@ static void check_multi_info(hp_uv_curlm * curlm) {
 static void curl_perform(uv_poll_t *req, int status, int events)
 {
 	assert(req->data);
-	struct hp_uv_curlm_easy * citem = req->data;
+	hp_uv_curlm_easy * citem = req->data;
 
     uv_timer_stop(&citem->curlm->timeout);
     int running_handles;
@@ -139,13 +160,9 @@ static int start_timeout(CURLM *multi, long timeout_ms, void *userp)
 {
 	assert(userp);
 	hp_uv_curlm *context = (hp_uv_curlm*) userp;
-	if (timeout_ms < 0) {
-		uv_timer_stop(&context->timeout);
-	}
-	else {
-		if (timeout_ms == 0)
-			timeout_ms = 1; /* 0 means directly call socket_action, but we'll do it
-			 in a bit */
+	if (timeout_ms <= 0){
+		timeout_ms = 1; /* 0 means directly call socket_action, but we'll do it
+		 in a bit */
 		uv_timer_start(&context->timeout, on_timeout, timeout_ms, 0);
 	}
 	return 0;
@@ -153,47 +170,49 @@ static int start_timeout(CURLM *multi, long timeout_ms, void *userp)
 
 static void curl_close_cb(uv_handle_t *handle)
 {
-	struct hp_uv_curlm_easy *citem = (struct hp_uv_curlm_easy*) handle->data;
-
-#if (LIBCURL_VERSION_MAJOR >=7 && LIBCURL_VERSION_MINOR >= 56)
-	/* then cleanup the form */
-	if(citem->form)
-		curl_mime_free(citem->form);
-#else
-	/* cleanup the formpost chain */
-	if(citem->form)
-		curl_formfree(citem->form);
-#endif /* LIBCURL_VERSION_MINOR */
-	/* free slist */
-	if(citem->hdrs)
-		curl_slist_free_all(citem->hdrs);
-
-	if(citem->f)
-		fclose(citem->f);
-	if(citem->resp)
-		sdsfree(citem->resp);
+	hp_uv_curlm_easy *citem = (hp_uv_curlm_easy*) handle->data;
 	free(citem);
+}
+
+static hp_uv_curlm_easy *create_curl_context(hp_uv_curlm_easy * oldcitem, hp_uv_curlm * curlm,
+		curl_socket_t sockfd)
+{
+	assert(oldcitem && curlm);
+
+    hp_uv_curlm_easy *citem;
+
+    citem = (hp_uv_curlm_easy*) malloc(sizeof *citem);
+    *citem = *oldcitem;
+
+    citem->fd = sockfd;
+
+    int r = uv_poll_init_socket(curlm->loop, &citem->poll_handle, sockfd);
+    assert(r == 0);
+    citem->poll_handle.data = citem;
+
+    return citem;
 }
 
 static int handle_socket(CURL *easy, curl_socket_t s, int action, void *userp, void *socketp)
 {
 	hp_uv_curlm * curlm = (hp_uv_curlm *) userp;
-	assert(curlm);
+	assert(curlm && curlm->curl_handle);
 
-	struct hp_uv_curlm_easy * citem = 0;
-	if (action == CURL_POLL_IN || action == CURL_POLL_OUT || action == CURL_POLL_INOUT) {
-		if(!socketp){
-			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &citem);
-			assert(citem);
+	int rc;
+	hp_uv_curlm_easy * citem = 0;
+	if (action == CURL_POLL_IN || action == CURL_POLL_OUT) {
+		if(socketp){
+			citem = (hp_uv_curlm_easy * )socketp;
+		}
+		else{
+			hp_uv_curlm_easy * oldcitem = 0;
+			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &oldcitem);
+			citem = create_curl_context(oldcitem, curlm, s);
 
-		    int r = uv_poll_init_socket(curlm->loop, &citem->poll_handle, s);
-		    assert(r == 0);
-
-		    citem->fd = s;
-		    citem->poll_handle.data = citem;
+			curl_easy_setopt(easy, CURLOPT_WRITEDATA, citem);
+			curl_easy_setopt(easy, CURLOPT_PRIVATE, citem);
 			curl_multi_assign(curlm->curl_handle, s, (void *) citem);
 		}
-		else citem = (struct hp_uv_curlm_easy * )socketp;
     }
 
     switch (action) {
@@ -203,18 +222,15 @@ static int handle_socket(CURL *easy, curl_socket_t s, int action, void *userp, v
         case CURL_POLL_OUT:
             uv_poll_start(&citem->poll_handle, UV_WRITABLE, curl_perform);
             break;
-        case CURL_POLL_INOUT:
-        	uv_poll_start(&citem->poll_handle, UV_READABLE | UV_WRITABLE, curl_perform);
-        	break;
         case CURL_POLL_REMOVE:
             if (socketp) {
-                uv_poll_stop(&((struct hp_uv_curlm_easy*)socketp)->poll_handle);
-                uv_close(&((struct hp_uv_curlm_easy*)socketp)->poll_handle, curl_close_cb);
+            	citem = socketp;
+                uv_poll_stop(&citem->poll_handle);
+                uv_close((uv_handle_t*) &citem->poll_handle, curl_close_cb);
                 curl_multi_assign(curlm->curl_handle, s, NULL);
             }
             break;
         default:
-			assert(0);
             abort();
     }
 
@@ -246,7 +262,7 @@ int hp_uv_curlm_add(hp_uv_curlm * curlm, CURL * handle, const char * url
 	}
 
 
-	struct hp_uv_curlm_easy * citem = calloc(1, sizeof(struct hp_uv_curlm_easy));
+	hp_uv_curlm_easy * citem = calloc(1, sizeof(hp_uv_curlm_easy));
 	citem->curl = handle;
 	citem->on_proress = on_proress;
 	citem->on_done = on_done;
@@ -255,6 +271,7 @@ int hp_uv_curlm_add(hp_uv_curlm * curlm, CURL * handle, const char * url
 	citem->f = f;
 	citem->curlm = curlm;
 	citem->hdrs = hdrs;
+
 	if(flags == 0)
 		citem->form = form;
 
@@ -296,11 +313,11 @@ int hp_uv_curlm_init(hp_uv_curlm * curlm, uv_loop_t * loop)
 	if(!(curlm && loop))
 		return -1;
 
-	memset(curlm, 0, sizeof(hp_uv_curlm));
-	curlm->loop = loop;
-
 	if(curl_global_init(CURL_GLOBAL_ALL))
 		return -1;
+
+	memset(curlm, 0, sizeof(hp_uv_curlm));
+	curlm->loop = loop;
 
 	curlm->curl_handle = curl_multi_init();
 	curl_multi_setopt(curlm->curl_handle, CURLMOPT_SOCKETFUNCTION, handle_socket);
@@ -321,8 +338,6 @@ void hp_uv_curlm_uninit(hp_uv_curlm * curlm)
 		return;
 
 	curl_multi_cleanup(curlm->curl_handle);
-
-	curl_global_cleanup();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -334,9 +349,14 @@ void hp_uv_curlm_uninit(hp_uv_curlm * curlm)
 #include <sys/stat.h>	/*fstat*/
 #include <curl/curl.h>   /* libcurl */
 #include "hp_curl.h"
+#include "hp_assert.h"
+#include "hp_ssl.h"
+#include "string_util.h"
 
-#define MULTI_REQ_HTTP "http://mirrors.163.com/centos/filelist.gz"
-#define MULTI_REQ_FILE "download/filelist.gz"
+#define TEST_URL "https://mirrors.163.com/cygwin/x86_64/release/git/git-2.33.0-1-src.tar.xz"
+#define TEST_SHA256 "764baee2c61abd836722ad059cec69557812923a1aad7f3440b30eb1c706111f"
+#define TEST_FSIZE 10340424
+#define TEST_FILE "test_hp_uv_curl_main/git-2.33.0-1-src.tar.xz"
 
 static int on_progress(int bytes, int content_length, sds resp, void * arg)
 {
@@ -350,52 +370,32 @@ static int on_progress(int bytes, int content_length, sds resp, void * arg)
 	return 0;
 }
 
-static int on_file(hp_uv_curlm * curlm, char const * url, sds str, void * arg)
+static int on_file(hp_uv_curlm * curlm, char const * url, sds str_, void * arg)
 {
-
-	FILE * f = fopen("download/filelist.gz", "r");
-	assert(f);
-	fclose(f);
-
-	return 0;
-}
-
-static int on_multi(hp_uv_curlm * curlm, char const * url, sds str, void * arg)
-{
-	assert(curlm);
-	assert(strcmp(url, MULTI_REQ_HTTP) == 0);
-	assert(arg == curlm);
-
-	struct stat fsobj, * fs = &fsobj;
-	int rc = stat(MULTI_REQ_FILE, fs);
-	assert(rc == 0);
-
-	FILE * f = fopen(MULTI_REQ_FILE, "r");
-	assert(f);
-
-	char * buf = malloc(fs->st_size);
-	size_t size = fread(buf, sizeof(char), fs->st_size, f);
-	assert(size == fs->st_size);
-	fclose(f);
-
-	size_t slen = sdslen(str);
-	assert(slen == size);
-
-	assert(memcmp(str, buf, size) == 0);
-	free(buf);
+	hp_assert_path(TEST_FILE, REG);
+	sds str = hp_fread(TEST_FILE);
+	hp_assert(sdslen(str) == TEST_FSIZE, "%i!=%i", sdslen(str), TEST_FSIZE);
+#ifdef LIBHP_WITH_SSL
+	sds hash = hp_ssl_sha256(str, sdslen(str));
+	hp_assert(strncasecmp(hash, TEST_SHA256, strlen(TEST_SHA256)) == 0,
+		"len=%i, hash='%s', TEST_SHA256='%s'", sdslen(str), hash, TEST_SHA256);
+	sdsfree(hash);
+#endif //LIBHP_WITH_SSL
+	sdsfree(str);
 
 	return 0;
 }
 
 static int on_buffer(hp_uv_curlm * curlm, char const * url, sds str, void * arg)
 {
-
-	FILE * f = fopen("download/filelist.gz", "w");
-	assert(f);
-	size_t size = fwrite(str, sizeof(char), sdslen(str), f);
-	assert(size == sdslen(str));
-
-	fclose(f);
+	assert(str);
+	hp_assert(sdslen(str) == TEST_FSIZE, "%i!=%i", sdslen(str), TEST_FSIZE);
+#ifdef LIBHP_WITH_SSL
+	sds hash = hp_ssl_sha256(str, sdslen(str));
+	hp_assert(strncasecmp(hash, TEST_SHA256, strlen(TEST_SHA256)) == 0,
+		"len=%i, hash='%s', TEST_SHA256='%s'", sdslen(str), hash, TEST_SHA256);
+	sdsfree(hash);
+#endif //LIBHP_WITH_SSL
 
 	return 0;
 }
@@ -409,27 +409,7 @@ static int on_upload(hp_uv_curlm * curlm, char const * url, sds str, void * arg)
 int test_hp_uv_curl_main(int argc, char ** argv)
 {
 	int rc;
-	/* download to file */
-	{
-		uv_loop_t uvloop, * loop = &uvloop; uv_loop_init(loop);
-
-		hp_uv_curlm hp_curl_multiobj, *curlm = &hp_curl_multiobj;
-		rc = hp_uv_curlm_init(curlm, loop);
-		assert(rc == 0);
-
-		unlink("download/filelist.gz");
-		FILE * f = fopen("download/filelist.gz", "r");
-		assert(!f);
-
-		rc = hp_uv_curlm_add(curlm, curl_easy_init(), "http://mirrors.163.com/centos/filelist.gz"
-			, 0, 0, "download/filelist.gz", on_progress, on_file, curlm, 0);
-		assert(rc == 0);
-
-		uv_run(loop, UV_RUN_DEFAULT);
-
-		hp_uv_curlm_uninit(curlm);
-		uv_loop_close(loop);
-	}
+	hp_assert_path("test_hp_uv_curl_main/", DIR);
 
 	/* download to buffer */
 	{
@@ -439,11 +419,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		rc = hp_uv_curlm_init(curlm, loop);
 		assert(rc == 0);
 
-		unlink("download/filelist.gz");
-		FILE * f = fopen("download/filelist.gz", "r");
-		assert(!f);
-
-		rc = hp_uv_curlm_add(curlm, curl_easy_init(), "http://mirrors.163.com/centos/filelist.gz"
+		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
 				, 0, 0, "", on_progress, on_buffer, curlm, 0);
 		assert(rc == 0);
 
@@ -452,6 +428,24 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		hp_uv_curlm_uninit(curlm);
 		uv_loop_close(loop);
 	}
+	/* download to file */
+	{
+		uv_loop_t * loop = uv_default_loop();
+
+		hp_uv_curlm hp_curl_multiobj, *curlm = &hp_curl_multiobj;
+		rc = hp_uv_curlm_init(curlm, loop);
+		assert(rc == 0);
+
+		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
+			, 0, 0, TEST_FILE, on_progress, on_file, curlm, 0);
+		assert(rc == 0);
+
+		uv_run(loop, UV_RUN_DEFAULT);
+
+		hp_uv_curlm_uninit(curlm);
+		uv_loop_close(loop);
+	}
+
 	/* ignore response */
 	{
 		uv_loop_t uvloop, * loop = &uvloop; uv_loop_init(loop);
@@ -460,7 +454,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		rc = hp_uv_curlm_init(curlm, loop);
 		assert(rc == 0);
 
-		rc = hp_uv_curlm_add(curlm, curl_easy_init(), "http://mirrors.163.com/centos/filelist.gz"
+		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
 			, 0, 0, 0, on_progress, 0, curlm, 0);
 		assert(rc == 0);
 
@@ -494,12 +488,12 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 	    /* Fill in the file upload field */
 	    field = curl_mime_addpart(form);
 	    curl_mime_name(field, "fileList");
-	    curl_mime_filedata(field, "download/filelist.gz");
+	    curl_mime_filedata(field, TEST_FILE);
 
 	    /* Fill in the filename field */
 	    field = curl_mime_addpart(form);
 	    curl_mime_name(field, "filename");
-	    curl_mime_data(field, "download/filelist.gz", CURL_ZERO_TERMINATED);
+	    curl_mime_data(field, TEST_FILE, CURL_ZERO_TERMINATED);
 #else
 		struct curl_httppost *form=NULL;
 		struct curl_httppost *lastptr=NULL;
@@ -508,7 +502,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		curl_formadd(&form,
 				   &lastptr,
 				   CURLFORM_COPYNAME, "fileList",
-				   CURLFORM_FILE, "download/filelist.gz",
+				   CURLFORM_FILE, TEST_FILE,
 				   CURLFORM_END);
 #endif /* LIBCURL_VERSION_MINOR */
 
@@ -522,6 +516,9 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		hp_uv_curlm_uninit(curlm);
 		uv_loop_close(loop);
 	}
+
+	curl_global_cleanup();
+
 	return rc;
 }
 

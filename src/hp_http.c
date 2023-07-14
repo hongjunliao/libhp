@@ -10,6 +10,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_WITH_HTTP
 //#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #endif /* _MSC_VER */
@@ -438,3 +439,4 @@ int test_hp_http_main(int argc, char ** argv)
 }
 #endif //LIBHP_WITH_CURL
 #endif /* NDEBUG */
+#endif //LIBHP_WITH_HTTP

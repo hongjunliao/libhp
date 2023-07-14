@@ -512,7 +512,6 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd, hp_iohdl iohdl)
 #include "hp_cjson.h"
 #include "string_util.h"
 #include "hp_assert.h"
-
 #define cfg hp_config_test
 #define cfgi(key) atoi(hp_config_test(key))
 /////////////////////////////////////////////////////////////////////////////////////

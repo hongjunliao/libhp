@@ -45,7 +45,7 @@ extern hp_cjson const HP_CJSON_PKG;
 
 sds cjson_fmt(char const * fmt, cJSON const * cjson, char const * key);
 
-cJSON * cjson_(cJSON const * cjson, char const * key);
+cJSON const * cjson_(cJSON const * cjson, char const * key);
 char const * cjson_cstr(cJSON const * cjson);
 int cjson_ival(cJSON const * cjson, char const * key, int def);
 double cjson_dval(cJSON const * cjson, char const * key, double def);

@@ -28,10 +28,6 @@
 #include "hp_cjson.h"
 #include "string_util.h"
 
-hp_cjson const HP_CJSON_PKG = {
-	.str = cJSON_PrintUnformatted,
-	.size = cJSON_GetArraySize,
-};
 /////////////////////////////////////////////////////////////////////////////////////////
 
 sds cjson_in(cJSON * array)
@@ -173,7 +169,7 @@ sds cjson_fmt(char const * fmt, cJSON const * cjson, char const * key)
 }
 /////////////////////////////////////////////////////////////////////////////////////////
 
-cJSON * cjson_(cJSON const * cjson, char const * key)
+cJSON const * cjson_(cJSON const * cjson, char const * key)
 {
 	if(!(cjson && key))
 		return 0;
@@ -366,7 +362,7 @@ cJSON * cjson_col(cJSON const * cjson, char const * key)
 	i = 0;
 	cJSON_ArrayForEach(obj, arr){
 		sds index = sdscatprintf(sdsempty(), "[%d]/%s", i, p);
-        cJSON * col = cjson_(arr, index);
+        cJSON const * col = cjson_(arr, index);
         if(!col){
         	cJSON_Delete(json);
         	json = 0;

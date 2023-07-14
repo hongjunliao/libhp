@@ -302,9 +302,11 @@ size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg)
 
 	size_t i_bytes = 0; /* in bytes this time */
 	for(;;){
-		int r = eti->pack(eti->i_buf, &eti->i_buflen, arg);
-		if(r != EAGAIN)
-			break;
+		if(eti->i_buflen > 0){
+			int r = eti->pack(eti->i_buf, &eti->i_buflen, arg);
+			if(r != EAGAIN)
+				break;
+		}
 
 		if(!(eti->i_buflen < eti->I_BUF_MAX)){
 			eti->I_BUF_MAX *= 2;

@@ -28,6 +28,7 @@
 #include <arpa/inet.h>	/* inet_ntop */
 #endif /* _MSC_VER */
 
+#define safe_call(fn, args...) do{ if(fn) { fn(args); } } while(0)
 /////////////////////////////////////////////////////////////////////////////////////////
 static int hp_io_t_internal_on_data(hp_io_t * io, char * buf, size_t * len)
 {
@@ -138,7 +139,7 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 
 			rc = hp_io_add(io->ioctx, nio, confd, niohdl);
 			if (rc != 0) {
-				if(niohdl.on_delete) niohdl.on_delete(nio);
+				safe_call(niohdl.on_delete, nio);
 				is_c = 1;
 			}
 		}
@@ -155,11 +156,11 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 
 static int iolist_match(void *ptr, void *key)
 {
-//	assert(ptr);
-//	if(!key) { return 0; }
-//	hp_io_t * io = (hp_io_t *)ptr, * k = (hp_io_t *)key;
-//	return (k->id > 0 && io->id == k->id) ||
-//			(hp_sock_is_valid(k->fd) && io->fd == k->fd);
+	assert(ptr);
+	if(!key) { return 0; }
+	hp_io_t * io = (hp_io_t *)ptr, * k = (hp_io_t *)key;
+	return (k->id > 0 && io->id == k->id) ||
+			(hp_sock_is_valid(hp_io_fd(k)) && hp_io_fd(io) == hp_io_fd(k));
 }
 
 int hp_io_init(hp_io_ctx * ioctx)
@@ -355,6 +356,7 @@ static void hp_io_t_internal_on_error(int err, char const * errstr, void * arg)
 	hp_io_t * io = (hp_io_t *)hp_epoll_arg(ev);
 	assert(io && io->ioctx);
 
+
 	list * li = (list *)io->ioctx->iolist;
 	hp_io_t key = { 0 };
 	key.id = io->id;
@@ -367,6 +369,8 @@ static void hp_io_t_internal_on_error(int err, char const * errstr, void * arg)
 
 	hp_eti_uninit(&io->eti);
 	hp_eto_uninit(&io->eto);
+
+	safe_call(io->iohdl.on_delete, io);
 //	io->iohdl.on_error(io, err, errstr);
 }
 
@@ -406,7 +410,10 @@ static int hp_io_t_internal_on_pack(char* buf, size_t* len, void * arg)
 	hp_io_t * io = (hp_io_t *)hp_epoll_arg(ev);
 	assert(io);
 
-	return hp_io_t_internal_on_data(io, buf, len) >= 0? EAGAIN : EBADF;
+	if(!(hp_io_t_internal_on_data(io, buf, len) >= 0)){
+		 shutdown(io->ed.fd, SHUT_RDWR);
+		 return EBADF;
+	}else return EAGAIN;
 }
 
 static void hp_io_t_internal_on_werror(struct hp_eto * eto, int err, void * arg)
@@ -725,7 +732,7 @@ hp_io_t * test_http_server_on_new(hp_io_ctx * ioctx, hp_sock_t fd)
 	int rc = request_init(req); assert(rc == 0);
 
 	char buf[64] = "";
-	hp_log(stdout, "%s: new HTTP request from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
+	hp_log(stdout, "%s: new HTTP connection from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
 			hp_io_count(ioctx));
 	return (hp_io_t *)req;
 }
@@ -742,17 +749,6 @@ int test_http_server_on_parse(hp_io_t * io, char * buf, size_t * len
 	req->parse.u.status_code = 1;
 	JSONRPC_PARSE(req->in, req->parse, req->json, rc);
 	if(rc <= 0) return rc;
-
-//	char url[128] = "(null)", ip[64] = "(null)";
-//	int port = 0;
-//	int n = sscanf(req->in, "GET %s HTTP/1.1\r\nHost: %[0-9.]:%d\r\n\r\n", url, ip, &port);
-//	if(!(n == 3 &&
-//			strcmp(url, cfg("test_hp_io_t_main.url")) == 0 &&
-//			strcmp(ip, cfg("test_hp_io_t_main.ip")) == 0 &&
-//			atoi(cfg("test_hp_io_t_main.port")) == port
-//			)) {
-//		return 0;
-//	}
 
 	*len = 0;
 	sdsclear(req->in);
@@ -827,8 +823,13 @@ int test_http_server_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
 }
 void test_http_server_on_delete(hp_io_t * io)
 {
-	assert(io);
 	httprequest * req = (httprequest *)io;
+	assert(io && io->ioctx);
+
+	char buf[64] = "";
+	hp_log(stdout, "%s: delete HTTP connection '%s', IO total=%d\n", __FUNCTION__
+			, hp_get_ipport_cstr(hp_io_fd(io), buf), hp_io_count(io->ioctx));
+
 	request_uninit(req);
 	free(req);
 }

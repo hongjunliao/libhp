@@ -53,17 +53,17 @@ struct hp_httpresp{
 //union hp_iohdr { char unused; };
 
 struct hp_http {
-	hp_io_ctx ioctx;
+	hp_io_ctx * ioctx;
+	hp_io_t 	listenio;
 	/* callbacks, set by user */
 	hp_http_request_cb_t on_request_cb;
-	int nreq;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int hp_http_init(hp_http * http	, hp_sock_t fd, int tcp_keepalive
+int hp_http_init(hp_http * http	, hp_io_ctx * ioctx, hp_sock_t listenfd, int tcp_keepalive
 		, hp_http_request_cb_t on_request_cb);
-int hp_http_uninit(hp_http * http);
+void hp_http_uninit(hp_http * http);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

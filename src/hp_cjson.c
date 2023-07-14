@@ -263,6 +263,14 @@ double cjson_dval(cJSON const * cjson, char const * key, double def)
 	return json? json->valuedouble : def;
 }
 
+char const * cjson_cstr(cJSON const * cjson)
+{
+	static char * s = 0;
+	if(s) free(s);
+	s = cJSON_PrintUnformatted(cjson);
+	return s;
+}
+
 char const * cjson_sval(cJSON const * cjson, char const * key, char * def)
 {
 	if(!(cjson && key))

@@ -26,6 +26,7 @@
 #include "http-parser/http_parser.h"
 #include "str_dump.h"
 #include "hp_url.h" //hp_urldecode
+#include "hp_net.h"
 /////////////////////////////////////////////////////////////////////////////////////
 
 static int request_url_cb (http_parser * parser, const char *buf, size_t len)
@@ -36,10 +37,10 @@ static int request_url_cb (http_parser * parser, const char *buf, size_t len)
 	cli->url = sdscatlen(cli->url, buf, len);
 
 #ifndef NDEBUG
-	if(hp_log_level > 8){
+	if(hp_log_level > 9){
 		int len = sdslen(cli->url);
 		hp_log(stdout, "%s: fd=%d, buf='%s'/%zu, request_url='%s', len=%d\n"
-			, __FUNCTION__, cli->base.fd
+			, __FUNCTION__, -1
 			, dumpstr(buf, len, 64), len
 			, dumpstr(cli->url, len, 64), len);
 	}
@@ -85,9 +86,9 @@ static int on_message_complete (http_parser * parser)
 			}
 		}
 #ifndef NDEBUG
-		if(hp_log_level > 5){
+		if(hp_log_level > 9){
 			hp_log(stdout, "%s: fd=%d, request_url=%d/'%s', queryd=%d/'%s'\n"
-				, __FUNCTION__, req->base.fd
+				, __FUNCTION__, -1/*req->base.fd*/
 				, sdslen(url), dumpstr(url, sdslen(url), 64)
 				, sdslen(req->url_query), dumpstr(req->url_query, sdslen(req->url_query), 64)
 				);
@@ -195,14 +196,20 @@ static int hp_httpreq_loop(hp_http * req)
 	return 0;
 }
 
-static hp_io_t * hp_httpreq_on_new(hp_io_ctx * ioctx, hp_sock_t fd)
+static hp_io_t * hp_httpreq_on_new(hp_io_t * cio, hp_sock_t fd)
 {
-	assert(ioctx);
+	assert(cio && cio->ioctx && cio->user);
 	hp_httpreq * req = (hp_httpreq *)calloc(1, sizeof(hp_httpreq));
-	int rc = hp_httpreq_init(req, (hp_http *)ioctx);
+	int rc = hp_httpreq_init(req, (hp_http *)cio->user);
 	assert(rc == 0);
 
-	++req->http->nreq;
+#ifndef NDEBUG
+	if(hp_log_level > 0){
+		char buf[64] = "";
+		hp_log(stdout, "%s: new HTTP connection from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
+				hp_io_count(cio->ioctx));
+	}
+#endif
 	return (hp_io_t *)req;
 }
 
@@ -219,7 +226,7 @@ static ssize_t hp_httpreq_parse(hp_httpreq * req, char const * buf, size_t len)
 		/* Handle error. Usually just close the connection. */
 		if(hp_log_level > 8)
 			hp_log(stderr, "%s: http_parser_execute failed, fd=%d, parsed/buf=%zu/%d, buf='%s'\n"
-				, __FUNCTION__, req->base.fd
+				, __FUNCTION__, -1/*req->base.fd*/
 				, nparsed, len
 				, dumpstr(buf, len, 128));
 
@@ -228,8 +235,8 @@ static ssize_t hp_httpreq_parse(hp_httpreq * req, char const * buf, size_t len)
 	return nparsed;
 }
 
-static int hp_httpreq_on_parse(hp_io_t * io, char * buf, size_t * len, int flags
-	, hp_iohdr_t ** hdrp, char ** bodyp)
+static int hp_httpreq_on_parse(hp_io_t * io, char * buf, size_t * len,
+		hp_iohdr_t ** hdrp, char ** bodyp)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
 	if(!(req && buf && len && hdrp && bodyp)) return -1;
@@ -284,7 +291,15 @@ static void hp_httpreq_on_delete(hp_io_t * io)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
 	if(!(req && req->http)) { return; }
-	--req->http->nreq;
+
+#ifndef NDEBUG
+	if(hp_log_level > 0){
+		char buf[64] = "";
+		hp_log(stdout, "%s: delete HTTP connection '%s', IO total=%d\n", __FUNCTION__
+				, hp_get_ipport_cstr(hp_io_fd(io), buf), hp_io_count(io->ioctx));
+	}
+#endif
+
 	hp_httpreq_uninit((hp_httpreq *)io);
 	free(io);
 }
@@ -296,33 +311,34 @@ static hp_iohdl s_httphdl = {
 	.on_dispatch = hp_httpreq_on_dispatch,
 	.on_loop = hp_httpreq_on_loop,
 	.on_delete = hp_httpreq_on_delete,
+#ifdef _MSC_VER
+	.wm_user = 0 	/* WM_USER + N */
+	.hwnd = 0    /* hwnd */
+#endif /* _MSC_VER */
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int hp_http_init(hp_http * http	, hp_sock_t fd, int tcp_keepalive
+int hp_http_init(hp_http * http	, hp_io_ctx * ioctx, hp_sock_t listenfd, int tcp_keepalive
 		, hp_http_request_cb_t on_request_cb)
 {
 	int rc;
-	if (!(http)) { return -1; }
+	if (!(http && ioctx)) { return -1; }
 
+	memset(http, 0, sizeof(hp_httpreq));
+	http->ioctx = ioctx;
 	http->on_request_cb = on_request_cb;
 
-	hp_ioopt ioopt = { fd, 0, s_httphdl
-#ifdef _MSC_VER
-		, 200  /* poll timeout */
-		, 0    /* hwnd */
-#endif /* _MSC_VER */
-	};
-	rc = hp_io_init((hp_io_ctx *)http, &ioopt);
-	if (rc != 0) { return -3; }
+	rc = hp_io_add(http->ioctx, &http->listenio, listenfd, s_httphdl);
+	if (rc != 0) { return -4; }
 
+	http->listenio.user = http;
 	return rc;
 }
 
-int hp_http_uninit(hp_http * http)
+void hp_http_uninit(hp_http * http)
 {
-	return hp_io_uninit((hp_io_ctx *)http);
+	return;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -342,7 +358,6 @@ int hp_http_uninit(hp_http * http)
 static int test_curl_multi_on_done(hp_curlm * curlm, char const * url, sds str, void * arg)
 {
 	sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "index.html");
-	hp_assert_path(file, REG);
 	sds fc = hp_fread(file);
 	assert(strncmp(str, fc, sdslen(fc)) == 0);
 	sdsfree(fc);
@@ -369,25 +384,29 @@ static int test_http_process(struct hp_http * http, hp_httpreq * req, struct hp_
 
 int test_hp_http_main(int argc, char ** argv)
 {
+	int rc = 0;
+#ifdef __linux__
 	{
-		int rc;
+		{
+			sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "index.html");
+			hp_assert_path(file, REG);
+			sdsfree(file);
+		}
 
 		int listenfd = hp_net_listen(18541);
 		hp_assert(listenfd > 0, "%s: unable to create listen socket at %d", __FUNCTION__, 18541);
 
-		hp_epoll efdsobj, * efds = &efdsobj;
-		rc = hp_epoll_init(efds, 200);
-		assert(rc == 0);
-
+		hp_io_ctx ioctxobj, *ioctx = &ioctxobj;
 		hp_http http_obj, * http = &http_obj;
-		rc = hp_http_init(http, listenfd, 0, test_http_process);
+
+		rc = hp_io_init(ioctx); assert(rc == 0);
+
+		rc = hp_http_init(http, ioctx, listenfd, 0, test_http_process);
 		assert(rc == 0);
 
 		hp_curlm hp_curl_multiobj, * curlm = &hp_curl_multiobj;
-		rc = hp_curlm_init(curlm, efds, 0);
+		rc = hp_curlm_init(curlm, &ioctx->efds, 0);
 		assert(rc == 0);
-
-		assert(hp_curlm_add);
 
 		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
 		assert(rc == 0);
@@ -400,21 +419,22 @@ int test_hp_http_main(int argc, char ** argv)
 
 		assert(curlm->n == 3);
 
-		hp_log(stdout, "%s: listening on port=%d, waiting for connection ...\n", __FUNCTION__
-				, 18541);
-		for(; curlm->n > 0;){
-			hp_epoll_run(efds, 200, (void *)-1);
-			hp_io_run((hp_io_ctx *)http, 200, 0);
+		int quit = 3;
+		for(; quit > 0;){
+			hp_io_run(ioctx, 200, 0);
+			if(hp_io_count(ioctx) == 1)
+				--quit;
 		}
 
 		assert(curlm->n == 0);
-//		assert(http->nreq == 0);
 
 		hp_curlm_uninit(curlm);
 		hp_http_uninit(http);
 		close(listenfd);
 	}
-	return 0;
+#endif //__linux__
+
+	return rc;
 }
 #endif //LIBHP_WITH_CURL
 #endif /* NDEBUG */

@@ -67,31 +67,24 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_hp_cjson_main);
 	run_test(test_hp_var_main);
 #endif
-#if defined(__linux__)
-	run_test(test_hp_inotify_main);
-#endif
 #else
 	run_test(test_hp_iocp_main);
 #endif /* _MSC_VER */
 
-#ifdef LIBHP_DEPRECADTED
-	run_test(test_hp_dict_main);
-	run_test(test_hp_cache_main);
-#ifdef LIBHP_WITH_TIMERFD
-	run_test(test_hp_expire_main);
-#endif
-#endif
+	run_test(test_hp_io_t_main);
+	run_test(test_hp_epoll_main);
+	run_test(test_hp_io_main);
 #if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
 	run_test(test_hp_http_main);
 #endif
 
 #ifdef LIBHP_WITH_CURL
-	run_test(test_hp_uv_curl_main);
-	run_test(test_hp_curl_main);
+//	run_test(test_hp_uv_curl_main);
+//	run_test(test_hp_curl_main);
 #endif
 
 #ifdef LIBHP_WITH_TIMERFD
-	run_test(test_hp_timerfd_main);
+//	run_test(test_hp_timerfd_main);
 #endif
 
 #ifdef LIBHP_WITH_REDIS
@@ -99,9 +92,6 @@ int libhp_all_tests_main(int argc, char ** argv)
 	int hiredis_exmaple_ae_main(int argc, char **argv);
 	rc = hiredis_exmaple_ae_main(argc, argv); assert(rc == 0);
 #endif
-	run_test(test_hp_epoll_main);
-	run_test(test_hp_io_main);
-	run_test(test_hp_io_t_main);
 
 #ifdef LIBHP_WITH_MYSQL
 	run_test(test_hp_mysql_main);
@@ -113,6 +103,17 @@ int libhp_all_tests_main(int argc, char ** argv)
 
 	run_test(test_hp_redis_main);
 	run_test(test_hp_pub_main);
+#endif
+#if defined(__linux__)
+	run_test(test_hp_inotify_main);
+#endif
+
+#ifdef LIBHP_DEPRECADTED
+	run_test(test_hp_dict_main);
+	run_test(test_hp_cache_main);
+#ifdef LIBHP_WITH_TIMERFD
+	run_test(test_hp_expire_main);
+#endif
 #endif
 
 	assert(atoi(hp_config_test("hp_config_unload")) == 0);

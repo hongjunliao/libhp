@@ -131,7 +131,7 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 		{ hp_sock_close(confd); continue; }
 
 		char is_c = 0;
-		hp_io_t * nio = io->iohdl.on_new? io->iohdl.on_new(io->ioctx, confd) : 0;
+		hp_io_t * nio = io->iohdl.on_new? io->iohdl.on_new(io, confd) : 0;
 		if(nio){
 			/* nio is NOT a listen io */
 			hp_iohdl niohdl = io->iohdl;
@@ -675,7 +675,6 @@ typedef struct httprequest {
 } httprequest;
 typedef struct httpserver {
 	hp_io_t listenio;
-	int quit;
 	struct list_head clients;
 } httpserver;
 
@@ -709,7 +708,6 @@ static int server_init(httpserver * s)
 {
 //	memset(s, 0, sizeof(httpserver));
 	INIT_LIST_HEAD(&s->clients);
-	s->quit = 0;
 	return 0;
 }
 static void server_uninit(httpserver * s)
@@ -725,15 +723,15 @@ static void server_uninit(httpserver * s)
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-hp_io_t * test_http_server_on_new(hp_io_ctx * ioctx, hp_sock_t fd)
+hp_io_t * test_http_server_on_new(hp_io_t * cio, hp_sock_t fd)
 {
-	assert(ioctx);
+	assert(cio && cio->ioctx);
 	httprequest * req = (httprequest *)malloc(sizeof(httprequest));
 	int rc = request_init(req); assert(rc == 0);
 
 	char buf[64] = "";
 	hp_log(stdout, "%s: new HTTP connection from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
-			hp_io_count(ioctx));
+			hp_io_count(cio->ioctx));
 	return (hp_io_t *)req;
 }
 
@@ -1203,12 +1201,18 @@ int test_hp_io_t_main(int argc, char ** argv)
 		hp_log(stdout, "%s: HTPP request sent:\n%s", __FUNCTION__, out);
 
 		/* run event loop */
-		for (; ;) {
+		int quit = 3;
+		for (; quit > 0;) {
 			hp_io_run(ioctx, 200, 0);
+
+			if(hp_io_count(ioctx) == 1)
+				--quit;
 		}
 
 
 		/*clear*/
+		hp_sock_close(confd);
+		hp_sock_close(listen_fd);
 		server_uninit(s);
 		client_uninit(c);
 		hp_io_uninit(ioctx);

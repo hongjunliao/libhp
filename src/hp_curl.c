@@ -403,9 +403,9 @@ void hp_curlm_uninit(hp_curlm * curlm)
 #include "hp_ssl.h"
 #include "string_util.h"
 
-#define TEST_URL "https://mirrors.163.com/cygwin/x86_64/release/git/git-2.33.0-1-src.tar.xz"
-#define TEST_SHA256 "764baee2c61abd836722ad059cec69557812923a1aad7f3440b30eb1c706111f"
-#define TEST_FSIZE 10340424
+#define TEST_URL "https://mirrors.aliyun.com/cygwin/x86_64/release/vim/vim-8.2.4372-2.tar.xz"
+#define TEST_SHA256 "d6e079e9867d0805dd3e5b7fe754670d72d04dee0c1e191fbeb8ee05553d63e8"
+#define TEST_FSIZE 1479988
 
 static int hp_curl_multi_test_on_done(hp_curlm * curlm, char const * url, sds str, void * arg)
 {

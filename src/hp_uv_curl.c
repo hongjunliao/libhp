@@ -353,10 +353,10 @@ void hp_uv_curlm_uninit(hp_uv_curlm * curlm)
 #include "hp_ssl.h"
 #include "string_util.h"
 
-#define TEST_URL "https://mirrors.163.com/cygwin/x86_64/release/git/git-2.33.0-1-src.tar.xz"
-#define TEST_SHA256 "764baee2c61abd836722ad059cec69557812923a1aad7f3440b30eb1c706111f"
-#define TEST_FSIZE 10340424
-#define TEST_FILE "test_hp_uv_curl_main/git-2.33.0-1-src.tar.xz"
+#define TEST_URL "https://mirrors.aliyun.com/cygwin/x86_64/release/vim/vim-8.2.4372-2.tar.xz"
+#define TEST_SHA256 "d6e079e9867d0805dd3e5b7fe754670d72d04dee0c1e191fbeb8ee05553d63e8"
+#define TEST_FSIZE 1479988
+#define TEST_FILE "test_hp_uv_curl_main/vim-8.2.4372-2.tar.xz"
 
 static int on_progress(int bytes, int content_length, sds resp, void * arg)
 {
@@ -422,6 +422,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
 				, 0, 0, "", on_progress, on_buffer, curlm, 0);
 		assert(rc == 0);
+		hp_log(stdout, "%s: downloading %s ...\n", __FUNCTION__, TEST_URL);
 
 		uv_run(loop, UV_RUN_DEFAULT);
 
@@ -439,6 +440,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
 			, 0, 0, TEST_FILE, on_progress, on_file, curlm, 0);
 		assert(rc == 0);
+		hp_log(stdout, "%s: downloading %s ...\n", __FUNCTION__, TEST_URL);
 
 		uv_run(loop, UV_RUN_DEFAULT);
 
@@ -453,6 +455,7 @@ int test_hp_uv_curl_main(int argc, char ** argv)
 		hp_uv_curlm hp_curl_multiobj, *curlm = &hp_curl_multiobj;
 		rc = hp_uv_curlm_init(curlm, loop);
 		assert(rc == 0);
+		hp_log(stdout, "%s: downloading %s ...\n", __FUNCTION__, TEST_URL);
 
 		rc = hp_uv_curlm_add(curlm, curl_easy_init(), TEST_URL
 			, 0, 0, 0, on_progress, 0, curlm, 0);

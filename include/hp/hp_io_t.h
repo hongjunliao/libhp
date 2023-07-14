@@ -46,7 +46,7 @@ typedef	void  (* hp_io_free_t)(void * ptr);
 
 struct hp_iohdl {
 	/* callback when new connection coming */
-	hp_io_t * (* on_new)(hp_io_ctx * ioctx, hp_sock_t fd);
+	hp_io_t * (* on_new)(hp_io_t * cio, hp_sock_t fd);
 	/* callback when data coming
 	* @return: >0-parse OK, got a message; 0: need more data; <0 parse failed
 	*/
@@ -87,6 +87,7 @@ struct hp_io_t {
 					/* select() */
 #endif /* _MSC_VER */
 	hp_iohdl iohdl;	/*io handle set by user*/
+	void * user;	/* ignored by hp_io_t */
 } ;
 
 struct hp_io_ctx {

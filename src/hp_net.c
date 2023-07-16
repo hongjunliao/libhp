@@ -397,6 +397,53 @@ char * get_ipport(int sockfd, char * ip, int len, int * port)
 	return ip;
 }
 
+hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
+{
+#if (defined LIBHP_WITH_WIN32_INTERROP) || (!defined _MSC_VER)
+	int fd = -1;
+
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0) {
+		return -1;
+	}
+
+#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+		if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+#else
+		u_long sockopt = 1;
+		if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
+#endif /* LIBHP_WITH_WIN32_INTERROP */
+	{
+		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
+		close(fd);
+		return -1;
+	}
+	if (connect(fd, (struct sockaddr *)&servaddr, sizeof(struct sockaddr)) < 0) {
+		if (errno != EINPROGRESS) {
+			close(fd);
+			return -1;
+		}
+	}
+
+	return fd;
+#else
+	SOCKET sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
+	assert(sock != INVALID_SOCKET);
+	unsigned long ul = 1;
+	if (ioctlsocket(sock, FIONBIO, (unsigned long*)&ul) == SOCKET_ERROR)
+		return 0;
+
+	if (connect((SOCKET)sock, (struct sockaddr *)&servaddr, sizeof(servaddr)) == SOCKET_ERROR
+		&& WSAGetLastError() != WSAEWOULDBLOCK) {
+		char err[64];
+		hp_log(stderr, "%s: connect failed, error=%d/'%s'\n", __FUNCTION__, WSAGetLastError(), err, sizeof(err));
+		return 0;
+	}
+
+	return sock;
+
+#endif /* LIBHP_WITH_WIN32_INTERROP */
+	}
 /*
  * @return: return the connected fd on success
  * (including errno == EINPROGRESS), -1 on error,

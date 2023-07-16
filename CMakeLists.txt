@@ -55,7 +55,7 @@ set(g_libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson
 			deps/libyuarel/*.c
 			"deps/c-vector/*.c deps/c-vector/*.cc"
 			deps/inih/*.c
-			src/*.c
+			"src/*.c src/*.cpp"
 	)
 ###########################################################################################
 
@@ -84,7 +84,7 @@ if(MSVC)
 endif()
 
 ###########################################################################################
-add_executable(test-libhp src/test.c test/test.c )
+add_executable(test-libhp test/test.cpp )
 target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/ )
 target_link_libraries(test-libhp libhp ) 
 

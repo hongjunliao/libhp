@@ -12,10 +12,6 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "hp/hp_bdb.h"  /*  */
 #include "hp/hp_cache.h"  /*  */
 #include "hp/hp_cjson.h"  /*  */
@@ -32,7 +28,6 @@ extern "C" {
 #include "hp/hp_io.h"  /*  */
 #include "hp/hp_iostat.h"  /*  */
 #include "hp/hp_libc.h"  /*  */
-#include "hp/hp_libim.h"  /*  */
 #include "hp/hp_log.h"  /*  */
 #include "hp/hp_mqtt.h"  /*  */
 #include "hp/hp_msg.h"  /*  */
@@ -57,10 +52,6 @@ extern "C" {
 #include "hp/hp_io_t.h"  /*  */
 #include "hp/hp_fs.h"  /*  */
 #include "hp/hp_assert.h"
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* LIBHP_HP_HDRS_H */
 

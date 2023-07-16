@@ -36,6 +36,8 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 hp_sock_t hp_net_listen(int port);
 hp_sock_t hp_net_connect(char const * ip, int port);
 int hp_net_connect_addr(char const * addr);
+hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr);
+
 int hp_net_set_alive(hp_sock_t fd, int interval);
 int hp_net_udp_bind(char const * ip, int port);
 

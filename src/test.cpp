@@ -12,13 +12,16 @@
 #ifdef LIBHP_WITH_ZLOG
 #include "zlog.h"
 #endif
-#include "hp/libhp.h"
 #include "hphdrs.h"
-
+#include <iostream>
+#include "libhp.h"
+/////////////////////////////////////////////////////////////////////////////////////////
 //deps/c-vector/example.c
 //deps/c-vector/example.cc
-extern int test_cvector_main(int argc, char *argv[]);
-extern int test_cvector_cpp_main(int argc, char *argv[]);
+extern "C" {
+int test_cvector_main(int argc, char *argv[]);
+int test_cvector_cpp_main(int argc, char *argv[]);
+}
 #define run_test(func) do {                 \
 	hp_log(stdout, "begin test: %s ...\n", #func);	\
 	rc = func(argc, argv); assert(rc == 0); \
@@ -41,7 +44,42 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_cvector_cpp_main);
 	run_test(test_hp_libc_main);
 	run_test(test_hp_err_main);
+
+	// hp_log()
+	{
+		hp_log(std::cout, "0 s, 0 char *\n");
+		hp_log(std::cout, "0 s, 1 char *\n", __FUNCTION__);
+		hp_log(std::cout, "1 s, 0 char *: '%s'\n");
+		hp_log(std::cout, "1 s, 1 char *: '%s'\n", __FUNCTION__);
+
+		hp_log(std::cout, "0 s, 0 string\n");
+		hp_log(std::cout, "0 s, 1 string\n", std::string("hello"));
+		hp_log(std::cout, "1 s, 0 string: '%s'\n");
+		hp_log(std::cout, "1 s, 1 string: '%s'\n", std::string("hello"));
+
+
+		hp_log(std::cout, "2 s, 0 string: '%s' '%s'\n");
+		hp_log(std::cout, "2 s, 1 string: '%s' '%s'\n", std::string("hello"));
+		hp_log(std::cout, "0 s, 2 string\n", std::string("hello"), std::string("world"));
+		hp_log(std::cout, "1 s, 2 string: '%s'\n", std::string("hello"), std::string("world"));
+		hp_log(std::cout, "2 s, 2 string: '%s' '%s'\n", std::string("hello"), std::string("world"));
+
+		hp_log(std::cout, "2 s, 1 string, 1 int: '%s' '%s'\n", std::string("hello"), (int)5);
+		hp_log(std::cout, "2 d, 1 string, 1 int: '%d' '%d'\n", std::string("hello"), (int)5);
+
+		hp_log(std::cout, "");
+		hp_log(std::cout, "%");
+		hp_log(std::cout, "%%");
+		hp_log(std::cout, "%%%");
+		hp_log(std::cout, "%%%%");
+		hp_log(std::cout, "\n");
+
+		hp_log(std::cout, "%%'%s'%%'%s'%%\n", "hello", std::string("world") );
+		hp_log(std::cout, "'%s'%%%'%s'\n", "hello", std::string("world") );
+	}
+
 	run_test(test_hp_log_main);
+
 	run_test(test_hp_msg_main);
 	run_test(test_hp_net_main);
 	run_test(test_hp_str_main);

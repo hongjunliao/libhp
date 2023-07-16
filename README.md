@@ -4,91 +4,126 @@ libhp is a simple library for c, especially on networking I/O, Redis,MySQL clien
 see rmqtt,a Redis-based MQTT broker for more use cases
 
 # compile and use
-* 1.cd to libhp root dir
-* 2.copy _config.h to config.h
-* 3.edit config.h, uncomment LIBHP_WITH_XXX macros to turn on or off the libhp APIs you need, e.g.:
+* cmake is recommended
+
 ```code
-/* enable MySQL APIs, hp_msyql_xxx */
-#define LIBHP_WITH_MYSQL
-```
-* 4.untar and configure depencies
-```code
-cd deps && tar -xf deps.targ.gz && cd -
+# in your cmake file
+set(LIBHP_WITH_HTTP 1 CACHE INTERNAL "LIBHP_WITH_HTTP")
+add_subdirectory(deps/libhp)
 ```
 
-* 5.mkdir build && cd build
 ```code
-# buld debug version, set CMAKE_BUILD_TYPE=Release to a release verison
-cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .. && make -j 2
-```
-* 6.include in your project, link with -llibhp/liblibhp.lib
-```code
-//...
-#inclde "hp/hp_log.h" /* hp_log */
-//...
-int main()
-{
-	hp_log(stdout, "hello libhp\n");
-	return 0;
-}
-//...
+
+/* in your code */
+#define LIBHP_WITH_HTTP
+#include "hp/hp_log.h"
+#include "hp/hp_http.h"
+...
+hp_log(stdout, "hello libhp\n");
+hp_http http;
+...
+
 ```
 
 # demos and exmaples
 * 1.samples in dir examples/, demos/
-* 2.test program in tests/, or test functions in every hp_xxx.c/test_xxx_main(), e.g.:
-    include/hp/hp_cjson.h
+* 2.test program in tests/, or test functions in every hp_xxx.c/test_xxx_main()
+
+	e.g.:
+    include/hp/hp_io_t.h
+    
 ```code
-//...
 #ifndef NDEBUG
-int test_hp_cjson_main(int argc, char ** argv);
+int test_hp_io_t_main(int argc, char ** argv);
 #endif /* NDEBUG */
+
 ```
 
 * 3.the rmqtt project
 
 # API简要说明
 
-* 1. hp_io_t, another networking I/O, using hp_iocp on Windows and hp_epoll on Linux
+* 1. hp_io_t, another networking I/O, using hp_iocp(IOCP) on Windows and hp_epoll(epoll) on Linux
+
 ```code
-		/* the IO context */
-		hp_io_ctx ioctxobj, * ioctx = &ioctxobj;
-		/* IO init options */
-		hp_ioopt ioopt = {
-				  listen_fd   /* listen fd */
-				, on_accept   /* called when new connection coming */
-				, { 0 } };
-		rc = hp_io_init(ioctx, &ioopt);
-		assert(rc == 0);
 
-		/* prepare for I/O */
-		hp_io_t ioobj, * io = &ioobj;
-		rc = hp_io_add(ioctx, io, fd
-		, on_data     /* called when data comming */
-		, on_error);  /* called when error occured */
-		assert(rc == 0);
+	/**
+	 * In this simple example, we create a HTTP sever and a HTTP client,
+	 * then the client send a HTTP request to the sever to get index.html
+	 *
+	 * see hp_io_t.c/test_hp_io_t_main for a complete example
+	 * /
+	struct httpclient {
+		hp_io_t io;
+		//...
+	} ;
+	struct httpserver {
+		hp_io_t listenio;
+		//...
+	} ;
 
-		/* write some thing async */
-		char const * data = "GET /index.html HTTP/1.1\r\nHost: %s:%d\r\n\r\n";
-		rc = hp_io_write(ioctx, io, data, strlen(data), 0, 0);
-		assert(rc == 0);
+	/* a HTTP client I/O handle */
+	hp_iohdl http_cli_hdl = {
+			.on_new = 0/*http_cli_on_new*/,       // set to NULL is fine
+			.on_parse = http_cli_on_parse,        // parse the HTTP response data
+			.on_dispatch = http_cli_on_dispatch,  // process the HTTP message
+			.on_loop = 0,                         // keep alive?
+			.on_delete = 0/*http_cli_on_delete*/, // 
+	#ifdef _MSC_VER
+			.wm_user = 0 	/* WM_USER + N */        // Windows only
+			.hwnd = 0    /* hwnd */
+	#endif /* _MSC_VER */
+	};
+	
+	/* the HTTP server I/O handle */
+	hp_iohdl http_server_hdl = {
+			.on_new = http_server_on_new,           // when a new HTTP client coming
+			.on_parse = http_server_on_parse,       // parse HTTP data
+			.on_dispatch = http_server_on_dispatch, // handle the HTTP message: reply/close/upgrade?
+			.on_loop = 0,                           // key alive?
+			.on_delete = http_server_on_delete,     // close the client
+	#ifdef _MSC_VER
+			.wm_user = 0 	/* WM_USER + N */
+			.hwnd = 0    /* hwnd */
+	#endif /* _MSC_VER */
+	};
 
-		/* run event loop */
-		for (; !quit;) {
-			hp_io_run(ioctx, 200, 0);
-		}
+	// init needed
+	httpclient cobj, *c = &cobj;
+	httpserver sobj, *s = &sobj;
+	hp_sock_t listen_fd, confd;
 
-		/* clear */
-		hp_io_uninit(ioctx);
+	/* the IO context */
+	hp_io_ctx ioctxobj, *ioctx = &ioctxobj;
+	rc = hp_io_init(ioctx); assert(rc == 0);
+
+	/* HTTP server add listen socket  with handles */
+	rc = hp_io_add(ioctx, &s->listenio, listen_fd, http_server_hdl); assert(rc == 0);
+	/* add HTTP connect socket */
+	rc = hp_io_add(ioctx, &c->io, confd, http_cli_hdl); assert(rc == 0);
+
+	/* the client send HTTP request async, data is freed by hp_io_t system
+	 */
+	char * data = calloc("GET /index.html HTTP/1.1\r\nHost: %s:%d\r\n\r\n");
+	rc = hp_io_write(ioctx, io, data, strlen(data), free, 0); assert(rc == 0);
+
+	/* run event loop */
+	for (;;) {
+		hp_io_run(ioctx, 200, 0); 
+	}
+
+	/* clear */
+	hp_io_uninit(ioctx);
+	
 ```
-* 2. hp_pu/sub, Redis Pub/Sub增强
+* 2. hp_pub/sub, Redis Pub/Sub增强
   * 基于Redis Pub/Sub实现
   * 使用zset,hash数据结构等保存会话及发布过的消息,发布即不丢失
   * 消息需要确认,以支持离线消息及会话
 
 # 第三方库说明及致谢
 
-deps/目录为项目依赖的第三库,感谢原作者们! 为节约时间, 已将所有依赖打包为deps/deps.tar.gz
+deps/目录为项目依赖的第三库,感谢原作者们!
 
 * cJSON, https://github.com/DaveGamble/cJSON.git
 * c-vector: https://github.com/eteran/c-vector
@@ -103,9 +138,6 @@ deps/目录为项目依赖的第三库,感谢原作者们! 为节约时间, 已�
 * zlog: https://github.com/HardySimpson/zlog.git
 
 注意! cJSON,c-vector使用的是修改版本:
-cJSON: https://gitee.com/docici/cJSON
-c-vector:https://gitee.com/jun/c-vector
-# build
-mkdir build
-cd build
-rm -rf * && cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 -DLIBHP_WITH_CJSON=1 .. && make -j 2
+
+ * cJSON: https://gitee.com/docici/cJSON
+ * c-vector:https://gitee.com/jun/c-vector

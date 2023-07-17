@@ -23,12 +23,12 @@
 #define _fd_isset(fd,set) FD_ISSET(fd, set) 
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 
-#include "hp_iocp.h"    /* hp_iocp */
-#include "sdsinc.h" /* sds */
-#include "hp_log.h"  /* hp_log */
-#include "hp_libc.h" /* hp_tuple2_t */
-#include "hp_err.h"	 /* hp_err */
-#include "hp_net.h"	 /* read_a */
+#include "hp/hp_iocp.h"    /* hp_iocp */
+#include "hp/sdsinc.h" /* sds */
+#include "hp/hp_log.h"  /* hp_log */
+#include "hp/hp_libc.h" /* hp_tuple2_t */
+#include "hp/hp_err.h"	 /* hp_err */
+#include "hp/hp_net.h"	 /* read_a */
 #include <process.h>    /* _beginthreadex */
 //#include <sysinfoapi.h> /* GetSystemInfo */
 #include <stdio.h>
@@ -567,7 +567,7 @@ int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lP
 		wsaoverlapped_free(overlapped);
 	}
 	else{
-		assert(0 && "hp_iocp_handle_msg");
+		assert(0 && "hp/hp_iocp_handle_msg");
 	}
 	free(iocpmsg);
 	return 0;
@@ -1087,9 +1087,9 @@ int hp_iocp_try_write(hp_iocp * iocpctx, int index)
 
 #include <time.h>			/* difftime */
 #include "http-parser/http_parser.h"
-#include "hp_net.h" //hp_net_connect
-#include "str_dump.h"   /* dumpstr */
-#include "string_util.h"
+#include "hp/hp_net.h" //hp_net_connect
+#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/string_util.h"
 #include "gbk-utf8/utf8.h"
 
 static char server_ip[128] = "";

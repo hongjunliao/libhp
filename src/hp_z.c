@@ -14,8 +14,8 @@
 
 #ifdef LIBHP_WITH_ZLIB
 
-#include "hp_z.h"
-#include "hp_log.h"     /* hp_log */
+#include "hp/hp_z.h"
+#include "hp/hp_log.h"     /* hp_log */
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>

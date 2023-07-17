@@ -11,16 +11,16 @@
 #endif /* HAVE_CONFIG_H */
 #ifdef LIBHP_DEPRECADTED
 
-#include "sdsinc.h"
+#include "hp/sdsinc.h"
 #include <string.h>
 #ifdef _MSC_VER
 #define strcasecmp  _stricmp
 #endif /* _MSC_VER */
 
-#include "hp_log.h"     /* hp_log */
-#include "str_dump.h"   /* dumpstr */
-#include "hp_epoll.h"    /*  */
-#include "hp_cache.h"   /*  */
+#include "hp/hp_log.h"     /* hp_log */
+#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_epoll.h"    /*  */
+#include "hp/hp_cache.h"   /*  */
 #include <sys/stat.h>	/*fstat*/
 #include <stdlib.h> 	/* calloc */
 #include <string.h>     /* memset, ... */

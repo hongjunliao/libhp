@@ -13,9 +13,9 @@
 #include <dlfcn.h>			/* dlsym */
 #include <stdio.h>
 #include <string.h>
-#include "hp_test.h"    /* hp_test */
-#include "sdsinc.h"		/* sds */
-#include "libhp.h"
+#include "hp/hp_test.h"    /* hp_test */
+#include "hp/sdsinc.h"		/* sds */
+#include "hp/libhp.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 int hp_test(char const * test, int argc, char ** argv, int (* all)(int argc, char *argv[]), int flags)

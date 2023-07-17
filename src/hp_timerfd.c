@@ -10,8 +10,8 @@
 
 #ifdef LIBHP_WITH_TIMERFD
 
-#include "hp_timerfd.h"  /* hp_timerfd */
-#include "hp_log.h"     /* hp_log */
+#include "hp/hp_timerfd.h"  /* hp_timerfd */
+#include "hp/hp_log.h"     /* hp_log */
 #include <sys/timerfd.h> /* timerfd_create */
 #include <unistd.h>
 #include <stdio.h>
@@ -146,7 +146,7 @@ void hp_timerfd_uninit(hp_timerfd * timerfd)
 
 /* tests */
 #ifndef NDEBUG
-#include "hp_epoll.h"
+#include "hp/hp_epoll.h"
 
 static hp_epoll efds_obj, *efds = &efds_obj;
 static int n = 2;

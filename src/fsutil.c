@@ -15,7 +15,7 @@
 #endif /* _MSC_VER */
 
 #include "Win32_Interop.h"
-#include "sdsinc.h"
+#include "hp/sdsinc.h"
 #include <unistd.h>
 #include <sys/stat.h>    /* mkdir */
 #include <fcntl.h>       /* ioctl */
@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <errno.h>       /* errno */
 #include <assert.h>      /* define NDEBUG to disable assertion */
-#include "hp_fs.h"
+#include "hp/hp_fs.h"
 #include <uv.h>
 #include <sys/stat.h>
 

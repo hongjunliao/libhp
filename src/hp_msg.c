@@ -15,11 +15,11 @@
 #endif /* WIN32 */
 
 
-#include "hp_libc.h"
-#include "hp_msg.h"
-#include "hp_z.h"
-#include "hp_log.h"
-#include "str_dump.h"
+#include "hp/hp_libc.h"
+#include "hp/hp_msg.h"
+#include "hp/hp_z.h"
+#include "hp/hp_log.h"
+#include "hp/str_dump.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -19,7 +19,7 @@
 #include "hp_epoll.h"    /* hp_epoll */
 #include "hp_timerfd.h"  /* hp_timerfd */
 #include <curl/curl.h>   /* libcurl */
-#include "sds/sds.h"     /* sds */
+#include "hp/sdsinc.h"     /* sds */
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus

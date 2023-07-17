@@ -9,7 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 #ifdef __linux__
-#include "hp_inotify.h"
+#include "hp/hp_inotify.h"
 #include <unistd.h>
 #include <sys/inotify.h> /* inotify */
 #include <stdio.h>
@@ -18,9 +18,9 @@
 #include <search.h>
 #include <assert.h>     /* define NDEBUG to disable assertion */
 #include <errno.h>      /* errno */
-#include "hp_log.h"      /* hp_log */
-#include "hp_epoll.h"    /* hp_epoll */
-#include "sds/sds.h"     /* sds */
+#include "hp/hp_log.h"      /* hp_log */
+#include "hp/hp_epoll.h"    /* hp_epoll */
+#include "hp/sdsinc.h"     /* sds */
 #include "c-vector/cvector.h"
 #include <sys/epoll.h>  /* epoll_event */
 
@@ -317,9 +317,9 @@ struct HP_INOTIFY_TOOL_PKG const HP_INOTIFY_TOOL = {
 #include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
-#include "hp_io.h"	/* cJSON */
-#include "string_util.h"/* hp_fread  */
-#include "str_dump.h"   /* dumpstr */
+#include "hp/hp_io.h"	/* cJSON */
+#include "hp/string_util.h"/* hp_fread  */
+#include "hp/str_dump.h"   /* dumpstr */
 
 #define Ino HP_INOTIFY_TOOL
 
@@ -438,7 +438,7 @@ int test_hp_inotify_main(int argc, char ** argv)
 
 	hp_eti * eti = &fnotify->eti;
 	rc = hp_eti_init(eti, 1024 * 8); /* 8K read buffer */
-	assert(rc == 0 && "hp_eti_init");
+	assert(rc == 0 && "hp/hp_eti_init");
 	eti->pack = read_cb;
 	eti->read_error = error_cb;
 

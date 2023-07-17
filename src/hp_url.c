@@ -11,7 +11,7 @@
 
 #ifdef LIBHP_WITH_HTTP
 
-#include "hp_url.h"
+#include "hp/hp_url.h"
 #include <string.h> 	/* strncmp */
 #include "libyuarel/yuarel.h"   /* yuarel_parse_query */
 

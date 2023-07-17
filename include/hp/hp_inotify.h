@@ -13,7 +13,7 @@
 #ifdef __linux__
 
 #include "hp_epoll.h"    /* hp_epoll */
-#include "sds/sds.h"
+#include "hp/sdsinc.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus

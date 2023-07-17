@@ -23,10 +23,10 @@
 
 #include <limits.h>	       /* INT_MAX, IOV_MAX */
 #include <assert.h>        /* define NDEBUG to disable assertion */
-#include "sdsinc.h"        /* sds */
+#include "hp/sdsinc.h"        /* sds */
 #include "cjson/cJSON.h"	/* cJSON */
-#include "hp_cjson.h"
-#include "string_util.h"
+#include "hp/hp_cjson.h"
+#include "hp/string_util.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

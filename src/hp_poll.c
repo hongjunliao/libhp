@@ -11,7 +11,7 @@
 
 #if !defined(_WIN32) && !defined(_MSC_VER)
 
-#include "hp_poll.h"   /*  */
+#include "hp/hp_poll.h"   /*  */
 #include "stdio.h"     /* fprintf */
 #include <poll.h>  /* poll */
 #include <unistd.h>

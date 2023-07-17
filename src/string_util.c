@@ -3,7 +3,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "string_util.h"
+#include "hp/string_util.h"
 #include <search.h>        /* lfind, ... */
 #include <stdio.h>
 #include <math.h>          /* pow */
@@ -13,8 +13,8 @@
 #include <ctype.h>         /* toupper */
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <sys/stat.h>	/*fstat*/
-#include "hp_libc.h"
-#include "hp_log.h"
+#include "hp/hp_libc.h"
+#include "hp/hp_log.h"
 
 #ifdef _MSC_VER
 #define strcasecmp  _stricmp

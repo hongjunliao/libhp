@@ -16,15 +16,15 @@
 #include <WinSock2.h>
 #endif /* _MSC_VER */
 
-#include "hp_pub.h"
+#include "hp/hp_pub.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include "sdsinc.h"
+#include "hp/sdsinc.h"
 #include "c-vector/cvector.h"
-#include "hp_log.h"
-#include "hp_libc.h"
-#include "string_util.h"
+#include "hp/hp_log.h"
+#include "hp/hp_libc.h"
+#include "hp/string_util.h"
 #include "klist.h"        /* list_head */
 
 #ifdef __cplusplus
@@ -510,11 +510,11 @@ int hp_sub_ping(redisAsyncContext * subc)
 /////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
-#include "hp_redis.h"
+#include "hp/hp_redis.h"
 #ifndef _MSC_VER
 #include <uuid/uuid.h>
 #endif /* _MSC_VER */
-#include "hp_config.h"	/* hp_config_t  */
+#include "hp/hp_config.h"	/* hp_config_t  */
 
 static int done = 0, dones[64] = { 0 };
 static int s_conn_flag = 0;

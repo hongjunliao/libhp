@@ -37,7 +37,9 @@ extern "C" {
  * make sure a file named 'config.ini' exists when you run these tests, see libhp/test/config.ini
  * for more details
  */
+#ifndef NDEBUG
 int libhp_all_tests_main(int argc, char ** argv);
+#endif //NDEBUG
 
 #ifdef __cplusplus
 }

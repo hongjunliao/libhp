@@ -8,20 +8,20 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "hp_log.h"     /* hp_log */
+#include "hp/hp_log.h"     /* hp_log */
 #include <stdio.h>
 #include <stdarg.h>     /* va_list, ... */
 #include <time.h>       /* time.h */
 #ifndef _MSC_VER
 #include <unistd.h>     /* getpid, isatty */
 #include <sys/time.h>   /* gettimeofday */
-#include "sds/sds.h"        /* sds */
+#include "hp/sdsinc.h"        /* sds */
 #else
 #include <windows.h>
 #include <io.h>         /* isatty */
 #include <sysinfoapi.h> /* GetTickCount */
 #include <processthreadsapi.h> /* GetCurrentThreadId */
-#include "sdsinc.h"		/* sds */
+#include "hp/sdsinc.h"		/* sds */
 #endif /* _MSC_VER */
 
 #ifdef LIBHP_WITH_ZLOG
@@ -103,6 +103,8 @@ void hp_log(void * f, char const * fmt, ...)
 
 #endif
 
+//TODO: remove this
+void _serverAssert(int a, int b, char *, int d) {  }
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

@@ -10,15 +10,15 @@
 #ifdef LIBHP_DEPRECADTED
 #ifdef LIBHP_WITH_TIMERFD
 
-#include "hp_expire.h"
+#include "hp/hp_expire.h"
 #include <sys/time.h>
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include "sdsinc.h"        /* sds */
+#include "hp/sdsinc.h"        /* sds */
 #include "redis/src/dict.h" /* dict */
-#include "hp_epoll.h"
-#include "hp_dict.h"
+#include "hp/hp_epoll.h"
+#include "hp/hp_dict.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 static void def_free(void * p) {}
@@ -157,8 +157,8 @@ void hp_expire_uninit(hp_expire * e)
 
 #ifndef NDEBUG
 #include <unistd.h>
-#include "hp_redis.h"
-#include "hp_config.h"
+#include "hp/hp_redis.h"
+#include "hp/hp_config.h"
 
 static hp_epoll efds_obj, *efds = &efds_obj;
 

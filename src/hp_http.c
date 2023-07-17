@@ -14,7 +14,7 @@
 //#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #endif /* _MSC_VER */
-#include "hp_http.h"
+#include "hp/hp_http.h"
 //#include <unistd.h>
 #include <stddef.h>
 #include <time.h>
@@ -23,11 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>     /* assert */
-#include "hp_log.h"
-#include "http-parser/http_parser.h"
-#include "str_dump.h"
-#include "hp_url.h" //hp_urldecode
-#include "hp_net.h"
+#include "hp/hp_log.h"
+#include "http_parser.h"
+#include "hp/str_dump.h"
+#include "hp/hp_url.h" //hp_urldecode
+#include "hp/hp_net.h"
 /////////////////////////////////////////////////////////////////////////////////////
 
 static int request_url_cb (http_parser * parser, const char *buf, size_t len)
@@ -347,12 +347,12 @@ void hp_http_uninit(hp_http * http)
 #ifndef NDEBUG
 #ifdef LIBHP_WITH_CURL
 
-#include "hp_net.h"      /* errno */
-#include "hp_curl.h"     /* errno */
-#include "hp_test.h"
-#include "hp_assert.h"	//hp_assert
-#include "hp_config.h"
-#include "string_util.h"
+#include "hp/hp_net.h"      /* errno */
+#include "hp/hp_curl.h"     /* errno */
+#include "hp/hp_test.h"
+#include "hp/hp_assert.h"	//hp_assert
+#include "hp/hp_config.h"
+#include "hp/string_util.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 #define TEST_URL "http://127.0.0.1:18541/index.html"
 

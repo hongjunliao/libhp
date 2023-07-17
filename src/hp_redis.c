@@ -10,12 +10,12 @@
 
 #ifdef LIBHP_WITH_REDIS
 
-#include "sdsinc.h"
+#include "hp/sdsinc.h"
 #include <unistd.h> /* sleep */
 #include <time.h>
-#include "hp_redis.h"
+#include "hp/hp_redis.h"
 #include "unistd.h"
-#include "hp_libc.h"
+#include "hp/hp_libc.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
@@ -26,7 +26,7 @@
 #include <hiredis/adapters/ae.h>
 #endif /* _MSC_VER */
 
-#include "hp_log.h"
+#include "hp/hp_log.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -113,7 +113,7 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 /////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
-#include "hp_config.h"
+#include "hp/hp_config.h"
 static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;
 
 static int done = 0;

@@ -23,8 +23,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include "str_dump.h"   /* dumpstr */
-#include "hp_ssl.h"
+#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_ssl.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 
@@ -198,7 +198,7 @@ sds hp_ssl_sha256(const unsigned char *d, size_t n)
 }
 /////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
-#include "hp_assert.h"	//hp_assert
+#include "hp/hp_assert.h"	//hp_assert
 int test_hp_ssl_main(int argc, char ** argv)
 {
 	int rc;

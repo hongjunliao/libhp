@@ -12,9 +12,9 @@
 #if !defined(_MSC_VER)  && !defined(_WIN32)
 
 #include "Win32_Interop.h"
-#include "hp_net.h"
-#include "hp_sock_t.h"  /* hp_sock_t */
-#include "hp_log.h"  /* hp_log */
+#include "hp/hp_net.h"
+#include "hp/hp_sock_t.h"  /* hp_sock_t */
+#include "hp/hp_log.h"  /* hp_log */
 #include <stdio.h>
 #include <assert.h>     /* define NDEBUG to disable assertion */
 
@@ -876,7 +876,7 @@ int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-#include "hp_log.h"   /* hp_log */
+#include "hp/hp_log.h"   /* hp_log */
 #include <string.h>   /* memset */
 #include <sys/stat.h> /* stat */
 #include <stdlib.h>   /* malloc */

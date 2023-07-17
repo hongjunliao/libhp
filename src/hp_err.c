@@ -9,7 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "hp_err.h"     /*  */
+#include "hp/hp_err.h"     /*  */
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -20,8 +20,8 @@
 #include <assert.h>
 #include <string.h>
 #include <string.h> /* strerror_r */
-#include "sdsinc.h" /* sds */
-#include "hp_libc.h"/* hp_min */
+#include "hp/sdsinc.h" /* sds */
+#include "hp/hp_libc.h"/* hp_min */
 
 #ifdef _MSC_VER
 static HMODULE s_hDll = 0;
@@ -74,8 +74,7 @@ char const * hp_err(int err, hp_err_t errstr)
 
 #else
 	hp_err_t buf = "";
-	strerror_r(err, buf, sizeof(hp_err_t));
-	sds serr = sdscatprintf(sdsempty(), errstr, (buf[0]=='\0'? strerror(err) : buf));
+	sds serr = sdscatprintf(sdsempty(), errstr, strerror_r(err, buf, sizeof(hp_err_t)));
 	errstr[0]='\0'; // clear current
 	strncpy(errstr, serr, hp_min(sdslen(serr), sizeof(hp_err_t) - 1));
 

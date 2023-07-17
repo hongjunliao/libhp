@@ -12,9 +12,9 @@
 
 #ifdef LIBHP_DEPRECADTED
 
-#include "hp_dl.h"
-#include "hp_log.h"      /* hp_log */
-#include "hp_epoll.h"    /* hp_epoll */
+#include "hp/hp_dl.h"
+#include "hp/hp_log.h"      /* hp_log */
+#include "hp/hp_epoll.h"    /* hp_epoll */
 #include <unistd.h>
 #include <dlfcn.h>      /* dlopen */
 #include <stdio.h>
@@ -24,7 +24,7 @@
 #include <errno.h>      /* errno */
 #include <sys/stat.h>	/* stat */
 #include <sys/inotify.h> /* inotify */
-#include "sds/sds.h"     /* sds */
+#include "hp/sdsinc.h"     /* sds */
 
 /////////////////////////////////////////////////////////////////////////////////////
 

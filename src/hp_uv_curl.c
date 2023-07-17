@@ -10,15 +10,15 @@
 
 #ifdef LIBHP_WITH_CURL
 
-#include "hp_uv_curl.h"  /* hp_uv_curlm */
-#include "hp_log.h"
-#include "hp_fs.h"
+#include "hp/hp_uv_curl.h"  /* hp_uv_curlm */
+#include "hp/hp_log.h"
+#include "hp/hp_fs.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <errno.h>       /* errno */
 #include <curl/curl.h>   /* libcurl */
-#include "sds/sds.h"     /* sds */
+#include "hp/sdsinc.h"     /* sds */
 #include "c-vector/cvector.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -348,10 +348,10 @@ void hp_uv_curlm_uninit(hp_uv_curlm * curlm)
 #include <getopt.h>
 #include <sys/stat.h>	/*fstat*/
 #include <curl/curl.h>   /* libcurl */
-#include "hp_curl.h"
-#include "hp_assert.h"
-#include "hp_ssl.h"
-#include "string_util.h"
+#include "hp/hp_curl.h"
+#include "hp/hp_assert.h"
+#include "hp/hp_ssl.h"
+#include "hp/string_util.h"
 
 #define TEST_URL "https://mirrors.aliyun.com/cygwin/x86_64/release/vim/vim-8.2.4372-2.tar.xz"
 #define TEST_SHA256 "d6e079e9867d0805dd3e5b7fe754670d72d04dee0c1e191fbeb8ee05553d63e8"

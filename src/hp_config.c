@@ -11,8 +11,8 @@
 #ifndef NDEBUG
 
 #include <unistd.h>
-#include "hp_assert.h"
-#include "hp_config.h"
+#include "hp/hp_assert.h"
+#include "hp/hp_config.h"
 #include "inih/ini.h"		//ini_parse
 #include "redis/src/dict.h" //dict
 #include <string.h>
@@ -21,7 +21,7 @@
 static int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 {
     int l1,l2;
-    DICT_NOTUSED(privdata);
+//    DICT_NOTUSED(privdata);
 
     l1 = sdslen((sds)key1);
     l2 = sdslen((sds)key2);
@@ -31,7 +31,7 @@ static int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *ke
 
 static void r_dictSdsDestructor(void *privdata, void *val)
 {
-    DICT_NOTUSED(privdata);
+//    DICT_NOTUSED(privdata);
 
     sdsfree(val);
 }
@@ -127,12 +127,12 @@ static char const * hp_config_load(char const * id)
 	char f = 0;
 	static dict * s_config = 0;
 	if(!s_config){
-		s_config = dictCreate(&configTableDictType, 0);
+		s_config = dictCreate(&configTableDictType);
 		f = 1;
 	}
 	assert(s_config);
 
-	if(strcmp(id, "hp_config_unload") == 0 && s_config){
+	if(strcmp(id, "hp/hp_config_unload") == 0 && s_config){
 		dictRelease(s_config);
 		s_config = 0;
 		return "0";
@@ -151,7 +151,7 @@ static char const * hp_config_load(char const * id)
 		dictIterator * iter = dictGetIterator(s_config);
 		dictEntry * ent;
 		for(ent = 0; (ent = dictNext(iter));){
-			printf("'%s'=>'%s'\n", (char *)ent->key, (char *)ent->v.val);
+			printf("'%s'=>'%s'\n", (char *)dictGetKey(ent), (char *)dictGetVal(ent));
 		}
 		dictReleaseIterator(iter);
 	}
@@ -171,7 +171,7 @@ int test_hp_config_main(int argc, char ** argv)
 {
 	char const * loglevel = hp_config_test("loglevel");
 	hp_assert(loglevel && strlen(loglevel) > 0, "loglevel='%s'", loglevel);
-	assert(atoi(hp_config_test("hp_config_unload")) == 0);
+	assert(atoi(hp_config_test("hp/hp_config_unload")) == 0);
 
 	return 0;
 }

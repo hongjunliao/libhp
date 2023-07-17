@@ -15,7 +15,7 @@
 #if !defined(_WIN32) && !defined(_MSC_VER)
 
 
-#include "hp_sig.h"   /* hp_sig */
+#include "hp/hp_sig.h"   /* hp_sig */
 #include <unistd.h>   /* getpid */
 #include <signal.h>   /* sigaction, ... */
 #include <stdlib.h>   /* exit */

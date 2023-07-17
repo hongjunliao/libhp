@@ -12,15 +12,15 @@
 #ifndef _MSC_VER
 #ifdef LIBHP_WITH_CURL
 
-#include "hp_curl.h"
-#include "hp_epoll.h"    /* hp_epoll */
-#include "hp_timerfd.h"  /* hp_timerfd */
+#include "hp/hp_curl.h"
+#include "hp/hp_epoll.h"    /* hp_epoll */
+#include "hp/hp_timerfd.h"  /* hp_timerfd */
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <errno.h>       /* errno */
 #include <curl/curl.h>   /* libcurl */
-#include "sds/sds.h"     /* sds */
+#include "hp/sdsinc.h"     /* sds */
 #include "libyuarel/yuarel.h"   /* yuarel_parse_query */
 #include "c-vector/cvector.h"
 
@@ -399,9 +399,9 @@ void hp_curlm_uninit(hp_curlm * curlm)
 /* tests */
 #ifndef NDEBUG
 
-#include "hp_assert.h"
-#include "hp_ssl.h"
-#include "string_util.h"
+#include "hp/hp_assert.h"
+#include "hp/hp_ssl.h"
+#include "hp/string_util.h"
 
 #define TEST_URL "https://mirrors.aliyun.com/cygwin/x86_64/release/vim/vim-8.2.4372-2.tar.xz"
 #define TEST_SHA256 "d6e079e9867d0805dd3e5b7fe754670d72d04dee0c1e191fbeb8ee05553d63e8"

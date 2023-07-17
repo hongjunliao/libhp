@@ -10,13 +10,13 @@
 
 #ifdef LIBHP_WITH_MYSQL
 
-#include "hp_mysql.h"
+#include "hp/hp_mysql.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>        	/* define NDEBUG to disable assertion */
 #include <string.h>
 #include <assert.h>        	/* define NDEBUG to disable assertion */
-#include "sds/sds.h"        /* sds */
+#include "hp/sdsinc.h"        /* sds */
 #include "cjson/cJSON.h"	/* cJSON */
 #include "mysql/mysql.h"
 #include "mysql/errmsg.h"
@@ -334,8 +334,8 @@ ret:
 
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
-#include "hp_cjson.h"
-#include "hp_config.h"
+#include "hp/hp_cjson.h"
+#include "hp/hp_config.h"
 
 int test_hp_mysql_main(int argc, char ** argv)
 {

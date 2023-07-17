@@ -23,20 +23,20 @@
 #include <assert.h>     /* define NDEBUG to disable assertion */
 #include <time.h>
 #include <stdlib.h>
-#include "hp_epoll.h"    /* hp_epoll */
-#include "hp_io.h"       /* hp_eti */
-#include "hp_timerfd.h"  /* hp_timerfd */
-#include "sds/sds.h"     /* sds */
-#include "hp_io.h"
-#include "hp_log.h"     /* hp_log */
-#include "hp_libc.h"    /* hp_min */
-#include "hp_net.h"     /*  */
-#include "str_dump.h"   /* dumpstr */
-#include "string_util.h"/* sdslen_null */
+#include "hp/hp_epoll.h"    /* hp_epoll */
+#include "hp/hp_io.h"       /* hp_eti */
+#include "hp/hp_timerfd.h"  /* hp_timerfd */
+#include "hp/sdsinc.h"     /* sds */
+#include "hp/hp_io.h"
+#include "hp/hp_log.h"     /* hp_log */
+#include "hp/hp_libc.h"    /* hp_min */
+#include "hp/hp_net.h"     /*  */
+#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/string_util.h"/* sdslen_null */
 #include "klist.h"
 #include "c-vector/cvector.h"
-#include "hp_tcpio.h"
-#include "hp_libc.h"
+#include "hp/hp_tcpio.h"
+#include "hp/hp_libc.h"
 /////////////////////////////////////////////////////////////////////////////////////
 typedef struct tcpio_cli tcpio_cli;
 

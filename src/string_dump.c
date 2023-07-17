@@ -9,7 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "str_dump.h"   /* */
+#include "hp/str_dump.h"   /* */
 
 #include <stdio.h>
 #include <stdlib.h>

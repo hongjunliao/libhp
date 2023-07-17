@@ -10,9 +10,9 @@
 #endif /* HAVE_CONFIG_H */
 #ifndef _MSC_VER
 #ifndef _WIN32
-#include "hp_io.h"
-#include "hp_log.h"     /* hp_log */
-#include "hp_libc.h"    /* hp_min */
+#include "hp/hp_io.h"
+#include "hp/hp_log.h"     /* hp_log */
+#include "hp/hp_libc.h"    /* hp_min */
 #include <unistd.h>     /* read, sysconf, ... */
 #include <stdio.h>
 #include <string.h>     /* memset, ... */

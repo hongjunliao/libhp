@@ -5,10 +5,10 @@
  * my libc
  * */
 
-#include "hp_libc.h"
+#include "hp/hp_libc.h"
 #include <string.h>     /* strcmp */
 #include <assert.h>
-#include "sdsinc.h"		/* sds */
+#include "hp/sdsinc.h"		/* sds */
 /////////////////////////////////////////////////////////////////////////////////////////
 
 //char *  hp_nmalloc(size_t nmemb, size_t size)

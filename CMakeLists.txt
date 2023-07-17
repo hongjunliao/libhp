@@ -23,6 +23,10 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ###########################################################################################
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+set(LIBHP_WITH_CJSON 1)
+endif()
+###########################################################################################
 
 # deps from deps/ 
 # pkg_check_modules(openssl REQUIRED openssl)
@@ -40,7 +44,7 @@ set(g_hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjs
 	)
 set(g_incs .find_path  .find_path .find_path .find_path .find_path .find_path .find_path
 		.find_path .find_path .find_path .find_path .find_path .find_path .find_path .find_path .find_path 
-		.find_path .find_path .find_path .find_path "${PROJECT_BINARY_DIR}/ include/hp/ include/ deps/"
+		.find_path .find_path .find_path .find_path "${PROJECT_BINARY_DIR}/ include/ deps/"
 	)
 	
 set(g_deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson 
@@ -85,7 +89,7 @@ endif()
 
 ###########################################################################################
 add_executable(test-libhp test/test.cpp )
-target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/hp/ include/ deps/ )
+target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/ deps/ )
 target_link_libraries(test-libhp libhp ) 
 
 ###########################################################################################

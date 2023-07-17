@@ -12,8 +12,8 @@
 
 #ifdef __linux__
 
-#include "hp_epoll.h"   /*  */
-#include "hp_log.h"     /* hp_log */
+#include "hp/hp_epoll.h"   /*  */
+#include "hp/hp_log.h"     /* hp_log */
 #include <sys/epoll.h>  /* epoll_event */
 #include <unistd.h>
 #include <string.h> 	/* strlen */

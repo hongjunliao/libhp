@@ -11,9 +11,9 @@
 
 #ifdef LIBHP_DEPRECADTED
 
-#include "sdsinc.h"        /* sds */
+#include "hp/sdsinc.h"        /* sds */
 #include "redis/src/dict.h" /* dict */
-#include "hp_dict.h"    /*  */
+#include "hp/hp_dict.h"    /*  */
 #include <string.h>     /* strcmp */
 #include <assert.h>
 /////////////////////////////////////////////////////////////////////////////////////////

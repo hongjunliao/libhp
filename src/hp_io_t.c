@@ -11,16 +11,16 @@
 
 #include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */
-#include "sdsinc.h"		/* sds */
-#include "hp_io_t.h"
-#include "hp_err.h"
+#include "hp/sdsinc.h"		/* sds */
+#include "hp/hp_io_t.h"
+#include "hp/hp_err.h"
 #include <assert.h> /* assert */
 #include <errno.h> /*  */
 #include <limits.h> /* INT_MAX */
 #include <stdio.h>
 #include <string.h>
-#include "hp_log.h"
-#include "str_dump.h" /*dumpstr*/
+#include "hp/hp_log.h"
+#include "hp/str_dump.h" /*dumpstr*/
 
 #if !defined(_WIN32) && !defined(_MSC_VER)
 #include <poll.h>  /* poll */
@@ -505,13 +505,14 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd, hp_iohdl iohdl)
 /////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 #include <time.h>   /*difftime*/
-#include "hp_net.h" /* hp_net_connect */
+#include <cjson/cJSON.h>
+#include "hp/hp_net.h" /* hp_net_connect */
 #include "klist.h"  /* list_head */
-#include "sdsinc.h" /* sds */
-#include "hp_config.h"
-#include "hp_cjson.h"
-#include "string_util.h"
-#include "hp_assert.h"
+#include "hp/sdsinc.h" /* sds */
+#include "hp/hp_config.h"
+#include "hp/hp_cjson.h"
+#include "hp/string_util.h"
+#include "hp/hp_assert.h"
 #define cfg hp_config_test
 #define cfgi(key) atoi(hp_config_test(key))
 /////////////////////////////////////////////////////////////////////////////////////

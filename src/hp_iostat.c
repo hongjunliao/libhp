@@ -10,7 +10,7 @@
 
 #ifndef _MSC_VER
 
-#include "hp_iostat.h"
+#include "hp/hp_iostat.h"
 #include <unistd.h>      /* close */
 #include <sys/time.h>    /* gettimeofday */
 #include <stdio.h>

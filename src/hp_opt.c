@@ -23,7 +23,7 @@
 #define required_argument	OPTPARSE_REQUIRED	
 #define optional_argument	OPTPARSE_OPTIONAL
 
-#include "hp_opt.h"
+#include "hp/hp_opt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,7 +63,7 @@ int hp_opt_argv(char * cmdline, char * argv[])
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "hp_libc.h"
+#include "hp/hp_libc.h"
 
 int test_optparse_main(int argc, char ** argv)
 {

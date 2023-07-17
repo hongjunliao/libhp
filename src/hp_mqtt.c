@@ -10,8 +10,8 @@
 #endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MQTT
-#include "sdsinc.h"
-#include "hp_mqtt.h"
+#include "hp/sdsinc.h"
+#include "hp/hp_mqtt.h"
 #include <search.h>  /* lfind */
 #include "MQTTAsync.h"
 #include "MQTTClientPersistence.h"
@@ -22,8 +22,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include "c-vector/cvector.h"
-#include "paho_opts.h"
-#include "string_util.h"
+#include "hp/paho_opts.h"
+#include "hp/string_util.h"
 
 #if defined(WIN32)
 #include <windows.h>
@@ -529,7 +529,7 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 #include <stdlib.h>
 #include <assert.h>
 #include "MQTTClient.h"
-#include "hp_config.h"
+#include "hp/hp_config.h"
 extern hp_config_t hp_config_test;
 
 struct basic_test {
@@ -548,17 +548,17 @@ struct resub_test {
 };
 
 static struct basic_test t1 = {
-		{ "hp_sdfsdfs/0/dev1"}
+		{ "hp/hp_sdfsdfs/0/dev1"}
 		,{2}
 		, "hello#123"
 		,0
 };
 
 static struct resub_test t2 = {
-		  {"hp_sdfsdfs/1/dev1" }
-		, {"hp_sdfsdfs/1/dev1", "hp_sdfsdfs/apps/apps1" }
-		, {"hp_sdfsdfs/1/dev1", "hp_sdfsdfs/apps/apps2" }
-		, {"hp_sdfsdfs/1/dev1" }
+		  {"hp/hp_sdfsdfs/1/dev1" }
+		, {"hp/hp_sdfsdfs/1/dev1", "hp/hp_sdfsdfs/apps/apps1" }
+		, {"hp/hp_sdfsdfs/1/dev1", "hp/hp_sdfsdfs/apps/apps2" }
+		, {"hp/hp_sdfsdfs/1/dev1" }
 		,{2,2,2,2}
 		, "hello#123"
 		,0

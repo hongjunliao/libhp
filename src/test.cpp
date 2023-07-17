@@ -14,7 +14,7 @@
 #endif
 #include "hphdrs.h"
 #include <iostream>
-#include "libhp.h"
+#include "hp/libhp.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 //deps/c-vector/example.c
 //deps/c-vector/example.cc
@@ -154,12 +154,10 @@ int libhp_all_tests_main(int argc, char ** argv)
 #endif
 #endif
 
-	assert(atoi(hp_config_test("hp_config_unload")) == 0);
+	assert(atoi(hp_config_test("hp/hp_config_unload")) == 0);
 
 	return rc;
 }
 
-#else
-int libhp_all_tests_main(int argc, char ** argv) { return 0; }
 #endif //NDEBUG
 /////////////////////////////////////////////////////////////////////////////////////////

@@ -39,6 +39,9 @@ int libhp_all_tests_main(int argc, char ** argv)
 	rc = dzlog_set_category("libhp"); assert(rc == 0);
 #endif
 
+	hp_assert_path("config.ini", REG);
+	assert(atoi(hp_config_test("#load config.ini")) == 0);
+
 	run_test(test_hp_config_main);
 	run_test(test_cvector_main);
 	run_test(test_cvector_cpp_main);
@@ -154,7 +157,7 @@ int libhp_all_tests_main(int argc, char ** argv)
 #endif
 #endif
 
-	assert(atoi(hp_config_test("hp/hp_config_unload")) == 0);
+	assert(atoi(hp_config_test("#unload")) == 0);
 
 	return rc;
 }

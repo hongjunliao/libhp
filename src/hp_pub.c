@@ -433,7 +433,7 @@ redisAsyncContext * hp_subc(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid
 		, hp_sub_cb_t cb
-		, void const * arg)
+		, void * arg)
 {
 	hp_sub_arg_t a = { arg, 0 };
 	return hp_subc_arg(c, subc, shasub, shasup, sid, cb, a);
@@ -519,7 +519,7 @@ int hp_sub_ping(redisAsyncContext * subc)
 static int done = 0, dones[64] = { 0 };
 static int s_conn_flag = 0;
 
-char const * sids[] = { "rmqtt:s:865452044887154", "rmqtt:s:868783048901857" };
+char * sids[] = { "rmqtt:s:865452044887154", "rmqtt:s:868783048901857" };
 static char * topics[] = { "rmqtt:1:865452044887154", "rmqtt:apps:chat.tox.antox", "rmqtt:dept:1006"};
 static char const * fmts[] = { "{\"uuid0\":\"%s\"}", "{\"uuid1\":\"%s\"}", "{\"uuid2\":\"%s\"}" };
 static sds msgs[128] = { 0 };

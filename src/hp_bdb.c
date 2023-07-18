@@ -56,7 +56,7 @@ int test_hp_bdb_main(int argc, char ** argv)
 	rc = db_create(&dbp, 0, 0);
 	assert(rc == 0);
 
-	rc = dbp->open(dbp, NULL, "hp/hp_bdb.db", NULL, DB_BTREE, DB_CREATE, 0);
+	rc = dbp->open(dbp, NULL, "test_hp_bdb_main", NULL, DB_BTREE, DB_CREATE, 0);
 	assert(rc == 0);
 
 	DBT data = { 0 };

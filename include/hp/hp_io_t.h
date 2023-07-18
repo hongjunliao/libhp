@@ -19,6 +19,7 @@ extern "C" {
 #include "redis/src/adlist.h" /* list */
 #include "hp_sock_t.h"  /* hp_sock_t */
 #include <stddef.h> 	/* size_t */
+#include <netinet/in.h>
 #if !defined(__linux__) && !defined(_MSC_VER)
 #include "hp_io.h"      /* hp_eti,... */
 #include "hp_poll.h"   /* hp_poll */
@@ -72,6 +73,7 @@ struct hp_iohdl {
 
 struct hp_io_t {
 	int id;			/* ID for this I/O, more safe than fd? */
+	struct sockaddr_in addr;
 #if defined(_MSC_VER)
 	int	   index;
 #elif defined(__linux__)

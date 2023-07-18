@@ -105,9 +105,8 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 	int rc;
 
 	for(;;){
-		struct sockaddr_in clientaddr = { 0 };
-		socklen_t len = sizeof(clientaddr);
-		hp_sock_t confd = accept(fd, (struct sockaddr *)&clientaddr, &len);
+		socklen_t len = sizeof(io->addr);
+		hp_sock_t confd = accept(fd, (struct sockaddr *)&io->addr, &len);
 #ifndef _MSC_VER
 		if(!hp_sock_is_valid(confd)){
 			if (errno == EINTR || errno == EAGAIN) { return 0; }
@@ -142,6 +141,7 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 				safe_call(niohdl.on_delete, nio);
 				is_c = 1;
 			}
+			nio->addr = io->addr;
 		}
 		else { is_c = 1; }
 
@@ -1153,6 +1153,7 @@ static hp_iohdl s_http_cli_hdl = {
 int test_hp_io_t_main(int argc, char ** argv)
 {
 	int rc;
+
 	{
 		char buf[1024] = "";
 		int n = sscanf("\r\n{\"jsonrpc\": \"2.0\",\"method\": \"this_jsonapi_not_exist\",\"params\": [%d,%d],\"id\": %d}\r\n",

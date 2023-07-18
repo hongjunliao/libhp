@@ -115,3 +115,5 @@ msvs/test-libhp.vcxproj
 msvs/test-libhp.vcxproj.filters
 msvs/test-libhp.vcxproj.user
 build/
+build/
+deps/

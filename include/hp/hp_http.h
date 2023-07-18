@@ -55,6 +55,7 @@ struct hp_http {
 	hp_io_t 	listenio;
 	/* callbacks, set by user */
 	hp_http_request_cb_t on_request_cb;
+	list * reqlist;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -63,6 +64,7 @@ int hp_http_init(hp_http * http	, hp_io_ctx * ioctx, hp_sock_t listenfd, int tcp
 		, hp_http_request_cb_t on_request_cb);
 void hp_http_uninit(hp_http * http);
 
+#define hp_http_count(http) (listLength((http)->reqlist))
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

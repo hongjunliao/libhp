@@ -6,6 +6,13 @@
 # date 2023/7/5
 
 ###########################################################################################
+macro(hp_log)
+    string(TIMESTAMP CURRENT_TIMESTAMP "%Y-%m-%d %H:%M:%S")
+    get_property(_callee GLOBAL PROPERTY SB_CURRENT_FUNCTION)
+    message("[${CURRENT_TIMESTAMP}]/${ARGV}")
+#    message("[${CURRENT_TIMESTAMP}]/${_callee}: ${ARGV}")
+endmacro()
+###########################################################################################
 # libhp依赖查找
 
 # 为数字的表示不受${withprefix}XXX选项开关的控制
@@ -55,7 +62,7 @@ function(hp_cmake_copy_cmakefile dep)
 	
 endfunction()
 
-function(hp_cmake_find_deps SRCS_ withprefix withs hdrs incs deps libs)
+function(hp_cmake_find_deps SRCS_ withprefix depdir withs hdrs incs deps libs)
 	list(LENGTH ${hdrs} hdrs_len)
 	math( EXPR hdrs_len "${hdrs_len} - 1")
 
@@ -76,24 +83,24 @@ function(hp_cmake_find_deps SRCS_ withprefix withs hdrs incs deps libs)
 		endif()
 	
 		if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesub.h ))
-			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
+				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
 			endif()
 			
 			hp_cmake_copy_cmakefile(${dep})
 
-			add_subdirectory(deps/${dep})
-			set(${dep}_INCLUDE_DIRS "deps/${dep}" ${inc} PARENT_SCOPE)	
+			add_subdirectory(${depdir}/${dep})
+			set(${dep}_INCLUDE_DIRS "${depdir}/${dep}" ${inc} PARENT_SCOPE)	
 			set(${dep}_LIBRARIES ${lib_} PARENT_SCOPE)
-			message("hp_cmake_find_deps: lib added, add_subdirectory(deps/${dep}),${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
+			message("hp_cmake_find_deps: lib added, add_subdirectory(${depdir}/${dep}),${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
 			continue()
 		endif()	
 	
 		if((${with} EQUAL 1 ) AND (${hdr} STREQUAL .nullfilesrc.h ))
 			if(${dep} STREQUAL .src)
 				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)	
-			elseif(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+			elseif(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
+				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
 			endif()
 			
 			file(GLOB SRCS ${SRCS} ${lib_})
@@ -104,8 +111,8 @@ function(hp_cmake_find_deps SRCS_ withprefix withs hdrs incs deps libs)
 		endif()	
 
 		if(${withprefix}${with} AND (${hdr} STREQUAL .nullfilesrc.h ))
-			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+			if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
+				message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
 			endif()
 			
 			file(GLOB SRCS ${SRCS} ${lib_})
@@ -119,15 +126,15 @@ function(hp_cmake_find_deps SRCS_ withprefix withs hdrs incs deps libs)
 			find_path(${dep}_INCLUDE_DIRS ${hdr} )
 		
 			if(NOT ${dep}_INCLUDE_DIRS) 
-				if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}" )
-					message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep} NOT found")
+				if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
+					message(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
 				endif()
 				
 				hp_cmake_copy_cmakefile(${dep})
 				
-				add_subdirectory(deps/${dep})
-				set(${dep}_INCLUDE_DIRS "deps/${dep}" ${inc} PARENT_SCOPE)	
-				message("hp_cmake_find_deps: lib enabled by ${withprefix}${with}, add_subdirectory(deps/${dep})" )
+				add_subdirectory(${depdir}/${dep})
+				set(${dep}_INCLUDE_DIRS "${depdir}/${dep}" ${inc} PARENT_SCOPE)	
+				message("hp_cmake_find_deps: lib enabled by ${withprefix}${with}, add_subdirectory(${depdir}/${dep})" )
 				continue()
 			endif()
 			
@@ -144,6 +151,6 @@ endfunction()
 ###########################################################################################
 
 #测试 
-#hp_cmake_find_deps(SRCS LIBHP_WITH_ g_withs g_hdrs g_incs g_deps g_libs)
+#hp_cmake_find_deps(SRCS LIBHP_WITH_ deps g_withs g_hdrs g_incs g_deps g_libs)
 #message("hp_cmake_find_deps: SRCS='${SRCS}'")
 

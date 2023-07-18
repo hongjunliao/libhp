@@ -18,7 +18,7 @@
 #include <string.h>
 /////////////////////////////////////////////////////////////////////////////////////////
 /*====================== Hash table type implementation  ==================== */
-static int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
+static int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2)
 {
     int l1,l2;
 //    DICT_NOTUSED(privdata);
@@ -29,11 +29,11 @@ static int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *ke
     return memcmp(key1, key2, l1) == 0;
 }
 
-static void r_dictSdsDestructor(void *privdata, void *val)
+static void r_dictSdsDestructor(dict *d, void *key)
 {
 //    DICT_NOTUSED(privdata);
 
-    sdsfree(val);
+    sdsfree(key);
 }
 
 static uint64_t r_dictSdsHash(const void *key) {
@@ -74,10 +74,10 @@ static int inih_handler(void* user, const char* section, const char* name,
 		 * NOTE:
 		 * set mysql=
 		 * will clear existing values */
-		dictAdd(cfg, sdsnew("mysql_ip"), sdsnew(mysql_ip));
-		dictAdd(cfg, sdsnew("mysql_user"), sdsnew(mysql_user));
-		dictAdd(cfg, sdsnew("mysql_port"), sdsfromlonglong(mysql_port));
-		dictAdd(cfg, sdsnew("mysql_db"), sdsnew(mysql_db));
+		dictReplace(cfg, sdsnew("mysql_ip"), sdsnew(mysql_ip));
+		dictReplace(cfg, sdsnew("mysql_user"), sdsnew(mysql_user));
+		dictReplace(cfg, sdsnew("mysql_port"), sdsfromlonglong(mysql_port));
+		dictReplace(cfg, sdsnew("mysql_db"), sdsnew(mysql_db));
 	}
 	else if(strcmp(name, "mqtt.addr") == 0){
 		/* mqtt.addr=0.0.0.0:7006 */
@@ -85,7 +85,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 		int mqtt_port = 0;
 
 		if(value && strlen(value) > 0){
-			int n = sscanf(value, "%[^:]:%d", mqtt_bind, &mqtt_port);
+			char const * pp = strstr(value, "://");
+			int n = sscanf((pp? value + (pp - value + 3) : value), "%[^:]:%d", mqtt_bind, &mqtt_port);
 			if(n != 2){
 				return 0;
 			}
@@ -94,8 +95,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 		 * NOTE:
 		 * set mysql=
 		 * will clear existing values */
-		dictAdd(cfg, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
-		dictAdd(cfg, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
+		dictReplace(cfg, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
+		dictReplace(cfg, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
 	}
 	else if(strcmp(name, "redis") == 0){
 
@@ -112,11 +113,11 @@ static int inih_handler(void* user, const char* section, const char* name,
 			}
 		}
 
-		dictAdd(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
-		dictAdd(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
+		dictReplace(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
+		dictReplace(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
 	}
 
-	dictAdd(cfg, sdsnew(name), sdsnew(value));
+	dictReplace(cfg, sdsnew(name), sdsnew(value));
 
 	return 1;
 }
@@ -124,36 +125,46 @@ static int inih_handler(void* user, const char* section, const char* name,
 static char const * hp_config_load(char const * id)
 {
 	if(!id) return 0;
-	char f = 0;
+
+	int n;
 	static dict * s_config = 0;
 	if(!s_config){
 		s_config = dictCreate(&configTableDictType);
-		f = 1;
 	}
 	assert(s_config);
 
-	if(strcmp(id, "hp/hp_config_unload") == 0 && s_config){
+	if(strcmp(id, "#unload") == 0 && s_config){
 		dictRelease(s_config);
 		s_config = 0;
 		return "0";
 	}
-
-	int f1 = (access("config.ini", F_OK) == 0 &&
-				ini_parse("config.ini", inih_handler, s_config));
-	int f2 = !f1 && (access("test/config.ini", F_OK) == 0 &&
-				ini_parse("test/config.ini", inih_handler, s_config));
-	if (!(f1 || f2)) {
-		hp_log(stderr, "%s: ini_parse failed for  '%s'/'%s' \n", __FUNCTION__, "config.ini", "test/config.ini" );
-		return "";
+	else if(strncmp(id, "#load", n = strlen("#load")) == 0 && strlen(id) >= (n + 2)){
+		char const * f = id + n + 1;
+		int line = 0;
+		if ((line = ini_parse(f, inih_handler, s_config)) != 0) {
+			hp_log(stderr, "%s: ini_parse failed for '%s' at line %d\n", __FUNCTION__, f, line);
+			return "-1";
+		}
+		return "0";
 	}
+	else if(strncmp(id, "#set", n = strlen("#set")) == 0 && strlen(id) >= (n + 4)){
 
-	if(f && hp_log_level > 4){
+		char buf[128]; strncpy(buf, id, sizeof(buf));
+		char * k = buf + n + 1, * v = strchr(k, ' ');
+		if(!v) return "-1";
+
+		*v='\0'; ++v;
+		dictReplace(s_config, sdsnew(k), sdsnew(v));
+		return "0";
+	}
+	else if(strcmp(id, "#show") == 0){
 		dictIterator * iter = dictGetIterator(s_config);
 		dictEntry * ent;
 		for(ent = 0; (ent = dictNext(iter));){
 			printf("'%s'=>'%s'\n", (char *)dictGetKey(ent), (char *)dictGetVal(ent));
 		}
 		dictReleaseIterator(iter);
+		return "0";
 	}
 
 	sds key = sdsnew(id);
@@ -164,15 +175,19 @@ static char const * hp_config_load(char const * id)
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 hp_config_t hp_config_test = hp_config_load;
+#define cfg hp_config_test
+#define cfgi(k) atoi(cfg(k))
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
 int test_hp_config_main(int argc, char ** argv)
 {
-	char const * loglevel = hp_config_test("loglevel");
-	hp_assert(loglevel && strlen(loglevel) > 0, "loglevel='%s'", loglevel);
-	assert(atoi(hp_config_test("hp/hp_config_unload")) == 0);
-
+	assert(cfgi("#set test.key.name 23") == 0 && cfgi("test.key.name") == 23);
+	assert(cfgi("#set test.key.name 24") == 0 && cfgi("test.key.name") == 24);
+	hp_assert(cfgi("#load bitcoin.conf") == 0, "'#load bitcoin.conf' failed");
+	hp_assert(cfgi("#load this_file_not_exist.conf") != 0, "'#load this_file_not_exist.conf' OK?");
+	hp_assert(strlen(cfg("loglevel")) > 0, "loglevel NOT found");
+	hp_assert(strlen(cfg("#show")) > 0, "#show failed");
 	return 0;
 }
 

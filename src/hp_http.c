@@ -192,7 +192,7 @@ static void hp_httpreq_uninit(hp_httpreq * req)
 	sdsfree(req->url);
 }
 
-static int hp_httpreq_loop(hp_http * req)
+static int hp_httpreq_loop(hp_httpreq * req)
 {
 	return 0;
 }
@@ -203,12 +203,14 @@ static hp_io_t * hp_httpreq_on_new(hp_io_t * cio, hp_sock_t fd)
 	hp_httpreq * req = (hp_httpreq *)calloc(1, sizeof(hp_httpreq));
 	int rc = hp_httpreq_init(req, (hp_http *)cio->user);
 	assert(rc == 0);
+	listAddNodeTail(req->http->reqlist, req);
 
 #ifndef NDEBUG
 	if(hp_log_level > 0){
 		char buf[64] = "";
-		hp_log(stdout, "%s: new HTTP connection from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
-				hp_io_count(cio->ioctx));
+		hp_log(stdout, "%s: new HTTP connection from '%s', total=%d\n", __FUNCTION__
+				, get_ipport_cstr2(&cio->addr, ":", buf, sizeof(buf)),
+				hp_http_count(req->http));
 	}
 #endif
 	return (hp_io_t *)req;
@@ -285,19 +287,25 @@ failed:
 
 static int hp_httpreq_on_loop(hp_io_t * io)
 {
-	return hp_httpreq_loop((hp_http *)io);
+	if(io->iohdl.on_new)
+		return 0;
+	return hp_httpreq_loop((hp_httpreq *)io);
 }
 
 static void hp_httpreq_on_delete(hp_io_t * io)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
-	if(!(req && req->http)) { return; }
+	assert((req && req->http));
+
+	listNode * node = listSearchKey(req->http->reqlist, req);
+	assert(node);
+	listDelNode(req->http->reqlist, node);
 
 #ifndef NDEBUG
 	if(hp_log_level > 0){
 		char buf[64] = "";
-		hp_log(stdout, "%s: delete HTTP connection '%s', IO total=%d\n", __FUNCTION__
-				, hp_get_ipport_cstr(hp_io_fd(io), buf), hp_io_count(io->ioctx));
+		hp_log(stdout, "%s: delete HTTP connection '%s', total=%d\n", __FUNCTION__
+				, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), hp_http_count(req->http));
 	}
 #endif
 
@@ -326,9 +334,11 @@ int hp_http_init(hp_http * http	, hp_io_ctx * ioctx, hp_sock_t listenfd, int tcp
 	int rc;
 	if (!(http && ioctx)) { return -1; }
 
-	memset(http, 0, sizeof(hp_httpreq));
+	memset(http, 0, sizeof(hp_http));
+
 	http->ioctx = ioctx;
 	http->on_request_cb = on_request_cb;
+	http->reqlist = listCreate();
 
 	rc = hp_io_add(http->ioctx, &http->listenio, listenfd, s_httphdl);
 	if (rc != 0) { return -4; }
@@ -339,6 +349,7 @@ int hp_http_init(hp_http * http	, hp_io_ctx * ioctx, hp_sock_t listenfd, int tcp
 
 void hp_http_uninit(hp_http * http)
 {
+	listRelease(http->reqlist);
 	return;
 }
 
@@ -420,6 +431,8 @@ int test_hp_http_main(int argc, char ** argv)
 
 		assert(curlm->n == 3);
 
+		hp_log(stdout, "%s: listening on HTTP port=%d, waiting for connection ...\n", __FUNCTION__, 18541);
+
 		int quit = 3;
 		for(; quit > 0;){
 			hp_io_run(ioctx, 200, 0);
@@ -431,6 +444,7 @@ int test_hp_http_main(int argc, char ** argv)
 
 		hp_curlm_uninit(curlm);
 		hp_http_uninit(http);
+		hp_io_uninit(ioctx);
 		close(listenfd);
 	}
 #endif //__linux__

@@ -74,7 +74,7 @@ redisAsyncContext * hp_subc(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid
 		, hp_sub_cb_t cb
-		, void const * arg);
+		, void * arg);
 redisAsyncContext * hp_subc_arg(redisAsyncContext * c, redisAsyncContext * subc
 		, char const * shasub, char const * shasup
 		, char const * sid

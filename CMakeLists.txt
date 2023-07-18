@@ -63,7 +63,7 @@ set(g_libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson
 	)
 ###########################################################################################
 
-hp_cmake_find_deps(SRCS LIBHP_WITH_ g_withs g_hdrs g_incs g_deps g_libs)
+hp_cmake_find_deps(SRCS LIBHP_WITH_ deps g_withs g_hdrs g_incs g_deps g_libs)
 #build as library
 add_library(libhp ${SRCS})
 

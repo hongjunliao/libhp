@@ -35,7 +35,7 @@ extern "C" {
  * message header, defined by user
  * it is fine that you don't define it if you never use it
  *   */
-typedef union hp_iohdr hp_iohdr_t;
+//typedef union hp_iohdr hp_iohdr_t;
 
 typedef struct hp_io_t hp_io_t;
 typedef struct hp_iohdl hp_iohdl;
@@ -52,10 +52,10 @@ struct hp_iohdl {
 	* @return: >0-parse OK, got a message; 0: need more data; <0 parse failed
 	*/
 	int (* on_parse)(hp_io_t * io, char * buf, size_t * len
-			, hp_iohdr_t ** hdrp, char ** bodyp);
+			, void ** hdrp, void ** bodyp);
 
 	/* callback when new message coming */
-	int(* on_dispatch)(hp_io_t * io, hp_iohdr_t * imhdr, char * body);
+	int(* on_dispatch)(hp_io_t * io, void * hdr, void * body);
 	/* callback when disconnect */
 	void(* on_delete)(hp_io_t * io);
 	/**

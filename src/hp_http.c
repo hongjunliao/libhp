@@ -239,7 +239,7 @@ static ssize_t hp_httpreq_parse(hp_httpreq * req, char const * buf, size_t len)
 }
 
 static int hp_httpreq_on_parse(hp_io_t * io, char * buf, size_t * len,
-		hp_iohdr_t ** hdrp, char ** bodyp)
+		void ** hdrp, void ** bodyp)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
 	if(!(req && buf && len && hdrp && bodyp)) return -1;
@@ -261,7 +261,7 @@ static int hp_httpreq_on_parse(hp_io_t * io, char * buf, size_t * len,
 	else return 0; // need more data
 }
 
-static int hp_httpreq_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
+static int hp_httpreq_on_dispatch(hp_io_t * io, void * hdr, void * body)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
 	if(!(req && req->http)) return -1;

@@ -14,6 +14,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 #include <stdio.h>
+#include "hp/sdsinc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +24,7 @@ extern "C" {
  * libhp global log level
  * */
 extern int hp_log_level;
+sds hp_log_hdr();
 /*
  * you can simply replace
  *  hp_log(f, fmt, ...); to fprintf(f, fmt, ...);
@@ -49,9 +51,7 @@ int test_hp_log_main(int argc, char ** argv);
 #include <string>  	//std::string
 #include <iostream>	//std::ostream
 
-#ifndef HP_LOG_CHR_IN
 #define HP_LOG_CHR_IN "diouxXeEfFgGaAcs"
-#endif //HP_LOG_CHR_IN
 
 static bool hp_log_is_chr_in(char c, char const * str)
 {
@@ -138,6 +138,17 @@ static void hp_log(std::ostream & f, char const * fmt, T t, Arg... args)
 		}
 	}
 }
+
+/**
+ * use HP_LOG instead of hp_log for c++
+ * */
+#define hp_log(f,fmt,args...) do {         \
+	sds fmt_ = sdscat(sdsnew("%s"), (fmt));\
+	sds hdr = hp_log_hdr();                \
+	hp_log((f), fmt_, hdr, ##args);        \
+	sdsfree(fmt_);                         \
+	sdsfree(hdr);                          \
+}while(0)
 #endif //__cplusplus
 
 /////////////////////////////////////////////////////////////////////////////////////

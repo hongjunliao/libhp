@@ -23,9 +23,9 @@ int test_cvector_main(int argc, char *argv[]);
 int test_cvector_cpp_main(int argc, char *argv[]);
 }
 #define run_test(func) do {                 \
-	hp_log(stdout, "begin test: %s ...\n", #func);	\
+	hp_log(std::cout, "begin test: %s ...\n", #func);	\
 	rc = func(argc, argv); assert(rc == 0); \
-	hp_log(stdout, "test %s done\n", #func);	    \
+	hp_log(std::cout, "test %s done\n", #func);	    \
 } while(0)
 /////////////////////////////////////////////////////////////////////////////////////////
 

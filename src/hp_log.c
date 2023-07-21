@@ -38,17 +38,8 @@ int hp_log_level =
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef LIBHP_WITH_ZLOG
 
-void hp_log(void * f, char const * fmt, ...)
+sds hp_log_hdr()
 {
-	FILE * fp = (FILE *)f;
-	int color = (fileno(fp) == fileno(stderr) ? 31 : 0); /* 31 for red, 0 for default */
-#ifdef _MSC_VER
-	if (fp == stderr)
-		fp = stdout;
-#endif /* XHCHAT_NO_STDERR */
-
-	if (!(fp && fmt)) return;
-
 	sds buf = sdsempty();
 	buf = sdsMakeRoomFor(buf, 512);
 
@@ -57,9 +48,10 @@ void hp_log(void * f, char const * fmt, ...)
 	gettimeofday(&tv, NULL);
 	pid_t pid = getpid();
 
-	int off1 = strftime(buf, sdsavail(buf), "[%Y-%m-%d %H:%M:%S", localtime(&tv.tv_sec));
+	int off1 = strftime(buf, sdsavail(buf), "[%Y-%m-%d %H:%M:%S",
+			localtime(&tv.tv_sec));
 	int off2 = snprintf(buf + off1, sdsavail(buf) - off1, ".%03d]/%d ",
-		(int)tv.tv_usec / 1000, pid);
+			(int) tv.tv_usec / 1000, pid);
 
 	sdsIncrLen(buf, off1 + off2);
 #else
@@ -73,6 +65,21 @@ void hp_log(void * f, char const * fmt, ...)
 	sdsIncrLen(buf, off1 + off2);
 #endif /* _MSC_VER */
 
+	return buf;
+}
+
+void hp_log(void * f, char const * fmt, ...)
+{
+	FILE * fp = (FILE *)f;
+	int color = (fileno(fp) == fileno(stderr) ? 31 : 0); /* 31 for red, 0 for default */
+#ifdef _MSC_VER
+	if (fp == stderr)
+		fp = stdout;
+#endif /* XHCHAT_NO_STDERR */
+
+	if (!(fp && fmt)) return;
+
+	sds buf = hp_log_hdr();
 	va_list ap;
 	va_start(ap, fmt);
 	buf = sdscatvprintf(buf, fmt, ap);

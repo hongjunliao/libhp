@@ -21,7 +21,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#define new __new
 #endif
 
 #if !defined(_MSC_VER)  && !defined(_WIN32)

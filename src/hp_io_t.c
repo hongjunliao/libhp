@@ -42,8 +42,7 @@ static int hp_io_t_internal_on_data(hp_io_t * io, char * buf, size_t * len)
 		return 0;
 
 	for (; *len > 0;) {
-		hp_iohdr_t * iohdr = 0;
-		char * body = 0;
+		void * iohdr = 0, * body= 0;
 		int n = io->iohdl.on_parse(io, buf, len, &iohdr, &body);
 		if (n < 0) {
 			*len = 0;
@@ -736,7 +735,7 @@ hp_io_t * test_http_server_on_new(hp_io_t * cio, hp_sock_t fd)
 }
 
 int test_http_server_on_parse(hp_io_t * io, char * buf, size_t * len
-		, hp_iohdr_t ** hdrp, char ** bodyp)
+		, void ** hdrp, void ** bodyp)
 {
 	assert(io && buf && len && hdrp && bodyp);
 
@@ -798,7 +797,7 @@ static int reply_jsonrpc(httprequest *req, cJSON * cjson)
 	return rc;
 }
 
-int test_http_server_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
+int test_http_server_on_dispatch(hp_io_t * io, void * hdr, void * body)
 {
 	assert(io);
 	httprequest *req = (httprequest *)io;
@@ -833,7 +832,7 @@ void test_http_server_on_delete(hp_io_t * io)
 }
 
 int test_http_cli_on_parse(hp_io_t * io, char * buf, size_t * len
-		, hp_iohdr_t ** hdrp, char ** bodyp)
+		, void ** hdrp, void ** bodyp)
 {
 	assert(io && buf && len && hdrp && bodyp);
 
@@ -852,7 +851,7 @@ int test_http_cli_on_parse(hp_io_t * io, char * buf, size_t * len
 
 	return rc;
 }
-int test_http_cli_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
+int test_http_cli_on_dispatch(hp_io_t * io, void * hdr, void * body)
 {
 	assert(io);
 	httpclient *c = (httpclient *)io;

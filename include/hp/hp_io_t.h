@@ -57,7 +57,7 @@ struct hp_iohdl {
 	/* callback when new message coming */
 	int(* on_dispatch)(hp_io_t * io, void * hdr, void * body);
 	/* callback when disconnect */
-	void(* on_delete)(hp_io_t * io);
+	void(* on_delete)(hp_io_t * io, int err, char const * errstr);
 	/**
 	 * callback in loop,
 	 * this function will be hi-frequently called

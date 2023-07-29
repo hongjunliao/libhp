@@ -79,6 +79,8 @@ int libhp_all_tests_main(int argc, char ** argv)
 
 		hp_log(std::cout, "%%'%s'%%'%s'%%\n", "hello", std::string("world") );
 		hp_log(std::cout, "'%s'%%%'%s'\n", "hello", std::string("world") );
+
+		hp_log(std::cout, "%%p=%p\n", &rc);
 	}
 
 	run_test(test_hp_log_main);

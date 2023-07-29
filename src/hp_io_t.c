@@ -48,12 +48,12 @@ static int hp_io_t_internal_on_data(hp_io_t * io, char * buf, size_t * len)
 			*len = 0;
 			return n;
 		}
-		else if (n == 0)
-			return 0;
-		if (io->iohdl.on_dispatch){
-			rc = io->iohdl.on_dispatch(io, iohdr, body);
-			if(rc != 0)
-				return -1;
+		else if (n > 0) {
+			if (io->iohdl.on_dispatch){
+				rc = io->iohdl.on_dispatch(io, iohdr, body);
+				if(rc != 0)
+					return -1;
+			}
 		}
 	}
 	return 0;
@@ -128,23 +128,8 @@ static hp_sock_t hp_io_t_internal_on_accept(hp_iocp * iocpctx, int index)
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 		{ hp_sock_close(confd); continue; }
 
-		char is_c = 0;
 		hp_io_t * nio = io->iohdl.on_new? io->iohdl.on_new(io, confd) : 0;
-		if(nio){
-			/* nio is NOT a listen io */
-			hp_iohdl niohdl = io->iohdl;
-			niohdl.on_new = 0;
-
-			rc = hp_io_add(io->ioctx, nio, confd, niohdl);
-			if (rc != 0) {
-				safe_call(niohdl.on_delete, nio);
-				is_c = 1;
-			}
-			nio->addr = io->addr;
-		}
-		else { is_c = 1; }
-
-		if (is_c) {
+		if(!nio){
 			hp_sock_close(confd);
 			continue;
 		}
@@ -345,7 +330,6 @@ int hp_io_count(hp_io_ctx * ioctx)
 #if !defined(__linux__) && !defined(_MSC_VER)
 #elif !defined(_MSC_VER)
 
-//FIXME: io->on_error
 static void hp_io_t_internal_on_error(int err, char const * errstr, void * arg)
 {
 	struct epoll_event * ev = (struct epoll_event *)arg;
@@ -369,8 +353,7 @@ static void hp_io_t_internal_on_error(int err, char const * errstr, void * arg)
 	hp_eti_uninit(&io->eti);
 	hp_eto_uninit(&io->eto);
 
-	safe_call(io->iohdl.on_delete, io);
-//	io->iohdl.on_error(io, err, errstr);
+	safe_call(io->iohdl.on_delete, io, err, errstr);
 }
 
 static int hp_io_t_internal_io_cb(struct epoll_event * ev)
@@ -725,8 +708,20 @@ static void server_uninit(httpserver * s)
 hp_io_t * test_http_server_on_new(hp_io_t * cio, hp_sock_t fd)
 {
 	assert(cio && cio->ioctx);
+
 	httprequest * req = (httprequest *)malloc(sizeof(httprequest));
 	int rc = request_init(req); assert(rc == 0);
+
+	hp_iohdl niohdl = cio->iohdl;
+	niohdl.on_new = 0;
+	rc = hp_io_add(cio->ioctx, (hp_io_t *)req, fd, niohdl);
+	if (rc != 0) {
+		request_uninit(req);
+		free(req);
+		return 0;
+	}
+
+	req->io.addr = cio->addr;
 
 	char buf[64] = "";
 	hp_log(stdout, "%s: new HTTP connection from '%s', IO total=%d\n", __FUNCTION__, hp_get_ipport_cstr(fd, buf),
@@ -818,7 +813,7 @@ int test_http_server_on_dispatch(hp_io_t * io, void * hdr, void * body)
 	}
 	return rc;
 }
-void test_http_server_on_delete(hp_io_t * io)
+void test_http_server_on_delete(hp_io_t * io, int err, char const * errstr)
 {
 	httprequest * req = (httprequest *)io;
 	assert(io && io->ioctx);

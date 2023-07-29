@@ -200,9 +200,21 @@ static int hp_httpreq_loop(hp_httpreq * req)
 static hp_io_t * hp_httpreq_on_new(hp_io_t * cio, hp_sock_t fd)
 {
 	assert(cio && cio->ioctx && cio->user);
+
 	hp_httpreq * req = (hp_httpreq *)calloc(1, sizeof(hp_httpreq));
 	int rc = hp_httpreq_init(req, (hp_http *)cio->user);
 	assert(rc == 0);
+
+	hp_iohdl niohdl = cio->iohdl;
+	niohdl.on_new = 0;
+	rc = hp_io_add(cio->ioctx, (hp_io_t *)req, fd, niohdl);
+	if (rc != 0) {
+		hp_httpreq_uninit(req);
+		free(req);
+		return 0;
+	}
+
+	req->base.addr = cio->addr;
 	listAddNodeTail(req->http->reqlist, req);
 
 #ifndef NDEBUG
@@ -292,7 +304,7 @@ static int hp_httpreq_on_loop(hp_io_t * io)
 	return hp_httpreq_loop((hp_httpreq *)io);
 }
 
-static void hp_httpreq_on_delete(hp_io_t * io)
+static void hp_httpreq_on_delete(hp_io_t * io, int err, char const * errstr)
 {
 	hp_httpreq * req = (hp_httpreq *)io;
 	assert((req && req->http));
@@ -304,8 +316,8 @@ static void hp_httpreq_on_delete(hp_io_t * io)
 #ifndef NDEBUG
 	if(hp_log_level > 0){
 		char buf[64] = "";
-		hp_log(stdout, "%s: delete HTTP connection '%s', total=%d\n", __FUNCTION__
-				, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), hp_http_count(req->http));
+		hp_log(stdout, "%s: delete HTTP connection '%s', %d/'%s' total=%d\n", __FUNCTION__
+				, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), err, errstr, hp_http_count(req->http));
 	}
 #endif
 

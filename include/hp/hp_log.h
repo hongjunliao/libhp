@@ -51,7 +51,7 @@ int test_hp_log_main(int argc, char ** argv);
 #include <string>  	//std::string
 #include <iostream>	//std::ostream
 
-#define HP_LOG_CHR_IN "diouxXeEfFgGaAcs"
+#define HP_LOG_CHR_IN "diouxXeEfFgGaAcsp"
 
 static bool hp_log_is_chr_in(char c, char const * str)
 {

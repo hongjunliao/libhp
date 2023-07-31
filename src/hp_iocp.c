@@ -9,19 +9,13 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "redis/src/adlist.h"
 
 #ifdef _MSC_VER
-#ifdef LIBHP_WITH_WIN32_INTERROP
-#define closesocket close
-#define _fd_set(fd,set) FD_SET(FDAPI_get_ossocket(fd), set) 
-#define _fd_isset(fd,set) FD_ISSET(FDAPI_get_ossocket(fd), set)
-#else
 #include <winsock2.h>
 #define _fd_set(fd,set) FD_SET((fd), set) 
 #define _fd_isset(fd,set) FD_ISSET(fd, set) 
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include "hp/hp_iocp.h"    /* hp_iocp */
 #include "hp/sdsinc.h" /* sds */
@@ -182,6 +176,9 @@ static void hp_iocp_close_socket(hp_iocp * iocpctx, hp_iocp_item * item, int fla
 	if (!hp_sock_is_valid(item->sock)) {
 		return;
 	}
+
+	//FIXME: closing socket here will cause select failure
+	//consider call it in select thread
 	closesocket(item->sock);
 
 	if(flags){
@@ -200,12 +197,7 @@ static int hp_iocp_do_socket(hp_iocp * iocpctx, hp_iocp_item * item)
 	if (!(iocpctx && item))
 		return -1;
 
-#ifdef LIBHP_WITH_WIN32_INTERROP
-	SOCKET sock = FDAPI_get_ossocket(item->sock);
-#else
 	SOCKET sock = item->sock;
-#endif /* LIBHP_WITH_WIN32_INTERROP */
-
 
 	if (!CreateIoCompletionPort((HANDLE)sock, (HANDLE)iocpctx->hiocp, (ULONG_PTR)item, (DWORD)0)) {
 		int err = GetLastError();
@@ -610,7 +602,6 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 	list * socks = listCreate();
 	listSetFreeMethod(socks, select_sock_free);
 	listSetMatchMethod(socks, select_sock_match);
-#ifndef LIBHP_WITH_WIN32_INTERROP
 
 	struct fd_set rfds_obj, wfds_obj, exceptfds_obj;
 	struct fd_set * rfds = &rfds_obj, *wfds = &wfds_obj, * exceptfds = &exceptfds_obj;
@@ -726,7 +717,6 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 
 		Sleep(iocpctx->stime_out);
 	}
-#endif /* LIBHP_WITH_WIN32_INTERROP */			
 
 	listRelease(socks);
 	/* post "exit" message */

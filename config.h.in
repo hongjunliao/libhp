@@ -42,10 +42,12 @@
 /* mainly for hiredis, define if you want to use
  * https://github.com/microsoftarchive/redis.git
  * else use https://github.com/redis/hiredis.git
+ * 2023/7/31
+ * LIBHP_WITH_WIN32_INTERROP is removed for simplicity
  */
-#ifdef _MSC_VER
- #cmakedefine  LIBHP_WITH_WIN32_INTERROP
-#endif /* _MSC_VER */
+//#ifdef _MSC_VER
+// #cmakedefine  LIBHP_WITH_WIN32_INTERROP
+//#endif /* _MSC_VER */
 
 /* define to use MySQL/MariaDB client, hp_mysql_XXX */
 #cmakedefine  LIBHP_WITH_MYSQL

@@ -11,20 +11,15 @@
 #ifdef LIBHP_WITH_REDIS
 
 #include "hp/sdsinc.h"
-#include <unistd.h> /* sleep */
 #include <time.h>
 #include "hp/hp_redis.h"
-#include "unistd.h"
 #include "hp/hp_libc.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <hiredis/async.h>
-#ifndef LIBHP_WITH_WIN32_INTERROP
 #include <hiredis/adapters/libuv.h>
-#else
-#include <hiredis/adapters/ae.h>
-#endif /* _MSC_VER */
+//#include <hiredis/adapters/ae.h>
 
 #include "hp/hp_log.h"
 
@@ -79,11 +74,8 @@ int hp_redis_init(redisAsyncContext ** redisc, hp_redis_ev_t * s_ev, char const 
 	}
 	c->dataCleanup = 0;
 
-#ifndef LIBHP_WITH_WIN32_INTERROP
 	redisLibuvAttach(c, s_ev);
-#else
-	redisAeAttach(s_ev, c);
-#endif /* _MSC_VER */
+//	redisAeAttach(s_ev, c);
 
 	redisAsyncSetConnectCallback(c, on_connect? on_connect : hp_redis_connectCallback);
 	redisAsyncSetDisconnectCallback(c, hp_redis_disconnectCallback);

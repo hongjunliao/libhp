@@ -3,13 +3,16 @@
  * @author hongjun.liao <docici@126.com>, @date 2018/12/3
  *
  * sds
- * */
-
-/* for those use sds on Win32, include following first
+ *
+ *
+ * for those use sds on Win32, include following first
  * #ifdef _MSC_VER
  * #include "redis/src/Win32_Interop/Win32_Portability.h"
  * #include "redis/src/Win32_Interop/win32_types.h"
  * #endif
+ *
+ * 2023/7/31
+ * use hiredis/sds.h instead
  */
 
 #ifndef HP_SDSINC_H
@@ -23,10 +26,8 @@
 extern "C" {
 #endif
 
-#if defined(_WIN32) && defined(LIBHP_WITH_WIN32_INTERROP)
-#include "redis/src/sds.h"  /* sds */
-#elif defined(_MSC_VER)
-#include "../../deps/hiredis/sds.h"
+#ifdef _MSC_VER
+#include "hiredis/sds.h"
 #else
 #include "sds/sds.h"		/* sds */
 #endif /* _MSC_VER */

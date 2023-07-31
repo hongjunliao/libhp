@@ -131,6 +131,11 @@ int hp_vercmp(char const * ver, char const * cmp);
 sds hp_timestr(time_t t, char const * fmt);
 
 /////////////////////////////////////////////////////////////////////////////////////////
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
+#endif
+/////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 int test_hp_str_main(int argc, char ** argv);
 #endif /* NDEBUG */

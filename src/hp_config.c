@@ -10,7 +10,6 @@
 
 #ifndef NDEBUG
 
-#include <unistd.h>
 #include "hp/hp_assert.h"
 #include "hp/hp_config.h"
 #include "inih/ini.h"		//ini_parse

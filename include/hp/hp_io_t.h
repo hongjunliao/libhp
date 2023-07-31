@@ -19,7 +19,6 @@ extern "C" {
 #include "redis/src/adlist.h" /* list */
 #include "hp_sock_t.h"  /* hp_sock_t */
 #include <stddef.h> 	/* size_t */
-#include <netinet/in.h>
 #if !defined(__linux__) && !defined(_MSC_VER)
 #include "hp_io.h"      /* hp_eti,... */
 #include "hp_poll.h"   /* hp_poll */
@@ -40,7 +39,7 @@ extern "C" {
 typedef struct hp_io_t hp_io_t;
 typedef struct hp_iohdl hp_iohdl;
 typedef struct hp_io_ctx hp_io_ctx;
-
+typedef struct hp_ioopt hp_ioopt;
 typedef	void  (* hp_io_free_t)(void * ptr);
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -65,22 +64,19 @@ struct hp_iohdl {
 	 * @return: return <0 to ask to close the client
 	*/
 	int (* on_loop)(hp_io_t * io);
-#ifdef _MSC_VER
-	int wm_user; /* WM_USER + N */
-	HWND hwnd;   /* see hp_iocp for more details */
-#endif /* _MSC_VER */
 };
 
 struct hp_io_t {
+	hp_io_ctx * ioctx;     /* hp_io_ctx */
 	int id;			/* ID for this I/O, more safe than fd? */
 	struct sockaddr_in addr;
 #if defined(_MSC_VER)
+	hp_sock_t fd;    /* fd */
 	int	   index;
 #elif defined(__linux__)
 	hp_eti 	eti; 	/* for in data */
 	hp_eto 	eto; 	/* for out data */
 	hp_epolld ed;	/* context */
-	hp_io_ctx * ioctx;     /* hp_io_ctx */
 #elif !defined(_WIN32)
 	hp_eti 	eti; 	/* for in data */
 	hp_eto 	eto; 	/* for out data */
@@ -106,10 +102,17 @@ struct hp_io_ctx {
 	int ioid; /* for hp_io_t::id */
 } ;
 
+/* options for init hp_io_ctx */
+struct hp_ioopt {
+#ifdef _MSC_VER
+	int wm_user; /* WM_USER + N */
+	HWND hwnd;   /* see hp_iocp for more details */
+#endif /* _MSC_VER */
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int hp_io_init(hp_io_ctx * ioctx);
+int hp_io_init(hp_io_ctx * ioctx, hp_ioopt opt);
 
 int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd, hp_iohdl iohdl);
 int hp_io_write(hp_io_t * io

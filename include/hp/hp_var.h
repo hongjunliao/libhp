@@ -12,6 +12,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_DEPRECADTED
 #ifdef LIBHP_WITH_CJSON
 #include "sdsinc.h"		/* sds */
 
@@ -44,7 +45,7 @@ int test_hp_var_main(int argc, char ** argv);
 }
 #endif
 #endif //LIBHP_WITH_CJSON
-
+#endif //LIBHP_DEPRECADTED
 #endif /* LIBHP_VAR_H__ */
 
 /////////////////////////////////////////////////////////////////////////////////////////

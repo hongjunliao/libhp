@@ -12,6 +12,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
+
 #include "libhp.h"
 
 #ifdef __cplusplus
@@ -40,5 +42,7 @@ LIBHP_EXT int test_hp_test_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
+
+#endif //LIBHP_WITH_DLFCN
 
 #endif /* HP_TEST_H__ */

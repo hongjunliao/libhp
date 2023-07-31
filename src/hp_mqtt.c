@@ -31,6 +31,7 @@
 #else
 #include <sys/time.h>
 #include <unistd.h>
+#define sleep usleep
 #endif
 
 #if defined(_WRS_KERNEL)
@@ -522,7 +523,6 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 
 #ifndef NDEBUG
 
-#include <unistd.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
@@ -622,7 +622,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		assert(rc == 0);
 
 		while(mqttcli->state != XHMDM_CON_OK){
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 			if(s_conn_failed)
 				break;
 		}
@@ -651,13 +651,13 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		assert(rc == 0);
 
 		while(mqttcli->state != XHMDM_CON_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		rc = hp_mqtt_sub(mqttcli, 1, t1.topics, t1.qoses, &token);
 		assert(rc == 0);
 
 		while(mqttcli->state != XHMDM_SUB_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		rc = hp_mqtt_pub(mqttcli, t1.topics[0], t1.qoses[0], t1.message, 0, &token);
 		assert(rc == 0);
@@ -666,7 +666,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		assert(rc == MQTTASYNC_SUCCESS);
 
 		while(!t1.done)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		hp_mqtt_disconnect(mqttcli);
 
@@ -688,19 +688,19 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		assert(rc == 0);
 
 		while(mqttcli->state != XHMDM_CON_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		/* 1 topic */
 		rc = hp_mqtt_sub(mqttcli, 1, t2.topics, t2.qoses, &token);
 		assert(rc == 0);
 		while(mqttcli->state != XHMDM_SUB_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		/* 2 topic, add a new one */
 		rc = hp_mqtt_sub(mqttcli, 2, t2.topics2, t2.qoses, &token);
 		assert(rc == 0);
 		while(mqttcli->state != XHMDM_SUB_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		/* 2 topic: send message OK */
 		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], t2.message, 0, &token);
@@ -712,7 +712,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		rc = hp_mqtt_sub(mqttcli, 2, t2.topics3, t2.qoses, &token);
 		assert(rc == 0);
 		while(mqttcli->state != XHMDM_SUB_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		/* 2 topic: changed, send message1 failed, message2 OK */
 		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[1], "1", 0, &token);
@@ -729,7 +729,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		rc = hp_mqtt_sub(mqttcli, 1, t2.topics4, t2.qoses, &token);
 		assert(rc == 0);
 		while(mqttcli->state != XHMDM_SUB_OK)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		rc = hp_mqtt_pub(mqttcli, t2.topics2[1], t2.qoses[0], "2", 0, &token);
 		assert(rc == 0);
@@ -748,7 +748,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		assert(rc == MQTTASYNC_SUCCESS);
 
 		while(!t2.done)
-			usleep(200 * 1000);
+			sleep(200 * 1000);
 
 		hp_mqtt_disconnect(mqttcli);
 

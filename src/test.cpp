@@ -108,15 +108,20 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_hp_stat_main);
 #ifdef LIBHP_WITH_CJSON
 	run_test(test_hp_cjson_main);
+#ifdef LIBHP_DEPRECADTED
 	run_test(test_hp_var_main);
+#endif
 #endif
 #else
 	run_test(test_hp_iocp_main);
 #endif /* _MSC_VER */
 
 	run_test(test_hp_io_t_main);
+
+#ifdef __linux__
 	run_test(test_hp_epoll_main);
 	run_test(test_hp_io_main);
+#endif
 #if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
 	run_test(test_hp_http_main);
 #endif

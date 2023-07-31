@@ -9,7 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #ifndef WIN32
 #include <netinet/in.h>  /* ntohl */
 #endif /* WIN32 */

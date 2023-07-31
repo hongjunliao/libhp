@@ -9,7 +9,7 @@
 
 #ifdef LIBHP_WITH_REDIS
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #include <sys/time.h> /*gettimeofday*/
 #else

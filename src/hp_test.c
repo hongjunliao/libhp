@@ -9,6 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
 
 #include <dlfcn.h>			/* dlsym */
 #include <stdio.h>
@@ -91,3 +92,5 @@ int test_hp_test_main(int argc, char ** argv)
 	return 0;
 }
 #endif //NDEBUG
+
+#endif //LIBHP_WITH_DLFCN

@@ -12,7 +12,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "hp_sock_t.h"  /* hp_sock_t */
 
 #ifdef _MSC_VER

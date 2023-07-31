@@ -8,6 +8,8 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_DEPRECADTED
+
 #ifdef LIBHP_WITH_CJSON
 #include "hp/hp_var.h"        /* hp_var */
 #include <string.h>	       /* strncpy */
@@ -259,3 +261,4 @@ int test_hp_var_main(int argc, char ** argv)
 }
 #endif /* NDEBUG */
 #endif //LIBHP_WITH_CJSON
+#endif //LIBHP_DEPRECADTED

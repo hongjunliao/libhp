@@ -331,11 +331,7 @@ static hp_iohdl s_httphdl = {
 	.on_parse = hp_httpreq_on_parse,
 	.on_dispatch = hp_httpreq_on_dispatch,
 	.on_loop = hp_httpreq_on_loop,
-	.on_delete = hp_httpreq_on_delete,
-#ifdef _MSC_VER
-	.wm_user = 0 	/* WM_USER + N */
-	.hwnd = 0    /* hwnd */
-#endif /* _MSC_VER */
+	.on_delete = hp_httpreq_on_delete
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -423,7 +419,13 @@ int test_hp_http_main(int argc, char ** argv)
 		hp_io_ctx ioctxobj, *ioctx = &ioctxobj;
 		hp_http http_obj, * http = &http_obj;
 
-		rc = hp_io_init(ioctx); assert(rc == 0);
+		hp_ioopt opt = {
+#ifdef _MSC_VER
+		.wm_user = 900, /* WM_USER + N */
+		.hwnd = 0		/* hwnd */
+#endif /* _MSC_VER */
+		};
+		rc = hp_io_init(ioctx, opt); assert(rc == 0);
 
 		rc = hp_http_init(http, ioctx, listenfd, 0, test_http_process);
 		assert(rc == 0);

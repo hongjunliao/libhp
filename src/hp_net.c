@@ -9,15 +9,16 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#if !defined(_MSC_VER)  && !defined(_WIN32)
+ /////////////////////////////////////////////////////////////////////////////////////
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "hp/hp_net.h"
 #include "hp/hp_sock_t.h"  /* hp_sock_t */
 #include "hp/hp_log.h"  /* hp_log */
 #include <stdio.h>
 #include <assert.h>     /* define NDEBUG to disable assertion */
 
+#ifndef _MSC_VER
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -34,10 +35,24 @@
 #include <stdlib.h>     /* free */
 #include <string.h>     /* strerror */
 #include <errno.h>
-#if defined(_MSC_VER)
+ //#include <stdio.h>
+ //#include <string.h>
+ //#include <arpa/inet.h>
+#include <netdb.h>
+//#include <stdlib.h>
+
+#else
 #include <WS2tcpip.h>   /* inet_pton */
-#endif
+#endif /* _MSC_VER */
+
+ /////////////////////////////////////////////////////////////////////////////////////
+
+
 #define LISTENQ 512  /* for listen() */
+
+ /////////////////////////////////////////////////////////////////////////////////////
+
+#ifndef _MSC_VER
 
 ssize_t hp_net_sendto(int fd, char const * ip, int port, char const * buf, size_t len)
 {
@@ -103,7 +118,9 @@ ssize_t hp_net_sendmsg(int fd, struct sockaddr_in * servaddr, socklen_t len, str
 	return n;
 }
 
-#if defined(_MSC_VER)
+#endif //#ifndef _MSC_VER
+
+#ifndef _MSC_VER
 /*
  * NOTE: the source code is mainly from book <unpv13e>,
  * sample url: https://github.com/k84d/unpv13e
@@ -188,8 +205,7 @@ int hp_net_set_alive(hp_sock_t fd, int interval)
 		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPALIVE): %s\n", __FUNCTION__, strerror(errno));
 		return -1;
 	}
-#else
-#if defined(__GLIBC__) && !defined(__FreeBSD_kernel__)
+#elif defined(__GLIBC__) && !defined(__FreeBSD_kernel__)
 	val = interval;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
 		fprintf(stderr, "%s: setsockopt(IPPROTO_TCP, TCP_KEEPIDLE): %s\n", __FUNCTION__, strerror(errno));
@@ -235,12 +251,12 @@ hp_sock_t hp_net_listen(int port)
 		close(fd);
 		return -1;
 	}
-#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
+#ifndef _MSC_VER
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 #else
 	u_long sockopt = 1;
 	if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+#endif /* _MSC_VER */
 	{
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
@@ -263,7 +279,7 @@ hp_sock_t hp_net_listen(int port)
 	return fd;
 	}
 
-#if defined(_MSC_VER)
+#if !defined(_MSC_VER)
 int hp_net_udp_bind(char const * ip, int port)
 {
 	int fd;
@@ -318,7 +334,6 @@ int hp_net_udp_bind(char const * ip, int port)
 
 	return fd;
 }
-#endif
 int hp_net_socketpair(int mwfd[2])
 {
 	if (socketpair(AF_LOCAL, SOCK_STREAM, 0, mwfd) < 0) {
@@ -340,6 +355,7 @@ int hp_net_socketpair(int mwfd[2])
 	}
 	return 0;
 }
+#endif
 
 char * hp_get_ipport_cstr(int sockfd, char * buf)
 {
@@ -399,7 +415,7 @@ char * get_ipport(int sockfd, char * ip, int len, int * port)
 
 hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
 {
-#if (defined LIBHP_WITH_WIN32_INTERROP) || (!defined _MSC_VER)
+#ifndef _MSC_VER
 	int fd = -1;
 
 	fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -407,12 +423,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
 		return -1;
 	}
 
-#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
-		if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
-#else
-		u_long sockopt = 1;
-		if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 	{
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
@@ -430,7 +441,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
 	SOCKET sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 	assert(sock != INVALID_SOCKET);
 	unsigned long ul = 1;
-	if (ioctlsocket(sock, FIONBIO, (unsigned long*)&ul) == SOCKET_ERROR)
+	if (ioctlsocket(sock, FIONBIO, &ul) == SOCKET_ERROR)
 		return 0;
 
 	if (connect((SOCKET)sock, (struct sockaddr *)&servaddr, sizeof(servaddr)) == SOCKET_ERROR
@@ -442,7 +453,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
 
 	return sock;
 
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+#endif /* _MSC_VER */
 	}
 /*
  * @return: return the connected fd on success
@@ -450,7 +461,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
  *  */
 hp_sock_t hp_net_connect(char const * ip, int port)
 {
-#if (defined LIBHP_WITH_WIN32_INTERROP) || (!defined _MSC_VER)
+#ifndef _MSC_VER
 	struct sockaddr_in servaddr = { 0 };
 	int fd = -1;
 
@@ -467,12 +478,7 @@ hp_sock_t hp_net_connect(char const * ip, int port)
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(port);
 
-#if (!defined _MSC_VER) || (defined LIBHP_WITH_WIN32_INTERROP)
-		if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
-#else
-		u_long sockopt = 1;
-		if (ioctlsocket(fd, FIONBIO, &sockopt) < 0)
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 	{
 		fprintf(stderr, "%s: ioctl(FIONBIO) failed for fd=%d\n", __FUNCTION__, fd);
 		close(fd);
@@ -513,7 +519,7 @@ hp_sock_t hp_net_connect(char const * ip, int port)
 
 	return sock;
 
-#endif /* LIBHP_WITH_WIN32_INTERROP */
+#endif /* _MSC_VER */
 	}
 
 int hp_net_connect_addr(char const * addr)
@@ -575,6 +581,7 @@ int fd_set_sendbuf(int fd, int * oldsz, int newsz)
 	return 0;
 }
 
+#ifndef _MSC_VER
 static void before_readv(struct iovec * vec, int count,
 	size_t nread, int * vec_n)
 {
@@ -650,7 +657,10 @@ size_t readv_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t
 	}
 	return nread;
 }
+#endif //#ifndef _MSC_VER
 
+
+#ifndef _MSC_VER
 size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if (!(fd >= 0 && err && buf && len > 0))
@@ -679,7 +689,7 @@ size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 	}
 	return nread;
 }
-#if defined(_MSC_VER)
+#else
 size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes)
 {
 	if(!(buf && err)) { return -1; }
@@ -760,15 +770,10 @@ ssize_t	readn(int fd, void *vptr, size_t n)
 	return(n - nleft);		/* return >= 0 */
 }
 
-//#include <stdio.h>
-//#include <string.h>
-//#include <arpa/inet.h>
-#include <netdb.h>
-//#include <stdlib.h>
-
 /* NOTE:
  * from http://blog.csdn.net/small_qch/article/details/16805857
 */
+#ifndef _MSC_VER
 int get_ip_from_host(char *ipbuf, const char *host, int maxlen)
 {
 	struct sockaddr_in sa;
@@ -785,7 +790,7 @@ int get_ip_from_host(char *ipbuf, const char *host, int maxlen)
 	strncpy(ipbuf, inet_ntoa(sa.sin_addr), maxlen);
 	return 0;
 }
-
+#endif
 /*
  * @return: 0 on false; else true */
 int netutil_same_subnet(int mask, char const * ip1, char const * ip2)
@@ -876,6 +881,7 @@ int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+#ifndef NDEBUG
 #include "hp/hp_log.h"   /* hp_log */
 #include <string.h>   /* memset */
 #include <sys/stat.h> /* stat */
@@ -949,6 +955,7 @@ int test_hp_net_main(int argc, char ** argv)
 		hp_log(stdout, "%s: sockaddr_in, ip_len=%zu, port_len=%zu\n", __FUNCTION__
 			, sizeof(servaddr.sin_addr.s_addr), sizeof(servaddr.sin_port));
 	}
+#ifndef _MSC_VER
 	{
 		struct iovec vec[2] = { {0, 0}, {0, 0} };
 		FILE * f = fopen("test_writev_0_count", "w");
@@ -962,6 +969,7 @@ int test_hp_net_main(int argc, char ** argv)
 			unlink("test_writev_0_count");
 		}
 	}
+#endif
 	int a = 0;
 	if (a == 0) {
 		hp_log(stdout, "%s:a==0\n", __FUNCTION__);
@@ -971,31 +979,31 @@ int test_hp_net_main(int argc, char ** argv)
 		hp_log(stdout, "%s:a==1\n", __FUNCTION__);
 	}
 	return 0;
+#ifndef _MSC_VER
+	{
+		char ipbuf[128];
+		char const * host = "www.baidu.com";
+		get_ip_from_host(ipbuf, host, 128);
+		printf("%s: host='%s', ip: %s\n", __FUNCTION__, host, ipbuf);
+		char buf[1024] = "GET / HTTP/1.1\r\n\r\n";
+		int fd = hp_net_connect(ipbuf, 80);
 
-	char ipbuf[128];
-	char const * host = "www.baidu.com";
-	get_ip_from_host(ipbuf, host, 128);
-	printf("%s: host='%s', ip: %s\n", __FUNCTION__, host, ipbuf);
+		ssize_t nwrite = write(fd, buf, strlen(buf));
+		if (nwrite <= 0) {
+			return -1;
+		}
+		hp_log(stdout, "%s: sent http request '%s' to host '%s'\n"
+			, __FUNCTION__, buf, host);
 
+		ssize_t nread = read(fd, buf, sizeof(buf));
+		if (nread > 0) {
+			buf[nread] = '\0';
+			hp_log(stdout, "%s: recv response from '%s', content='%p', len=%zu\n"
+				, __FUNCTION__, host, buf, strlen(buf));
+		}
+}
+#endif
 
-	char buf[1024] = "GET / HTTP/1.1\r\n\r\n";
-	int fd = hp_net_connect(ipbuf, 80);
-
-	ssize_t nwrite = write(fd, buf, strlen(buf));
-	if (nwrite <= 0) {
-		return -1;
-	}
-	hp_log(stdout, "%s: sent http request '%s' to host '%s'\n"
-		, __FUNCTION__, buf, host);
-
-	ssize_t nread = read(fd, buf, sizeof(buf));
-	if (nread > 0) {
-		buf[nread] = '\0';
-		hp_log(stdout, "%s: recv response from '%s', content='%p', len=%zu\n"
-			, __FUNCTION__, host, buf, strlen(buf));
-	}
 	return 0;
 }
 #endif /* NDEBUG */
-#endif /* _MSC_VER */
-

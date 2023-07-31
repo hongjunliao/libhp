@@ -19,22 +19,15 @@ extern "C" {
 #endif
 
 #ifdef _MSC_VER
-#ifdef LIBHP_WITH_WIN32_INTERROP
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-typedef int hp_sock_t;
-/* invalid socket */
-#define hp_sock_invalid 0
-#define hp_sock_close close
-#define hp_sock_is_valid(fd) (((fd) > 0))
-#else
+//#include "redis/src/Win32_Interop/Win32_FDAPI.h"
 #include <winsock2.h>
 typedef SOCKET hp_sock_t;
 #define hp_sock_invalid INVALID_SOCKET
 #define hp_sock_close closesocket
 #define hp_sock_is_valid(fd) (((fd) && (fd) != hp_sock_invalid))
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 #else
 #include <unistd.h>
+#include <netinet/in.h>
 typedef int hp_sock_t;
 #define hp_sock_invalid (-1)
 #define hp_sock_close close

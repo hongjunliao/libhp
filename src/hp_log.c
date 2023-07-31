@@ -108,10 +108,10 @@ void hp_log(void * f, char const * fmt, ...)
 	va_end(ap);
 }
 
-#endif
+#endif //LIBHP_WITH_ZLOG
 
 //TODO: remove this
-void _serverAssert(int a, int b, char *, int d) {  }
+void _serverAssert(int a, int b, char * c, int d) {  }
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

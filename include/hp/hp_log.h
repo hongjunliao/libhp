@@ -142,6 +142,15 @@ static void hp_log(std::ostream & f, char const * fmt, T t, Arg... args)
 /**
  * use HP_LOG instead of hp_log for c++
  * */
+#ifdef _MSC_VER
+#define hp_log(f,fmt,...) do {             \
+	sds fmt_ = sdscat(sdsnew("%s"), (fmt));\
+	sds hdr = hp_log_hdr();                \
+	hp_log((f), fmt_, hdr, __VA_ARGS__);   \
+	sdsfree(fmt_);                         \
+	sdsfree(hdr);                          \
+}while(0)
+#else
 #define hp_log(f,fmt,args...) do {         \
 	sds fmt_ = sdscat(sdsnew("%s"), (fmt));\
 	sds hdr = hp_log_hdr();                \
@@ -149,6 +158,8 @@ static void hp_log(std::ostream & f, char const * fmt, T t, Arg... args)
 	sdsfree(fmt_);                         \
 	sdsfree(hdr);                          \
 }while(0)
+#endif //
+
 #endif //__cplusplus
 
 /////////////////////////////////////////////////////////////////////////////////////

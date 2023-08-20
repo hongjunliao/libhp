@@ -12,9 +12,8 @@
 #ifdef LIBHP_WITH_ZLOG
 #include "zlog.h"
 #endif
-#include "hphdrs.h"
 #include <iostream>
-#include "hp/libhp.h"
+#include "hp/hphdrs.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 //deps/c-vector/example.c
 //deps/c-vector/example.cc
@@ -45,7 +44,7 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_hp_config_main);
 	run_test(test_cvector_main);
 	run_test(test_cvector_cpp_main);
-	run_test(test_hp_libc_main);
+	run_test(test_hp_stdlib_main);
 	run_test(test_hp_err_main);
 
 	// hp_log()
@@ -88,6 +87,17 @@ int libhp_all_tests_main(int argc, char ** argv)
 	run_test(test_hp_msg_main);
 	run_test(test_hp_net_main);
 	run_test(test_hp_str_main);
+
+#ifdef HAVE_UNISTD_H
+	run_test(test_hp_io_main);
+#endif //HAVE_POLL_H
+#ifdef HAVE_POLL_H
+	run_test(test_hp_poll_main);
+#endif //HAVE_POLL_H
+#ifdef HAVE_SYS_EPOLL_H
+	run_test(test_hp_epoll_main);
+#endif //#ifdef HAVE_SYS_EPOLL_H
+
 #ifdef LIBHP_WITH_OPTPARSE
 	run_test(test_hp_opt_main);
 #endif
@@ -115,13 +125,7 @@ int libhp_all_tests_main(int argc, char ** argv)
 #else
 	run_test(test_hp_iocp_main);
 #endif /* _MSC_VER */
-
 	run_test(test_hp_io_t_main);
-
-#ifdef __linux__
-	run_test(test_hp_epoll_main);
-	run_test(test_hp_io_main);
-#endif
 #if (defined LIBHP_WITH_CURL) && (defined LIBHP_WITH_HTTP)
 	run_test(test_hp_http_main);
 #endif

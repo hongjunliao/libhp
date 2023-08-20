@@ -8,6 +8,9 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+
+#ifdef LIBHP_DEPRECADTED
+
 #if !defined(__linux__) && !defined(_MSC_VER)
 #elif !defined(_MSC_VER)
 
@@ -24,7 +27,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include "hp/hp_epoll.h"    /* hp_epoll */
-#include "hp/hp_io.h"       /* hp_eti */
+#include "hp/hp_io.h"       /* hp_rd */
 #include "hp/hp_timerfd.h"  /* hp_timerfd */
 #include "hp/sdsinc.h"     /* sds */
 #include "hp/hp_io.h"
@@ -33,7 +36,7 @@
 #include "hp/hp_net.h"     /*  */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"/* sdslen_null */
-#include "klist.h"
+#include "hp/klist.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_tcpio.h"
 #include "hp/hp_libc.h"
@@ -41,8 +44,8 @@
 typedef struct tcpio_cli tcpio_cli;
 
 struct tcpio_cli {
-	struct hp_eti    eti;        /*  */
-	struct hp_eto    eto;        /* */
+	struct hp_rd    eti;        /*  */
+	struct hp_wr    eto;        /* */
 	struct hp_epolld epolld;
 };
 
@@ -95,7 +98,7 @@ static int pack_cb(char* buf, size_t* len, void* arg)
 	return EAGAIN;
 }
 
-static void write_error_cb(struct hp_eto * eto, int err, void * arg)
+static void write_error_cb(struct hp_wr * eto, int err, void * arg)
 {
 	struct epoll_event * ev = (struct epoll_event *)arg;
 	assert(ev);
@@ -105,7 +108,7 @@ static void write_error_cb(struct hp_eto * eto, int err, void * arg)
 
 }
 
-static void read_error_cb(struct hp_eti * eti, int err, void * arg)
+static void read_error_cb(struct hp_rd * eti, int err, void * arg)
 {
 	struct epoll_event * ev = (struct epoll_event *)arg;
 	assert(ev);
@@ -138,7 +141,7 @@ static int accept_cb(struct epoll_event * ev)
 		ioctl(confd, FIONBIO, &sockopt);
 
 		char cliaddstr[64];
-		get_ipport_cstr2(&clientaddr, ":", cliaddstr, sizeof(cliaddstr));
+		hp_addr4name(&clientaddr, ":", cliaddstr, sizeof(cliaddstr));
 		hp_log(stdout, "%s: new connect from '%s', fd=%d\n"
 				, __FUNCTION__, cliaddstr, confd);
 
@@ -149,16 +152,8 @@ static int accept_cb(struct epoll_event * ev)
 
 			hp_epolld_set(&client->epolld, confd, io_cb, arg);
 
-			hp_eti_init(&client->eti, 1024 * 2);
-			hp_eto_init(&client->eto, HP_ETIO_VEC);
-
-
-			struct hp_eto * eto = &client->eto;
-			eto->write_error = write_error_cb;
-
-			struct hp_eti * eti = &client->eti;
-			eti->read_error = read_error_cb;
-			eti->pack = pack_cb;
+			hp_rd_init(&client->eti, 1024 * 2, pack_cb, read_error_cb);
+			hp_wr_init(&client->eto, 2, write_error_cb);
 
 			/* try to add to epoll event system */
 			rc = hp_epoll_add(ctx->efds, confd,  EPOLLIN | EPOLLOUT |  EPOLLET, &client->epolld);
@@ -206,7 +201,7 @@ int test_hp_tcpio_main(int argc, char ** argv)
 	rc = hp_epoll_init(efds, 5000);
 	assert(rc == 0);
 
-	int fd = hp_net_listen(7006);
+	int fd = hp_tcp_listen(7006);
 	assert(fd > 0);
 
 	hp_tcpio ctxobj, * ctx = &ctxobj;
@@ -215,7 +210,7 @@ int test_hp_tcpio_main(int argc, char ** argv)
 
 	hp_log(stdout, "%s: listening on port=%d, waiting for dev connection ...\n", __FUNCTION__, 7006);
 
-	hp_epoll_run(efds, 200, 0);
+	hp_epoll_run(efds, 200, 0, 0);
 
 	hp_tcpio_uninit(ctx);
 	close(fd);
@@ -226,3 +221,4 @@ int test_hp_tcpio_main(int argc, char ** argv)
 
 #endif /* NDEBUG */
 #endif /* _MSC_VER */
+#endif //#ifdef LIBHP_DEPRECADTED

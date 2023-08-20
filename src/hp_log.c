@@ -50,7 +50,7 @@ sds hp_log_hdr()
 
 	int off1 = strftime(buf, sdsavail(buf), "[%Y-%m-%d %H:%M:%S",
 			localtime(&tv.tv_sec));
-	int off2 = snprintf(buf + off1, sdsavail(buf) - off1, ".%03d]/%d ",
+	int off2 = snprintf(buf + off1, sdsavail(buf) - off1, ".%03d]/%05d ",
 			(int) tv.tv_usec / 1000, pid);
 
 	sdsIncrLen(buf, off1 + off2);
@@ -59,7 +59,7 @@ sds hp_log_hdr()
 	int pid = (int)GetCurrentThreadId();
 
 	int off1 = strftime(buf, sdsavail(buf), "[%Y-%m-%d %H:%M:%S", localtime(&t));
-	int off2 = _snprintf(buf + off1, sdsavail(buf) - off1, ".%03d]/%d ",
+	int off2 = _snprintf(buf + off1, sdsavail(buf) - off1, ".%03d]/%05d ",
 		(int)GetTickCount() % 1000, pid);
 
 	sdsIncrLen(buf, off1 + off2);

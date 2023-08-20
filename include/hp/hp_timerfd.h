@@ -24,7 +24,6 @@ typedef struct hp_timerfd hp_timerfd;
 struct hp_timerfd{
 	hp_epoll *           efds;
 	int                  fd;
-	hp_epolld            ed;
 	size_t               n;
 	int (*handle)(hp_timerfd * timerfd);
 	void *               arg;

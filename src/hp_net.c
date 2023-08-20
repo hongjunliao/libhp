@@ -189,7 +189,7 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 /*
  * NOTE: code from hiredis/net.c
  * */
-int hp_net_set_alive(hp_sock_t fd, int interval)
+int hp_tcp_set_alive(hp_sock_t fd, int interval)
 {
 	int val = 1;
 
@@ -229,7 +229,7 @@ int hp_net_set_alive(hp_sock_t fd, int interval)
 	return 0;
 }
 
-hp_sock_t hp_net_listen(int port)
+hp_sock_t hp_tcp_listen(int port)
 {
 	hp_sock_t fd;
 	struct sockaddr_in	servaddr = { 0 };
@@ -372,7 +372,7 @@ char * hp_get_ipport_cstr(int sockfd, char * buf)
 	return buf;
 }
 
-char * get_ipport_cstr2(struct sockaddr_in * addr, char const * sep, char * buf, int len)
+char * hp_addr4name(struct sockaddr_in * addr, char const * sep, char * buf, int len)
 {
 	if (!(addr && sep && buf && len > 0))
 		return 0;
@@ -411,6 +411,17 @@ char * get_ipport(int sockfd, char * ip, int len, int * port)
 	*port = ntohs(cliaddr.sin_port);
 
 	return ip;
+}
+
+int hp_tcp_nodelay(hp_sock_t fd)
+{
+#ifndef _MSC_VER
+	return fcntl(fd, F_SETFL, O_NONBLOCK);
+#else
+	u_long sockopt = 1;
+	return ioctlsocket(fd, FIONBIO, &sockopt);
+#endif /* _MSC_VER */
+	return -1;
 }
 
 hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
@@ -459,7 +470,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
  * @return: return the connected fd on success
  * (including errno == EINPROGRESS), -1 on error,
  *  */
-hp_sock_t hp_net_connect(char const * ip, int port)
+hp_sock_t hp_tcp_connect(char const * ip, int port)
 {
 #ifndef _MSC_VER
 	struct sockaddr_in servaddr = { 0 };
@@ -532,7 +543,7 @@ int hp_net_connect_addr(char const * addr)
 		*p = '\0';
 		port = atoi(p + 1);
 	}
-	return hp_net_connect(ip, port);
+	return hp_tcp_connect(ip, port);
 }
 
 int fd_set_recvbuf(int fd, int * oldsz, int newsz)
@@ -902,19 +913,19 @@ int test_hp_net_main(int argc, char ** argv)
 		char buf[64];
 		struct sockaddr_in addr = { 0 };
 		inet_pton(AF_INET, "172.28.0.59", &addr.sin_addr);
-		assert(strcmp(get_ipport_cstr2(&addr, ":", buf, sizeof(buf)), "172.28.0.59:0") == 0);
+		assert(strcmp(hp_addr4name(&addr, ":", buf, sizeof(buf)), "172.28.0.59:0") == 0);
 	}
 	{
 		char buf[64];
 		struct sockaddr_in addr = { 0 };
 		inet_pton(AF_INET, "172.28.0.59", &addr.sin_addr);
-		assert(strcmp(get_ipport_cstr2(&addr, " ", buf, sizeof(buf)), "172.28.0.59 0") == 0);
+		assert(strcmp(hp_addr4name(&addr, " ", buf, sizeof(buf)), "172.28.0.59 0") == 0);
 	}
 	{
 		char buf[64];
 		struct sockaddr_in addr = { 0 };
 		inet_pton(AF_INET, "172.28.0.59", &addr.sin_addr);
-		assert(strcmp(get_ipport_cstr2(&addr, "::", buf, sizeof(buf)), "172.28.0.59::0") == 0);
+		assert(strcmp(hp_addr4name(&addr, "::", buf, sizeof(buf)), "172.28.0.59::0") == 0);
 	}
 	{struct sockaddr_in addr = { 0 };
 	inet_pton(AF_INET, "172.28.0.59", &addr.sin_addr);
@@ -986,7 +997,7 @@ int test_hp_net_main(int argc, char ** argv)
 		get_ip_from_host(ipbuf, host, 128);
 		printf("%s: host='%s', ip: %s\n", __FUNCTION__, host, ipbuf);
 		char buf[1024] = "GET / HTTP/1.1\r\n\r\n";
-		int fd = hp_net_connect(ipbuf, 80);
+		int fd = hp_tcp_connect(ipbuf, 80);
 
 		ssize_t nwrite = write(fd, buf, strlen(buf));
 		if (nwrite <= 0) {

@@ -27,16 +27,17 @@
 /////////////////////////////////////////////////////////////////////////////////////
 
 struct hp_inotify_ient {
+	int fd;
 	int wd; 		/* inotify whatch fd */
 	sds path;		 /* inotify whatched file */
 	int (* open)(char const * path, void * d);
-	int (* fn)(struct epoll_event * ev);
-	hp_epolld epolld;
+	int (* fn)(epoll_event * ev, void * arg);
+	void * d;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-static sds hp_inotify_iev_to_str(int iev)
+sds hp_inotify_iev_to_str(int iev)
 {
 	sds buf = sdscatfmt(sdsempty(), "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s"
 			, (iev & IN_ACCESS?        "IN_ACCESS | " : "")
@@ -74,15 +75,15 @@ static void hp_inotify_all(hp_inotify * dl, int events)
 	assert(dl);
 	int i;
 	for(i  = 0; i < cvector_size(dl->ients); ++i){
-		struct epoll_event evobj = { events, .data.ptr = &(dl->ients[i]->epolld) }, * ev = &evobj;
-		dl->ients[i]->epolld.fn(ev);
+		epoll_event evobj = { events}, * ev = &evobj;
+		dl->ients[i]->fn(ev, dl->ients + i);
 	}
 }
 
-static int epoll_before_wait(struct hp_epoll * efds, void * arg)
+static int epoll_before_wait(struct hp_epoll * epo)
 {
-	assert(efds && arg);
-	hp_inotify * dl = (hp_inotify *)arg;
+	assert(epo && epo->arg);
+	hp_inotify * dl = (hp_inotify *)epo->arg;
 
 	int i;
 	for(i = 0; i < cvector_size(dl->ients); ++i){
@@ -100,8 +101,8 @@ static int epoll_before_wait(struct hp_epoll * efds, void * arg)
 			else {
 				ent->wd = wd;
 				if(ent->open){
-					int fd  = ent->open(ent->path, ent->epolld.arg);
-					ent->epolld.fd = (fd > 0? fd : 0);
+					int fd  = ent->open(ent->path, ent->d);
+					ent->fd = (fd > 0? fd : 0);
 				}
 			}
 		}
@@ -161,8 +162,8 @@ static int hp_inotify_iread_event(hp_inotify * dl)
 						dl->ients[i]->wd = 0;
 					}
 					else if(event->mask & IN_MODIFY){
-						struct epoll_event evobj = { EPOLLIN, .data.ptr = &(dl->ients[i]->epolld) }, * ev = &evobj;
-						dl->ients[i]->epolld.fn(ev);
+						epoll_event evobj = { EPOLLIN };
+						dl->ients[i]->fn(&evobj, dl->ients + i);
 					}
 				}
 			}
@@ -171,9 +172,10 @@ static int hp_inotify_iread_event(hp_inotify * dl)
 	return 0;
 }
 
-static int epoll_dl_handle_ii(struct epoll_event * ev)
+static int epoll_dl_handle_ii(epoll_event * ev, void * arg)
 {
-	hp_inotify * dl = (hp_inotify *)hp_epoll_arg(ev);
+	assert(ev && arg);
+	hp_inotify * dl = (hp_inotify *)arg;
 	assert(dl);
 
 	if((ev->events & EPOLLERR)){
@@ -182,7 +184,7 @@ static int epoll_dl_handle_ii(struct epoll_event * ev)
 
 		hp_inotify_all(dl, EPOLLERR);
 
-		hp_epoll_del(dl->efds, dl->ifd, EPOLLIN | EPOLLET, &dl->iepolld);
+		hp_epoll_rm(dl->epo, dl->ifd);
 		close(dl->ifd);
 		dl->ifd = 0;
 
@@ -197,9 +199,9 @@ static int epoll_dl_handle_ii(struct epoll_event * ev)
 	return 0;
 }
 
-static int hp_inotify_add(hp_inotify * dl, char const * path
+int hp_inotify_add(hp_inotify * dl, char const * path
 		, int (* open)(char const * path, void * d)
-		, int (* fn)(struct epoll_event * ev), void * d)
+		, int (* fn)(epoll_event * ev, void * arg), void * d)
 {
 	if(!(dl && (path && strlen(path) > 0) && fn))
 		return -1;
@@ -213,9 +215,10 @@ static int hp_inotify_add(hp_inotify * dl, char const * path
 	int fd = (open? open(path, d) : 0);
 	hp_inotify_ient * ent = calloc(1, sizeof(hp_inotify_ient));
 	ent->path = sdsnew(path);
-	hp_epolld_set(&ent->epolld, (fd > 0? fd : 0), fn, d);
 	ent->wd = wd;
 	ent->open = open;
+	ent->fn = fn;
+	ent->d = d;
 
 	cvector_push_back(dl->ients, ent);
 
@@ -229,7 +232,7 @@ static int cmp_by_name(const void * a, const void * b)
 	return (strncmp(ent1->path, ent2->path, sdslen(ent1->path)) != 0);
 }
 
-static int hp_inotify_del(hp_inotify * dl, char const * dlname)
+int hp_inotify_del(hp_inotify * dl, char const * dlname)
 {
 	if(!(dl && dlname && dlname[0] != '\0'))
 		return 0;
@@ -243,8 +246,8 @@ static int hp_inotify_del(hp_inotify * dl, char const * dlname)
 
 	inotify_rm_watch(dl->ifd, ient->wd);
 
-	struct epoll_event evobj = { EPOLLERR, .data.ptr = &(ient->epolld) }, * ev = &evobj;
-	ient->epolld.fn(ev);
+	epoll_event evobj = { .events = EPOLLERR };
+	ient->fn(&evobj, ient);
 
 	sdsfree(ient->path);
 	free(ient);
@@ -254,14 +257,14 @@ static int hp_inotify_del(hp_inotify * dl, char const * dlname)
 	return 0;
 }
 
-int hp_inotify_init(hp_inotify * dl, struct hp_epoll * efds)
+int hp_inotify_init(hp_inotify * dl, struct hp_epoll * epo)
 {
-	if(!(dl && efds))
+	if(!(dl && epo))
 		return -1;
 
 	memset(dl, 0, sizeof(hp_inotify));
 
-	dl->efds = efds;
+	dl->epo = epo;
 	cvector_init(dl->ients, 2);
 
 	int fd = inotify_init1(IN_NONBLOCK);
@@ -271,12 +274,8 @@ int hp_inotify_init(hp_inotify * dl, struct hp_epoll * efds)
 	}
 
 	dl->ifd = fd;
-	hp_epolld_set(&dl->iepolld, dl->ifd, epoll_dl_handle_ii, dl);
-
-	if(hp_epoll_add(efds, dl->ifd, EPOLLIN | EPOLLET, &dl->iepolld) != 0)
+	if(hp_epoll_add(epo, dl->ifd, EPOLLIN | EPOLLET, epoll_dl_handle_ii, 0, dl) != 0)
 		return -1;
-
-	hp_epoll_add_before_wait(efds, epoll_before_wait, dl);
 
 	return 0;
 }
@@ -292,8 +291,8 @@ void hp_inotify_uninit(hp_inotify * dl)
 
 		inotify_rm_watch(dl->ifd, ient->wd);
 
-		struct epoll_event evobj = { EPOLLERR, .data.ptr = &(ient->epolld) }, * ev = &evobj;
-		ient->epolld.fn(ev);
+		epoll_event evobj = { EPOLLERR };
+		ient->fn(&evobj, dl);
 
 		sdsfree(ient->path);
 		free(ient);
@@ -304,40 +303,34 @@ void hp_inotify_uninit(hp_inotify * dl)
 		close(dl->ifd);
 }
 
-struct HP_INOTIFY_TOOL_PKG const HP_INOTIFY_TOOL = {
-	.init = hp_inotify_init,
-	.uninit = hp_inotify_uninit,
-	.add = hp_inotify_add,
-	.del = hp_inotify_del,
-
-};
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
+#if defined(HAVE_SYS_UIO_H)
 #include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
-#include "hp/hp_io.h"	/* cJSON */
+#include "hp/hp_io.h"	/*  */
 #include "hp/string_util.h"/* hp_fread  */
 #include "hp/str_dump.h"   /* dumpstr */
 
 #define Ino HP_INOTIFY_TOOL
 
 typedef struct file_read_notify {
-	hp_eti eti;
+	hp_rd eti;
 	int fd;
 	int flags;
 } file_read_notify;
 
-static hp_epoll efdsobj, * efds = &efdsobj;
+static hp_epoll efdsobj, * epo = &efdsobj;
 static int test_flag = 0;
 
 static int read_cb(char * buf, size_t * len, void * arg)
 {
 	assert(arg);
-	struct epoll_event* ev = (struct epoll_event*) arg;
+	epoll_event* ev = (epoll_event*) arg;
 	assert(ev);
-	file_read_notify * ctx = (file_read_notify *)hp_epoll_arg(ev);
+	file_read_notify * ctx = (file_read_notify *)arg;
 	assert(ctx);
 	assert(buf && len);
 
@@ -354,11 +347,11 @@ static int read_cb(char * buf, size_t * len, void * arg)
 	return EAGAIN;
 }
 
-static void error_cb(struct hp_eti * eti, int err, void * arg)
+static void error_cb(struct hp_rd * eti, int err, void * arg)
 {
 	assert(arg);
-	struct epoll_event* ev = (struct epoll_event*) arg;
-	file_read_notify * ctx = (file_read_notify *)hp_epoll_arg(ev);
+	epoll_event* ev = (epoll_event*) arg;
+	file_read_notify * ctx = (file_read_notify *)arg;
 	assert(ctx);
 
 	ev->events = 0;
@@ -374,11 +367,11 @@ static void error_cb(struct hp_eti * eti, int err, void * arg)
 }
 
 
-static int epoll_cb(struct epoll_event * ev)
+static int epoll_cb(epoll_event * ev, void * arg)
 {
-	assert(ev);
+	assert(ev && arg);
 
-	file_read_notify * ctx = (file_read_notify *)hp_epoll_arg(ev);
+	file_read_notify * ctx = (file_read_notify *)arg;
 	assert(ctx);
 
 	if((ev->events & EPOLLERR)){
@@ -387,7 +380,7 @@ static int epoll_cb(struct epoll_event * ev)
 	}
 
 	if((ev->events & EPOLLIN)){
-		hp_eti_read(&ctx->eti, ctx->fd, ev);
+		hp_rd_read(&ctx->eti, ctx->fd, ev);
 	}
 
 	return 0;
@@ -433,46 +426,48 @@ int test_hp_inotify_main(int argc, char ** argv)
 
     signal(SIGCHLD, SIG_IGN);
 
-	hp_inotify inotifyobj = { 0 }, * inotify = &inotifyobj;
-	struct file_read_notify fnotifyobj = { 0 }, * fnotify = &fnotifyobj;
+    {
+		hp_inotify inotifyobj = { 0 }, * inotify = &inotifyobj;
+		struct file_read_notify fnotifyobj = { 0 }, * fnotify = &fnotifyobj;
 
-	hp_eti * eti = &fnotify->eti;
-	rc = hp_eti_init(eti, 1024 * 8); /* 8K read buffer */
-	assert(rc == 0 && "hp/hp_eti_init");
-	eti->pack = read_cb;
-	eti->read_error = error_cb;
+		hp_rd * eti = &fnotify->eti;
+		rc = hp_rd_init(eti, 1024 * 8, read_cb, error_cb); /* 8K read buffer */
+		assert(rc == 0 && "hp/hp_eti_init");
 
-	rc = hp_epoll_init(efds, 65535);
-	assert(rc == 0);
+		rc = hp_epoll_init(epo, 1024, 100, epoll_before_wait, inotify);
+		assert(rc == 0);
 
-	r = Ino.init(inotify, efds);
-	assert(r == 0);
+		r = hp_inotify_init(inotify, epo);
+		assert(r == 0);
 
-	FILE * f = fopen("/tmp/a.log", "w");
-	assert(f);
-	fclose(f);
+		FILE * f = fopen("/tmp/a.log", "w");
+		assert(f);
+		fclose(f);
 
-	r = Ino.add(inotify, "/tmp/a.log", open_cb, epoll_cb, fnotify);
-	assert(r == 0);
+		r = hp_inotify_add(inotify, "/tmp/a.log", open_cb, epoll_cb, fnotify);
+		assert(r == 0);
 
-	pthread_t tid;
-	rc = pthread_create(&tid, 0, write_routine, (void *)inotify);
-	assert(rc == 0);
+		pthread_t tid;
+		rc = pthread_create(&tid, 0, write_routine, (void *)inotify);
+		assert(rc == 0);
 
-	for(;;){
-		hp_epoll_run(efds, 100, (void *)-1);
+		for(;;){
+			hp_epoll_run(epo, 1);
 
-		if(test_flag < 0 || test_flag == 10)
-			break;
-	}
+			if(test_flag < 0 || test_flag == 10)
+				break;
+		}
 
-	r = Ino.del(inotify, "/tmp/a.log");
-	assert(r == 0);
+		r = hp_inotify_del(inotify, "/tmp/a.log");
+		assert(r == 0);
 
-	Ino.uninit(inotify);
-	hp_epoll_uninit(efds);
+		hp_inotify_uninit(inotify);
+		hp_epoll_uninit(epo);
+    }
 
 	return r;
 }
+#endif //defined(HAVE_SYS_UIO_H)
 #endif /* NDEBUG */
+
 #endif /* _MSC_VER */

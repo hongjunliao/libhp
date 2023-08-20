@@ -21,7 +21,7 @@
 #include <string.h>
 #include <string.h> /* strerror_r */
 #include "hp/sdsinc.h" /* sds */
-#include "hp/hp_libc.h"/* hp_min */
+#include "hp/hp_stdlib.h"/* min */
 
 #ifdef _MSC_VER
 static HMODULE s_hDll = 0;
@@ -67,7 +67,12 @@ char const * hp_err(int err, hp_err_t errstr)
 	if (fOk && (hlocal != NULL)) {
 		sds serr = sdscatprintf(sdsempty(), errstr, (char const *)LocalLock(hlocal), sizeof(hp_err_t) - 1);
 		errstr[0]='\0'; // clear current
-		strncpy(errstr, serr, hp_min(sdslen(serr), sizeof(hp_err_t) - 1));
+		strncpy(errstr, serr, min(sdslen(serr), sizeof(hp_err_t) - 1));
+
+		char * p;
+		if((p = strrchr(errstr, '\n'))) *p = ' ';
+		if((p = strrchr(errstr, '\r'))) *p = ' ';
+
 		sdsfree(serr);
 		LocalFree(hlocal);
 	}
@@ -76,7 +81,7 @@ char const * hp_err(int err, hp_err_t errstr)
 	hp_err_t buf = "";
 	sds serr = sdscatprintf(sdsempty(), errstr, strerror_r(err, buf, sizeof(hp_err_t)));
 	errstr[0]='\0'; // clear current
-	strncpy(errstr, serr, hp_min(sdslen(serr), sizeof(hp_err_t) - 1));
+	strncpy(errstr, serr, min(sdslen(serr), sizeof(hp_err_t) - 1));
 
 	sdsfree(serr);
 #endif //_MSC_VER

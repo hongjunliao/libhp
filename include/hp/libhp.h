@@ -3,6 +3,7 @@
 * @author hongjun.liao <docici@126.com>, @date 2021/4/1
 *
 * */
+/////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef LIB_HP_H__
 #define LIB_HP_H__
@@ -13,6 +14,8 @@ extern "C" {
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+
+/////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef _WIN32
   /* Windows - set up dll import/export decorators. */

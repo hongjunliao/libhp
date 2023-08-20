@@ -13,7 +13,7 @@
 #include <ctype.h>         /* toupper */
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <sys/stat.h>	/*fstat*/
-#include "hp/hp_libc.h"
+#include "hp/hp_stdlib.h" //max
 #include "hp/hp_log.h"
 
 #ifdef _MSC_VER
@@ -435,7 +435,7 @@ int hp_vercmp(char const * ver, char const * cmp)
 	sds * s_ver = sdssplitlen(ver, strlen(ver), ".", 1, &c_ver);
 	sds * s_cmp = sdssplitlen(cmp, strlen(cmp), ".", 1, &c_cmp);
 
-	for(i = 0; i < hp_max(c_ver, c_cmp); ++i){
+	for(i = 0; i < max(c_ver, c_cmp); ++i){
 		int i_ver = atoi(i < c_ver? s_ver[i] : "0");
 		int i_cmp = atoi(i < c_cmp? s_cmp[i] : "0");
 
@@ -487,12 +487,18 @@ int test_hp_str_main(int argc, char ** argv)
 		sds s[] = { hp_timestr(0, 0), hp_timestr(1688225233, 0),
 				 hp_timestr(1688225233, "%Y-%m-%d"), hp_timestr(1688225233, "%H:%M:%S"),
 				 hp_timestr(1688225233, "day=%d/hour=%H"),
-				 hp_timestr(1688225233, "%E"), hp_timestr(1688225233, "hello")
+#ifndef _MSC_VER
+				 hp_timestr(1688225233, "%E"),
+#endif // !_MSC_VER
+				 hp_timestr(1688225233, "hello")
 			};
 		char const * v[] = { "1970-01-01 08:00:00", "2023-07-01 23:27:13",
 				 	 	 	 "2023-07-01", "23:27:13",
 							 "day=01/hour=23",
-							 "%E", "hello"
+#ifndef _MSC_VER
+							 "%E",
+#endif // !_MSC_VER
+							"hello"
 					};
 		for(i = 0; i < sizeof(s) / sizeof(s[0]); ++i) {
 			assert(strncmp(s[i], v[i], strlen(v[i])) == 0);

@@ -25,7 +25,7 @@
 
 #include <hiredis/async.h>
 #include "sdsinc.h"
-#include "hp_libc.h" /*hp_tupleN_t*/
+#include "hp_tuple.h"	  /*hp_tuple2_t*/
 #include "klist.h"        /* list_head */
 
 #ifdef __cplusplus

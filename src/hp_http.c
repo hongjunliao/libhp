@@ -14,6 +14,7 @@
 //#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #endif /* _MSC_VER */
+#include "hp/libhp.h"	//hp_free_t
 #include "hp/hp_http.h"
 //#include <unistd.h>
 #include <stddef.h>
@@ -144,10 +145,10 @@ static int http_response(hp_httpreq * req, struct hp_httpresp * resp)
 			, http_content_type_cstr(resp->type)
 			, sdslen(resp->html));
 
-	rc = hp_io_write(io, buf, sdslen(buf), (hp_io_free_t)sdsfree, 0);
+	rc = hp_io_write(io, buf, sdslen(buf), (hp_free_t)sdsfree, 0);
 	if(rc != 0) return -1;
 
-	rc = hp_io_write(io, resp->html, sdslen(resp->html), (resp->flags == 1? (hp_io_free_t)sdsfree : 0), 0);
+	rc = hp_io_write(io, resp->html, sdslen(resp->html), (resp->flags == 1? (hp_free_t)sdsfree : 0), 0);
 	if(rc != 0) return -1;
 
 	rc = hp_io_write(io, "\r\n\r\n", 4, 0, 0);
@@ -221,7 +222,7 @@ static hp_io_t * hp_httpreq_on_new(hp_io_t * cio, hp_sock_t fd)
 	if(hp_log_level > 0){
 		char buf[64] = "";
 		hp_log(stdout, "%s: new HTTP connection from '%s', total=%d\n", __FUNCTION__
-				, get_ipport_cstr2(&cio->addr, ":", buf, sizeof(buf)),
+				, hp_addr4name(&cio->addr, ":", buf, sizeof(buf)),
 				hp_http_count(req->http));
 	}
 #endif
@@ -317,7 +318,7 @@ static void hp_httpreq_on_delete(hp_io_t * io, int err, char const * errstr)
 	if(hp_log_level > 0){
 		char buf[64] = "";
 		hp_log(stdout, "%s: delete HTTP connection '%s', %d/'%s' total=%d\n", __FUNCTION__
-				, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), err, errstr, hp_http_count(req->http));
+				, hp_addr4name(&io->addr, ":", buf, sizeof(buf)), err, errstr, hp_http_count(req->http));
 	}
 #endif
 
@@ -413,7 +414,7 @@ int test_hp_http_main(int argc, char ** argv)
 			sdsfree(file);
 		}
 
-		int listenfd = hp_net_listen(18541);
+		int listenfd = hp_tcp_listen(18541);
 		hp_assert(listenfd > 0, "%s: unable to create listen socket at %d", __FUNCTION__, 18541);
 
 		hp_io_ctx ioctxobj, *ioctx = &ioctxobj;
@@ -431,7 +432,7 @@ int test_hp_http_main(int argc, char ** argv)
 		assert(rc == 0);
 
 		hp_curlm hp_curl_multiobj, * curlm = &hp_curl_multiobj;
-		rc = hp_curlm_init(curlm, &ioctx->efds, 0);
+//		rc = hp_curlm_init(curlm, &ioctx->efds, 0);
 		assert(rc == 0);
 
 		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
@@ -450,7 +451,7 @@ int test_hp_http_main(int argc, char ** argv)
 		int quit = 3;
 		for(; quit > 0;){
 			hp_io_run(ioctx, 200, 0);
-			if(hp_io_count(ioctx) == 1)
+			if(hp_io_size(ioctx) == 1)
 				--quit;
 		}
 

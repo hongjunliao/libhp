@@ -19,7 +19,7 @@
 #include "hp_epoll.h"    /* hp_epoll */
 #include "hp_timerfd.h"  /* hp_timerfd */
 #include <curl/curl.h>   /* libcurl */
-#include "hp/sdsinc.h"     /* sds */
+#include "sdsinc.h"     /* sds */
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
@@ -36,17 +36,12 @@ struct hp_curlm {
 	int              n;                 /* number of easy */
 
 	int              max_n;
-	hp_curlitem **   items;
 };
 /*
  * @param on_done: callback when finished
  */
 int hp_curlm_add(hp_curlm * curlm, const char * url
 		, struct curl_slist * hdrs, const char * body
-		, int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg)
-		, void * arg);
-
-int hp_curlm_queue(hp_curlm * curlm, const char * url, struct curl_slist * hdrs, char const * body
 		, int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg)
 		, void * arg);
 

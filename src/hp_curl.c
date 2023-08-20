@@ -34,21 +34,12 @@ struct hp_curl_recv {
 struct hp_curlm_easy {
 	CURL *           handle;
 	curl_socket_t    fd;
-	hp_epolld        ed;
 	sds              buf;
 
 	int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg);
 	void *           arg;
 
 	hp_curlm *      curlm;  /* ref to context */
-};
-
-struct hp_curlitem {
-	sds 			 url;
-	struct curl_slist * hdrs;
-	sds 			 body;
-	int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg);
-	void * 			 arg;
 };
 
 static size_t easy_write_data(void *ptr, size_t size, size_t nmemb, void *userdata)
@@ -181,11 +172,11 @@ static void check_multi_info(hp_curlm * curlm)
 	}
 }
 
-static int hp_curl_multi_handle_io(struct epoll_event * ev)
+static int hp_curl_multi_handle_io(struct epoll_event * ev,  void * arg)
 {
-	assert(ev && hp_epoll_arg(ev));
+	assert(ev && arg);
 
-	struct hp_curlm_easy * citem = (struct hp_curlm_easy *)hp_epoll_arg(ev);
+	struct hp_curlm_easy * citem = (struct hp_curlm_easy *)arg;
 	assert(citem);
 	assert(citem->curlm);
 
@@ -221,24 +212,22 @@ static int handle_socket(CURL *easy, curl_socket_t s, int action, void *userp,
 		assert(citem->handle == easy);
 
 		citem->fd = s;
-		hp_epolld_set(&citem->ed, citem->fd, hp_curl_multi_handle_io, citem);
-
 		curl_multi_assign(curlm->curl_handle, s, (void *) citem);
 	}
 	switch (action) {
 	case CURL_POLL_IN:
-		hp_epoll_add(curlm->efds, s, EPOLLIN, &citem->ed);
+		hp_epoll_add(curlm->efds, s, EPOLLIN, hp_curl_multi_handle_io, 0, citem);
 		break;
 	case CURL_POLL_OUT:
-		hp_epoll_add(curlm->efds, s, EPOLLOUT, &citem->ed);
+		hp_epoll_add(curlm->efds, s, EPOLLOUT, hp_curl_multi_handle_io, 0, citem);
 		break;
 	case CURL_POLL_INOUT:
-		hp_epoll_add(curlm->efds, s, EPOLLIN | EPOLLOUT, &citem->ed);
+		hp_epoll_add(curlm->efds, s, EPOLLIN | EPOLLOUT, hp_curl_multi_handle_io, 0, citem);
 		break;
 	case CURL_POLL_REMOVE:
 		if (socketp) {
 			citem = (struct hp_curlm_easy *) socketp;
-			hp_epoll_del(curlm->efds, s, EPOLLIN | EPOLLOUT, &citem->ed);
+			hp_epoll_rm(curlm->efds, s);
 			curl_multi_assign(curlm->curl_handle, s, 0);
 		}
 		break;
@@ -304,50 +293,6 @@ static int hp_curl_multi_handle_timeout(hp_timerfd * timerfd)
 	return 0;
 }
 
-int hp_curlm_queue(hp_curlm * curlm, const char * url, struct curl_slist * hdrs, char const * body
-		, int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg)
-		, void * arg)
-{
-	if(!(curlm && url))
-		return -1;
-
-	hp_curlitem * item = calloc(1, sizeof(hp_curlitem));
-	item->url = sdsnew(url);
-	item->hdrs = hdrs;
-	item->body = sdsnew(body);
-	item->on_done = on_done;
-	item->arg = arg;
-
-	cvector_push_back(curlm->items, item);
-
-	return 0;
-}
-
-static int hp_curlm_before_wait(struct hp_epoll * efds, void * arg)
-{
-	assert(efds && arg);
-	hp_curlm * curlm = (hp_curlm *)arg;
-
-	for(; !cvector_empty(curlm->items);){
-		if(curlm->n >= curlm->max_n)
-			break;
-
-		hp_curlitem * item = curlm->items[0];
-		assert(item);
-
-		int rc = hp_curlm_add(curlm, item->url, item->hdrs, item->body, item->on_done, item->arg);
-		assert(rc == 0);
-
-		cvector_erase(curlm->items, 0);
-
-		sdsfree(item->url);
-		sdsfree(item->body);
-		free(item);
-	}
-
-	return 0;
-}
-
 int hp_curlm_init(hp_curlm * curlm, hp_epoll * efds, int max_n)
 {
 	if(!(curlm && efds))
@@ -367,11 +312,6 @@ int hp_curlm_init(hp_curlm * curlm, hp_epoll * efds, int max_n)
 	if(hp_timerfd_init(&curlm->timer, efds, hp_curl_multi_handle_timeout, 0, curlm) != 0)
 		return -1;
 
-	cvector_init(curlm->items, curlm->max_n);
-
-	int rc = hp_epoll_add_before_wait(efds, hp_curlm_before_wait, curlm);
-	assert(rc == 0);
-
 	return 0;
 }
 
@@ -384,15 +324,6 @@ void hp_curlm_uninit(hp_curlm * curlm)
 	curl_multi_cleanup(curlm->curl_handle);
 
 	curl_global_cleanup();
-
-	size_t i;
-	for(i = 0; i < cvector_size(curlm->items); ++i){
-		hp_curlitem * item = curlm->items[i];
-		sdsfree(item->url);
-		sdsfree(item->body);
-		free(curlm->items[i]);
-	}
-	cvector_free(curlm->items);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -458,7 +389,7 @@ int test_hp_curl_main(int argc, char ** argv)
 	{
 		int rc;
 		hp_epoll efdsobj, * efds = &efdsobj;
-		rc = hp_epoll_init(efds, 200);
+		rc = hp_epoll_init(efds, 200, 200, 0, 0);
 		assert(rc == 0);
 
 		hp_curlm hp_curl_multiobj, * curlm = &hp_curl_multiobj;
@@ -479,33 +410,7 @@ int test_hp_curl_main(int argc, char ** argv)
 		assert(curlm->n == 3);
 
 		for(;curlm->n > 0;)
-			hp_epoll_run(efds, 200, (void *)-1);
-
-		assert(curlm->n == 0);
-
-		hp_curlm_uninit(curlm);
-	}
-	////////////////////////////////////////////////
-	/* multi mode, with concurrency control */
-	{
-		int rc;
-		hp_epoll efdsobj, * efds = &efdsobj;
-		rc = hp_epoll_init(efds, 200);
-		assert(rc == 0);
-
-		hp_curlm hp_curl_multiobj, * curlm = &hp_curl_multiobj;
-		rc = hp_curlm_init(curlm, efds, 20);
-		assert(rc == 0);
-
-		size_t i;
-		for(i = 0; i < 30; ++i){
-			rc = hp_curlm_queue(curlm, TEST_URL, 0, 0, hp_curl_multi_test_on_done, curlm);
-			assert(rc == 0);
-
-		}
-
-		for(;curlm->n > 0;)
-			hp_epoll_run(efds, 200, (void *)-1);
+			hp_epoll_run(efds, 1);
 
 		assert(curlm->n == 0);
 

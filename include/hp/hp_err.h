@@ -31,7 +31,7 @@ char const * hp_err(int err, hp_err_t errstr);
 char const * hp_lerr();
 
 #ifndef NDEBUG
-LIBHP_EXT int test_hp_err_main(int argc, char ** argv);
+int test_hp_err_main(int argc, char ** argv);
 #endif //NDEBUG
 
 #ifdef __cplusplus

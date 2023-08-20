@@ -13,14 +13,14 @@
 #include "hp/sdsinc.h"
 #include <time.h>
 #include "hp/hp_redis.h"
-#include "hp/hp_libc.h"
+#include "hp/hp_tuple.h"
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <hiredis/async.h>
 #include <hiredis/adapters/libuv.h>
 //#include <hiredis/adapters/ae.h>
-
+#include "hp/hp_stdlib.h" //max
 #include "hp/hp_log.h"
 
 #ifdef __cplusplus
@@ -126,14 +126,14 @@ static void test_hp_redis_cb_2(redisAsyncContext *c, void *r, void *privdata)
 }
 
 static void test_hp_redis_on_connect_1(const redisAsyncContext *c, int status) {
-	s_conn_flag = (status != REDIS_OK)? -1 : (hp_max(s_conn_flag, 0) + 1);
+	s_conn_flag = (status != REDIS_OK)? -1 : (max(s_conn_flag, 0) + 1);
 	if (status != REDIS_OK) {
         hp_log(stdout, "%s: connect Redis failed: '%s'\n", __FUNCTION__, c->errstr);
         return;
     }
 }
 static void test_hp_redis_on_connect_2(const redisAsyncContext *c, int status) {
-	s_conn_flag = (status != REDIS_OK) ? -1 : (hp_max(s_conn_flag, 0) + 1);
+	s_conn_flag = (status != REDIS_OK) ? -1 : (max(s_conn_flag, 0) + 1);
 	if (status != REDIS_OK) {
 		hp_log(stdout, "%s: connect Redis failed: '%s'\n", __FUNCTION__, c->errstr);
 		return;

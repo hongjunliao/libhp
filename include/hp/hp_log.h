@@ -14,7 +14,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 #include <stdio.h>
-#include "hp/sdsinc.h"
+#include "sdsinc.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -23,9 +23,10 @@
 #include "hp/sdsinc.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_log.h"
-#include "hp/hp_libc.h"
+#include "hp/hp_tuple.h"
 #include "hp/string_util.h"
-#include "klist.h"        /* list_head */
+#include "hp/klist.h"        /* list_head */
+#include "hp/hp_stdlib.h" //max
 
 #ifdef __cplusplus
 extern "C" {
@@ -760,7 +761,7 @@ ret:
 }
 
 static void hp_pub_on_connect_1(const redisAsyncContext *c, int status) {
-	s_conn_flag = (status != REDIS_OK) ? -1 : (hp_max(s_conn_flag, 0) + 1);
+	s_conn_flag = (status != REDIS_OK) ? -1 : (max(s_conn_flag, 0) + 1);
 	if (status != REDIS_OK) {
         hp_log(stdout, "%s: connect Redis failed: '%s'\n", __FUNCTION__, c->errstr);
         return;

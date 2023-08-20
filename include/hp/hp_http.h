@@ -11,9 +11,10 @@
 #define LIBHP_HTTP_H__
 
 //#include "Win32_Interop.h"
-#include "hp/sdsinc.h"    	/* sds */
-#include "hp/hp_sock_t.h"   /* hp_sock_t */
-#include "hp/hp_io_t.h"   	/* hp_io_ctx */
+#include "sdsinc.h"    	/* sds */
+#include "hp_sock_t.h"   /* hp_sock_t */
+#include "hp_io_t.h"   	/* hp_io_ctx */
+#include "redis/src/adlist.h" /* list */
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

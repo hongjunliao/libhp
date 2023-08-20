@@ -23,9 +23,20 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ###########################################################################################
+include(CheckIncludeFile)
+check_include_file(poll.h HAVE_UNISTD_H)
+check_include_file(poll.h HAVE_POLL_H)
+check_include_file(sys/epoll.h HAVE_SYS_EPOLL_H)
+check_include_file(sys/uio.h HAVE_SYS_UIO_H)
+check_include_file(sys/inotify.h HAVE_SYS_INOTIFY_H)
+check_include_file(search.h HAVE_SEARCH_H)
+
+###########################################################################################
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 # hp_io_t test
 set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
+
 if(WIN32)
 	# hp_iocp test
 	set(LIBHP_WITH_HTTP 1 CACHE INTERNAL "LIBHP_WITH_HTTP")	
@@ -49,12 +60,16 @@ endif()
 # pkg_check_modules(hiredis REQUIRED hiredis)
 
 if(WIN32)
+	# paho.mqtt.c
+	set(PAHO_BUILD_STATIC 1 CACHE INTERNAL "PAHO_BUILD_STATIC")	
+	set(path_mqtt_lib "paho-mqtt3a-static")
 	# sds
 	set(sds_lib "deps/hiredis/sds.c")
 	set(uv_lib uv_a)
 else()
 	set(sds_lib "deps/sds/*.c")
 	set(uv_lib uv)
+	set(path_mqtt_lib "paho-mqtt3a")
 endif()
 
 set(g_withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
@@ -73,7 +88,7 @@ set(g_deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson
 		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
 		gbk-utf8 libyuarel c-vector inih .src
 	)
-set(g_libs "ssl crypto" z mysqlclient db curl paho-mqtt3a cjson 
+set(g_libs "ssl crypto" z mysqlclient db curl ${path_mqtt_lib} cjson 
 			c uuid ${uv_lib} dl zlog http_parser hiredis 
 			"deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c"
 			${sds_lib}

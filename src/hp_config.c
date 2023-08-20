@@ -116,7 +116,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 		dictReplace(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
 	}
 
-	dictReplace(cfg, sdsnew(name), sdsnew(value));
+	sds k = (section && section[0]? sdscatfmt(sdsempty(), "%s.%s", section, name) : sdsnew(name));
+	dictReplace(cfg, k, sdsnew(value));
 
 	return 1;
 }
@@ -183,7 +184,7 @@ int test_hp_config_main(int argc, char ** argv)
 {
 	assert(cfgi("#set test.key.name 23") == 0 && cfgi("test.key.name") == 23);
 	assert(cfgi("#set test.key.name 24") == 0 && cfgi("test.key.name") == 24);
-	hp_assert(cfgi("#load bitcoin.conf") == 0, "'#load bitcoin.conf' failed");
+	hp_assert(cfgi("#load config.ini") == 0, "'#load config.ini' failed");
 	hp_assert(cfgi("#load this_file_not_exist.conf") != 0, "'#load this_file_not_exist.conf' OK?");
 	hp_assert(strlen(cfg("loglevel")) > 0, "loglevel NOT found");
 	hp_assert(strlen(cfg("#show")) > 0, "#show failed");

@@ -13,7 +13,7 @@
 #ifdef __linux__
 
 #include "hp_epoll.h"    /* hp_epoll */
-#include "hp/sdsinc.h"
+#include "sdsinc.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
@@ -24,29 +24,25 @@ typedef struct hp_inotify hp_inotify;
 typedef struct hp_inotify_ient hp_inotify_ient;
 
 struct hp_inotify {
-	hp_epoll * efds;
+	hp_epoll * epo;
 	int ifd; 			/* inotify fd */
-	hp_epolld iepolld;
 	hp_inotify_ient ** ients;
 };
 
-struct HP_INOTIFY_TOOL_PKG {
 	/* init */
-	int(* init)(hp_inotify * dl, hp_epoll * efds);
-	/* uninit */
-	void(* uninit)(hp_inotify * dl);
-	/* add dl
-	 * @param reload: hp_inotify_reload_t */
-	int (* add)(hp_inotify * dl, char const * path
-			, int (* open)(char const * path, void * d)
-			, int (* fn)(struct epoll_event * ev), void * d);
-	/* del dl */
-	int (* del)(hp_inotify * dl, char const * name);
-	/* inotify events to c_str */
-	sds (* iev_to_str)(int iev);
+int hp_inotify_init(hp_inotify * dl, hp_epoll * epo);
+/* add dl
+ * @param reload: hp_inotify_reload_t */
+int hp_inotify_add(hp_inotify * dl, char const * path
+		, int (* open)(char const * path, void * d)
+		, int (* fn)(epoll_event * ev, void * arg), void * d);
+/* del dl */
+int hp_inotify_del(hp_inotify * dl, char const * name);
+/* uninit */
+void hp_inotify_uninit(hp_inotify * dl);
 
-};
-extern struct HP_INOTIFY_TOOL_PKG const HP_INOTIFY_TOOL;
+sds hp_inotify_iev_to_str(int iev);
+/////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
 int test_hp_inotify_main(int argc, char ** argv);

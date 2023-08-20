@@ -10,6 +10,9 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
+
+#ifdef LIBHP_DEPRECADTED
+
 #if !defined(__linux__) && !defined(_MSC_VER)
 #elif !defined(_MSC_VER)
 #include "hp_epoll.h"    /* hp_epoll */
@@ -26,8 +29,8 @@ struct hp_tcpio {
 
 	int (* conn)(hp_tcpio * ctx, int connfd, void ** arg);
 	int (* pack)(char* buf, size_t* len, void* arg);
-	void (* write_error)(struct hp_eto * eto, int err, void * arg);
-	void (* read_error)(struct hp_eti * eti, int err, void * arg);
+	void (* write_error)(struct hp_wr * eto, int err, void * arg);
+	void (* read_error)(struct hp_rd * eti, int err, void * arg);
 };
 
 int hp_tcpio_init(hp_tcpio * ctx, hp_epoll * efds, int fd
@@ -39,3 +42,4 @@ void hp_tcpio_uninit(hp_tcpio * ctx);
 #endif
 #endif /* _MSC_VER */
 #endif /* HP_TCPIO_H */
+#endif //#ifdef LIBHP_DEPRECADTED

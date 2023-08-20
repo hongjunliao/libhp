@@ -55,6 +55,8 @@
 #define HP_IOCP_RBUF  (1024 * 4)
 #define hp_iocp_is_quit(iocp) (iocp->ioid == -1)
 /////////////////////////////////////////////////////////////////////////////////////
+#define SOLISTEN 0x1024
+/////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct hp_iocp_obuf hp_iocp_obuf;
 typedef struct hp_iocp_item hp_iocp_item;
@@ -173,7 +175,11 @@ static int hp_iocp_do_socket(hp_iocp * iocp, hp_iocp_item * item)
 		return -4;
 	}
 
+	//FIXME: combine to ONE message?
 	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_ADD(iocp), (WPARAM)item->id, (LPARAM)item->fd);
+	if(item->on_accept)
+		hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), (WPARAM)item->id, POLLIN | SOLISTEN);
+
 	return 0;
 }
 
@@ -266,9 +272,9 @@ static char zreadchar[1];
 /*
  * the actual I/O functions
  * */
-static int hp_iocp_do_read(hp_iocp * iocp, hp_iocp_item * item)
+static int hp_iocp_do_read(hp_iocp * iocp, int id, SOCKET fd, int * err)
 {
-	assert((iocp && item));
+	assert((iocp && err));
 	int rc = 0;
 
 	// Use zero length read with overlapped to get notification
@@ -278,21 +284,18 @@ static int hp_iocp_do_read(hp_iocp * iocp, hp_iocp_item * item)
 	bufs[0].buf = zreadchar;
 	bufs[0].len = 0;
 
-	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->fd, 0, bufs, 1, 0);
+	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(id, fd, 0, bufs, 1, 0);
 	DWORD flags = 0;
-	rc = WSARecv(item->fd, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
+	rc = WSARecv(fd, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
 		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
-	DWORD err = WSAGetLastError();
+	*err = WSAGetLastError();
 
-	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
+	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != *err)) {
 		wsaoverlapped_free(overlapped);
-
-		item->err = err;
-		hp_err(err, item->errstr);
 		rc = -1;
 	}
 	else {
-		item->err = 0;
+		*err = 0;
 		rc = 0;
 	}
 
@@ -361,28 +364,20 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 		int id = wParam, flags = lParam;;
 		hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
 		if(!item) {
-#ifndef NDEBUG
 			++iocp->n_dmsg0;
-			if(iocp->n_dmsg0 > 0 && iocp->n_dmsg0 % 10 == 0 && hp_log_level > 5)
-				hp_log(stdout, "%s: HP_IOCP_WM_FD message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg0);
-#endif /* NDEBUG */
 			return 0;
 		}
 
 		if(flags & (POLLERR | POLLHUP)) rc = flags;
 		else{
 			if (flags & POLLIN) {
-				assert(item->on_data || item->on_accept);
-				if(item->on_data) { rc = hp_iocp_do_read(iocp, item);
-					hp_log(stdout, "%s: _____________________n_on_data=%d\n", __FUNCTION__, ++iocp->n_on_data);
-				}
-				else  {             item->on_accept(iocp, item->arg);
-					hp_log(stdout, "%s: _____________________n_on_accept=%d\n", __FUNCTION__, ++iocp->n_on_accept);
-				}
+				assert(item->on_accept);
+				item->on_accept(iocp, item->arg);
+				++iocp->n_on_accept;
 			}
 			if ((flags & POLLOUT)){
 				rc = hp_iocp_do_write(iocp, item);
-				hp_log(stdout, "%s: _____________________n_on_pollout=%d\n", __FUNCTION__, ++iocp->n_on_pollout);
+				++iocp->n_on_pollout;
 			}
 		}
 		if(rc != 0 || item->err)
@@ -421,7 +416,7 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 						ibufL = ibufl = sdslen(item->ibuf);
 						rc = item->on_data(iocp, item->arg, item->ibuf, &ibufl);
 						sdsIncrLen(item->ibuf, ibufl - ibufL);
-						if(rc < 0 && hp_iocp_do_read(iocp, item) != 0)
+						if(rc < 0 && hp_iocp_do_read(iocp, item->id, item->fd, &item->err) != 0)
 							hp_iocp_item_on_error(iocp, item);
 					}
 				}
@@ -430,10 +425,12 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 					hp_err(item->err, item->errstr);
 					hp_iocp_item_on_error(iocp, item);
 				}
-				hp_log(stdout, "%s: _____________________n_on_i=%d, nbuf=%zu\n", __FUNCTION__, ++iocp->n_on_i, nbuf);
+
+				if(nbuf == 0)
+					++iocp->n_on_i;
 			}
 			else { /* write done */
-				hp_log(stdout, "%s: _____________________n_on_o=%d\n", __FUNCTION__, ++iocp->n_on_o);
+				++iocp->n_on_o;
 				assert(nbuf <= wsabuf->len);    /* finished bytes should NOT bigger than committed */
 				hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
 				assert(obuf);
@@ -457,12 +454,7 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 			}
 		}
 		else {
-#ifndef NDEBUG
 			++iocp->n_dmsg1;
-			if(iocp->n_dmsg1 > 0 && iocp->n_dmsg1 % 10 == 0 && hp_log_level > 5)
-				hp_log(stdout, "%s: HP_IOCP_WM_IO message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg1);
-#endif /* NDEBUG */
-
 			hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
 			if (obuf) {
 				if (obuf->free)
@@ -604,11 +596,10 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 				|| FD_ISSET(pds[i].fd, exceptfds))) continue;
 
 			int flags = 0;
-			if(FD_ISSET(pds[i].fd, rfds)) flags |= POLLIN;
+			if(FD_ISSET(pds[i].fd, rfds) && (pds[i].flags & SOLISTEN)) flags |= POLLIN;
 			if(FD_ISSET(pds[i].fd, wfds)) { flags |= POLLOUT; pds[i].flags &= ~POLLOUT; }
 			if(FD_ISSET(pds[i].fd, exceptfds)) flags = POLLERR;
 
-			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, flags);
 			//POLLERR | POLLHUP | POLLNVAL
 			if(flags & (POLLERR | POLLHUP)) {
 				//fd closed(by user?) or exception
@@ -619,6 +610,12 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 				}
 				--nfds;
 			}
+			else if(FD_ISSET(pds[i].fd, rfds) && !(pds[i].flags & SOLISTEN)) {
+				int err = 0;
+				rc = hp_iocp_do_read(iocp, pds[i].id, pds[i].fd, &err);
+				if(rc != 0) flags = POLLERR;
+			}
+			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, flags);
 		}
 		Sleep(iocp->stime_out * ( 1 + nfds / iocp->maxfd));
 	}
@@ -928,6 +925,15 @@ void hp_iocp_uninit(hp_iocp * iocp)
 
 	/* free */
 	vecfree(iocp->items);
+
+#ifndef NDEBUG
+			hp_log(stdout, "%s: HP_IOCP_WM_FD message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg0);
+			hp_log(stdout, "%s: _____________________n_on_accept=%d\n", __FUNCTION__, iocp->n_on_accept);
+			hp_log(stdout, "%s: _____________________n_on_pollout=%d\n", __FUNCTION__, iocp->n_on_pollout);
+			hp_log(stdout, "%s: _____________________n_on_i=%d, nbuf=%zu\n", __FUNCTION__, iocp->n_on_i, 0);
+			hp_log(stdout, "%s: _____________________n_on_o=%d\n", __FUNCTION__, iocp->n_on_o);
+			hp_log(stdout, "%s: HP_IOCP_WM_IO message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg1);
+#endif /* NDEBUG */
 
 	return;
 }
@@ -1485,7 +1491,7 @@ static int client_server_echo_test(int test, int n)
 	s->listen_fd = listen_fd;
 
 	rc = hp_iocp_init(iocp, 2 * n + 1/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/,
-			500/*timeout*/, s/*arg*/);
+			200/*timeout*/, s/*arg*/);
 	assert(rc == 0);
 
 	/* add listen socket */
@@ -1775,12 +1781,22 @@ static int get_http_file()
 int test_hp_iocp_main(int argc, char ** argv)
 {
 	int rc;
-	hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
-			",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
-		POLLIN, POLLOUT, POLLERR, POLLHUP
-		, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
-		, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
-		, FD_SETSIZE);
+	{
+		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
+				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
+			POLLIN, POLLOUT, POLLERR, POLLHUP
+			, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
+			, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
+			, FD_SETSIZE);
+	}
+	{
+		int flags = SOLISTEN | POLLIN | POLLOUT | POLLERR;
+		assert((flags & SOLISTEN) && (flags & POLLIN) && (flags & POLLOUT) && (flags & POLLERR));
+		flags &= ~POLLIN;
+		assert(!(flags & POLLIN));
+		flags &= ~SOLISTEN;
+		assert(!(flags & SOLISTEN));
+	}
 	/* simple test */
 	simple_tests();
 	//add,remove test

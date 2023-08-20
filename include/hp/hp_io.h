@@ -2,10 +2,10 @@
  * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2018/5/25
  *
- * eto: read or write until 'again' or error, using iovec
- * called epoll-style IO(ET mode)
+ * read or write fd until 'again' or error, using iovec if available
 
  * */
+/////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef LIBHP_IO_H__
 #define LIBHP_IO_H__
@@ -14,32 +14,24 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
-#ifndef _WIN32
+#ifdef HAVE_UNISTD_H
+
+#include "hp/libhp.h"	//hp_free_t
 #include "hp_iostat.h"  /* hp_iostat */
 #include <stddef.h>
+#ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>    /* iovec */
+#endif //#ifdef HAVE_SYS_UIO_H
+/////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define XH_ETIO_LOG_LEVEL     0
-#define HP_ETIO_VEC           8
+typedef struct hp_wr hp_wr;
+typedef struct hp_rd hp_rd;
 
-typedef struct hp_eto hp_eto;
-typedef struct hp_eti hp_eti;
-
-typedef	void  (* hp_eto_free_t)(void * ptr);
-
-struct hp_eto_item {
-	void *             ptr;         /* ptr to free */
-	hp_eto_free_t     free;        /* for free ptr */
-
-	struct iovec       vec;         /* will change while writing */
-};
-
-struct hp_eti {
+struct hp_rd {
 	char *               i_buf;
 	size_t               i_buflen;
 	size_t               I_BUF_MAX;
@@ -48,72 +40,65 @@ struct hp_eti {
 
 	struct hp_iostat *   stat;        /* for statistics */
 	/*
-	 * callback for pack msg
+	 * callback for data msg
 	 * @return:
-	 * EAGAIN: pack OK       --> continue reading for next pack
-	 * else: pack failed     --> maybe error occurred, or NO more data needed, stop reading and return
+	 * >=0: OK, continue reading for next data
+	 * <0: failed, maybe parse data failed
 	 * */
-	int (* pack)(char * buf, size_t * len, void * arg);
+	int (* data)(char * buf, size_t * len, void * arg);
 	/*
 	 * callback for read error
 	 *  */
-	void (* read_error)(struct hp_eti * eti, int err, void * arg);
-	/* set by user */
-	int * loglevel;              /* log level */
+	void (* read_error)(struct hp_rd * rd, int err, void * arg);
+	/**
+	 * error value: return of data() if failed,, or read_error(err)
+	 * 0 means OK
+	 */
+	int err;
 };
 
-struct hp_eto {
-	struct hp_eto_item * o_items;
+struct hp_wr {
+	struct hp_uio_item * o_items;
 	int                  O_ITEMS_INIT_LEN;
 	int                  o_items_len;
 	int                  O_ITEMS_LEN;
 	size_t               o_bytes;     /* total bytes written */
 	/*
-	 * callback if write done
-	 * */
-	void (* write_done)(struct hp_eto * eto, int err, void * arg);
-
-	/*
 	 * callback if write error
 	 * */
-	void (* write_error)(struct hp_eto * eto, int err, void * arg);
-
-	/* set by user */
-	int * loglevel;              /* log level */
+	void (* write_error)(struct hp_wr * wr, int err, void * arg);
+	/**
+	 * error value: write_error(err)
+	 * 0 means OK
+	 */
+	int err;
 };
 
-int hp_eti_init(struct hp_eti * eti, int bufrlen);
-void hp_eti_uninit(struct hp_eti * eti);
+int hp_rd_init(struct hp_rd * rd, int bufrlen,
+		int (* data)(char * buf, size_t * len, void * arg),
+		void (* read_error)(struct hp_rd * rd, int err, void * arg));
+/*!
+ * check rd->err for errors
+ * */
+size_t hp_rd_read(struct hp_rd * rd, int fd, void * arg);
 
-int hp_eto_init(struct hp_eto * eto, int n);
-void hp_eto_uninit(struct hp_eto * eto);
-int hp_eto_add(struct hp_eto * eto, void * iov_base, size_t iov_len, hp_eto_free_t free, void * ptr);
-void hp_eto_clear(struct hp_eto * eto);
+void hp_rd_uninit(struct hp_rd * rd);
+
+int hp_wr_init(struct hp_wr * wr, int n, void (* write_error)(struct hp_wr * wr, int err, void * arg));
+int hp_wr_add(struct hp_wr * wr, void * iov_base, size_t iov_len, hp_free_t free, void * ptr);
+/*!
+ * check wr->err for errors
+ * */
+size_t hp_wr_write(struct hp_wr *wr, int fd, void * arg);
+
+void hp_wr_clear(struct hp_wr * wr);
 /* total bytes to write */
-int hp_eto_obytes(hp_eto * eto);
+int hp_wr_bytes(hp_wr * wr);
+void hp_wr_uninit(struct hp_wr * wr);
 
-#define hp_eto_try_write(eto, epolld) \
-do { \
-	struct epoll_event hetw_evobj, * __hetw_ev = &hetw_evobj; \
-	__hetw_ev->data.ptr = (epolld); \
-	__hetw_ev->events = EPOLLOUT; \
-	hp_eto_write((eto), (epolld)->fd, __hetw_ev); \
-}while(0)
+/////////////////////////////////////////////////////////////////////////////////////
 
-#define hp_eti_try_read(eti, epolld) \
-do { \
-	struct epoll_event hetw_evobj, * __hetw_ev = &hetw_evobj; \
-	__hetw_ev->data.ptr = (epolld); \
-	__hetw_ev->events = EPOLLIN; \
-	hp_eti_read((eti), (epolld)->fd, __hetw_ev); \
-}while(0)
-
-/* @see writev_a */
-size_t hp_eto_write(struct hp_eto *eto, int fd, void * arg);
-size_t hp_eti_read(struct hp_eti * eti, int fd, void * arg);
-
-void hp_eio_uninit(struct hp_eto *eto);
-
+#ifdef HAVE_SYS_UIO_H
 /**
  * write @param vec until 'again' or error or write done
  * @return: return @bytes for written
@@ -121,7 +106,9 @@ void hp_eio_uninit(struct hp_eto *eto);
  *                     0 for OK, else for error
  * @note: call again if  write incomplete and no error
  */
-ssize_t writev_a(int fd, int * err, struct iovec * vec, int count, int * n, size_t bytes);
+typedef struct iovec iovec;
+ssize_t hp_uio_write(int fd, int * err, iovec * vec, int count, int * n, size_t bytes);
+#endif //#ifdef HAVE_SYS_UIO_H
 
 #ifndef NDEBUG
 int test_hp_io_main(int argc, char ** argv);
@@ -130,6 +117,7 @@ int test_hp_io_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
-#endif  /* _WIN32 */
-#endif /* _MSC_VER */
+
+
+#endif //#ifdef HAVE_UNISTD_H
 #endif /* LIBHP_IO_H__ */

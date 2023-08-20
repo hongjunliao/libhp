@@ -1,5 +1,5 @@
 ﻿/*!
-* This file is PART of libxhhp project
+* This file is PART of libhp project
 * @author hongjun.liao <docici@126.com>, @date 2018/12/3
 *
 * an Win32 IOCP wrapper
@@ -9,78 +9,60 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-//#include "Win32_Interop.h"
-#include "redis/src/adlist.h"
 
 #ifdef _MSC_VER
+#include "hp/hp_iocp.h"   /* hp_iocp */
 #include <winsock2.h>
-#define _fd_set(fd,set) FD_SET((fd), set) 
-#define _fd_isset(fd,set) FD_ISSET(fd, set) 
-
-#include "hp/hp_iocp.h"    /* hp_iocp */
-#include "hp/sdsinc.h" /* sds */
-#include "hp/hp_log.h"  /* hp_log */
-#include "hp/hp_libc.h" /* hp_tuple2_t */
-#include "hp/hp_err.h"	 /* hp_err */
-#include "hp/hp_net.h"	 /* read_a */
+#include "redis/src/adlist.h"
+#include "hp/sdsinc.h"    /* sds */
+#include "hp/hp_log.h"    /* hp_log */
+#include "hp/hp_tuple.h"  /* hp_tuple2_t */
+#include "hp/hp_err.h"	  /* hp_err */
+#include "hp/hp_search.h" /* hp_lfind */
+#include "hp/hp_tuple.h"  /* hp_tuple2_t */
+#include "hp/hp_net.h"  /* read_a */
 #include <process.h>    /* _beginthreadex */
-//#include <sysinfoapi.h> /* GetSystemInfo */
+#include <sysinfoapi.h> /* GetSystemInfo */
 #include <stdio.h>
 #include <string.h>     /* memset, ... */
 #include <assert.h>     /* define NDEBUG to disable assertion */
 #include <stdlib.h>
+#include "c-vector/cvector.h" //cvector_size
 
-#define OPTPARSE_IMPLEMENTATION
-#define OPTPARSE_API static
-#include "optparse/optparse.h"		/* option */
-//#include "getopt.h"			/* getopt_long */
-
-#include "c-vector/cvector.h"
-
+/////////////////////////////////////////////////////////////////////////////////////
+#define vecsize cvector_size
+#define vecpush cvector_push_back
+#define vecempty cvector_empty
+#define vecrm cvector_remove
+#define vecfree cvector_free
+#define vecinit cvector_init
+#define veccap cvector_capacity
 /////////////////////////////////////////////////////////////////////////////////////
 
 /* WM_USER + N */
-#define HP_IOCP_WM_IO(c)        ((c)->wmuser + 1)
-#define HP_IOCP_WM_FD(c)        ((c)->wmuser + 2)
-#define HP_IOCP_WM_END(c)       ((c)->wmuser + 3)
+#define HP_IOCP_WM_IO(c)        ((c)->wmuser + 1) // I/O done
+#define HP_IOCP_WM_FD(c)        ((c)->wmuser + 2) // fd event: POLLIN?
+#define HP_IOCP_WM_ADD(c)       ((c)->wmuser + 3) // add a fd to poll()
+#define HP_IOCP_WM_RM(c)        ((c)->wmuser + 4) // rm a fd from poll()
+
 /* add other WM_XXX here */
 
-#define IS_HP_IOCP_WM(c,msg)      ((msg) >= HP_IOCP_WM_FIRST(c) && (msg) <= HP_IOCP_WM_LAST(c))
+#define HP_IOCP_WM_FIRST(c)     HP_IOCP_WM_IO(c)
+#define HP_IOCP_WM_LAST(c)      HP_IOCP_WM_RM(c)
 
-/* internal use */
-#define HP_IOCP_WM_FD_ADD		(WM_USER + 10)
-#define HP_IOCP_WM_FD_RM		(WM_USER + 11)
-#define HP_IOCP_WM_FD_WINC		(WM_USER + 12)
-#define HP_IOCP_WM_FD_WDEC		(WM_USER + 13)
-#define HP_IOCP_WM_FD_END		(WM_USER + 14)
-
-#define HP_IOCP_WM_FD_FIRST     HP_IOCP_WM_FD_ADD
-#define HP_IOCP_WM_FD_LAST      HP_IOCP_WM_FD_END
-
-#define HP_IOCP_WMF_FDR         (1 << 1)
-#define HP_IOCP_WMF_FDW         (1 << 2)
-#define HP_IOCP_WMF_FDE         (1 << 3)
-
-#define HP_IOCP_RBUF  (1024 * 4)
-
+#define IS_HP_IOCP_WM(c,msg)    ((msg) >= HP_IOCP_WM_FIRST(c) && (msg) <= HP_IOCP_WM_LAST(c))
 /////////////////////////////////////////////////////////////////////////////////////
-/*
- * the message between threads
- **/
-struct hp_iocp_msg {
-	int             id;         /* ID for hp_iocp_item */
-	int             flags;      /* flags for this msg, see HP_IOCP_MSGF_XXX */
-	int             err;        /* error for this I/O operation */
-	char            errstr[64];
+#define HP_IOCP_RBUF  (1024 * 4)
+#define hp_iocp_is_quit(iocp) (iocp->ioid == -1)
+/////////////////////////////////////////////////////////////////////////////////////
 
-	WSAOVERLAPPED * overlapped; /* WSARecv overlapped */
-	hp_sock_t       sock;
-};
+typedef struct hp_iocp_obuf hp_iocp_obuf;
+typedef struct hp_iocp_item hp_iocp_item;
 
 /* for write */
 struct hp_iocp_obuf {
 	void *         ptr;         /* ptr to free */
-	hp_iocp_free_t free;        /* for free ptr */
+	hp_free_t      free;        /* for free ptr */
 
 	WSABUF         buf;         /* the buf, will change while writing */
 
@@ -91,17 +73,10 @@ struct hp_iocp_obuf {
 /* the I/O context */
 struct hp_iocp_item {
 	int			  id;			/* ID for this item */
-	hp_sock_t     sock;         /* the socket */
-
-	/* for read request */
-	size_t        rb_max;       /* max of read block */
-	size_t        rb_size;      /* size per read block */
-
-	size_t        n_rb;         /* number of read blocks */
-	size_t        n_wb;			/* number of write requests */
+	SOCKET        fd;           /* the socket */
 
 	/* for write */
-	struct hp_iocp_obuf ** obuf; /* bufs to write */
+	hp_iocp_obuf ** obuf; /* bufs to write */
 	/* for read */
 	sds           ibuf;
 
@@ -109,23 +84,49 @@ struct hp_iocp_item {
 	size_t        ibytes;       /* total bytes read */
 	size_t        obytes;       /* total bytes written */
 
+	/*
+	 * callback for on_accept
+	 * */
+	int (* on_accept)(hp_iocp * iocp, void * arg);
 	/* callback to process data, in ibuf
 	 * @return: >0: continue pending I/O request; =0: stop pending I/O request; <0: remove this I/O
 	 *  */
-	int (* on_data)(hp_iocp * iocpctx, int index, char * buf, size_t * len);
+	int (* on_data)(hp_iocp * iocp, void * arg, char * buf, size_t * len);
 	/* callback if error */
-	int (* on_error)(hp_iocp * iocpctx, int index, int err, char const * errstr);
-	/*
-	 * callback for connect
-	 * */
-	hp_sock_t(* connect)(hp_iocp * iocpctx, int index);
-
+	int (* on_error)(hp_iocp * iocp, void * arg, int err, char const * errstr);
+	int (* on_loop)(void * arg);
 	int             err;        /* error for this I/O operation */
 	hp_err_t        errstr;
 
 	void * arg;
 };
 
+static int hp_iocp_item_find_by_id(const void * k, const void * e)
+{
+	assert(e && k);
+	int kid = *(int *)k;
+	hp_iocp_item * item = (hp_iocp_item *)e;
+
+	return !(item->id == kid);
+}
+
+static int hp_iocp_item_find_by_id2(const void * k, const void * e)
+{
+	assert(e && k);
+	int kid = *(int *)k;
+	hp_iocp_item * item = (hp_iocp_item *)e;
+
+	if(kid < item->id)       return -1;
+	else if(kid == item->id) return 0;
+	else                     return 1;
+}
+
+/*
+ * use bsearch() is safe in most cases: "2147483647/(24*3600*50)==497"
+ */
+#define hp_iocp_item_find(iocp, id) (hp_iocp_item *)bsearch\
+	((id), ((iocp)->items), vecsize((iocp)->items), sizeof(hp_iocp_item), hp_iocp_item_find_by_id2)
+/////////////////////////////////////////////////////////////////////////////////////
 /*
  * overlapped in WSARecv/WSASend
  * */
@@ -139,26 +140,15 @@ struct hp_iocp_overlapped {
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
- * functions for hp_iocp_msg
- * */
-static inline struct hp_iocp_msg * hp_iocp_msg_alloc(hp_sock_t sock)
-{
-	struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
-	msg->sock = sock;
-	return msg;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-/*
  * functions for Windows message queue
  * */
-static int hp_iocp_msg_post(int tid, HWND hwnd, int type, struct hp_iocp_msg * msg)
+static int hp_iocp_msg_post(int tid, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int rc;
 
 	for (;;) {
-		if (hwnd) rc = PostMessage(hwnd, (UINT)type, (WPARAM)msg, (LPARAM)0);
-		else      rc = PostThreadMessage((DWORD)tid, (UINT)type, (WPARAM)msg, (LPARAM)0);
+		if (hwnd) rc = PostMessage(hwnd, message, wParam, lParam);
+		else      rc = PostThreadMessage((DWORD)tid, message, wParam, lParam);
 		
 		if(rc) { break; }
 	}
@@ -167,71 +157,23 @@ static int hp_iocp_msg_post(int tid, HWND hwnd, int type, struct hp_iocp_msg * m
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
- * socket
+ * bind socket with IOCP
  * */
-static void hp_iocp_close_socket(hp_iocp * iocpctx, hp_iocp_item * item, int flags)
+
+static int hp_iocp_do_socket(hp_iocp * iocp, hp_iocp_item * item)
 {
-	assert(iocpctx && item);
+	assert((iocp && item));
 
-	if (!hp_sock_is_valid(item->sock)) {
-		return;
-	}
-
-	//FIXME: closing socket here will cause select failure
-	//consider call it in select thread
-	closesocket(item->sock);
-
-	if(flags){
-		struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
-		msg->id = item->id;
-		msg->sock = item->sock;
-
-		int tid = GetThreadId(iocpctx->sthread);
-		hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_RM, msg);
-	}
-	item->sock = hp_sock_invalid;
-}
-
-static int hp_iocp_do_socket(hp_iocp * iocpctx, hp_iocp_item * item)
-{
-	if (!(iocpctx && item))
-		return -1;
-
-	SOCKET sock = item->sock;
-
-	if (!CreateIoCompletionPort((HANDLE)sock, (HANDLE)iocpctx->hiocp, (ULONG_PTR)item, (DWORD)0)) {
+	if (!CreateIoCompletionPort((HANDLE)item->fd, (HANDLE)iocp->hiocp, (ULONG_PTR)item, (DWORD)0)) {
 		int err = GetLastError();
 		hp_err_t errstr = "CreateIoCompletionPort: %s";
 		hp_log(stderr, "%s: CreateIoCompletionPort failed, error=%d/'%s'\n"
 			, __FUNCTION__, err, hp_err(err, errstr));
+
 		return -4;
 	}
 
-	struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
-	msg->id = item->id;
-	msg->sock = item->sock;
-	int tid = GetThreadId(iocpctx->sthread);
-
-	hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_ADD, msg);
-	return 0;
-}
-
-static int hp_iocp_connect(hp_iocp * iocpctx, hp_iocp_item * item)
-{
-	assert(iocpctx && item);
-
-	int rc;
-	if (hp_sock_is_valid(item->sock)) {
-		if (!item->connect)
-			return -1;
-		item->sock = item->connect(iocpctx, item->id);
-		if (!hp_sock_is_valid(item->sock)) {
-			return -1;
-		}
-		rc = hp_iocp_do_socket(iocpctx, item);
-		assert(rc == 0);
-	}
-
+	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_ADD(iocp), (WPARAM)item->id, (LPARAM)item->fd);
 	return 0;
 }
 
@@ -241,67 +183,29 @@ static int hp_iocp_connect(hp_iocp * iocpctx, hp_iocp_item * item)
  * for hp_iocp_item
  */
 
- /**
- * when an item is available?
- * read blocks clean and write list clean
- */
-static int is_item_avail(hp_iocp_item * item)
+#define hp_iocp_item_is_removed(item) \
+	((item)->on_accept == hp_iocp_def_on_accept || (item)->on_data == hp_iocp_def_on_data)
+
+static int hp_iocp_item_on_error(hp_iocp * iocp, hp_iocp_item * item)
 {
-	assert(item);
-	return !(
-		hp_sock_is_valid(item->sock) ||  /* socket is OK */
-		item->n_rb != 0              ||  /* still has read block */
-		item->n_wb != 0              ||  /* still has write request */
-		(item->obuf)					/* write list NOT empty: 
-										 * 1.will add to "write request" later; 2.idle ones */
-	);
-}
+	assert((iocp && item));
+	int rc = 0;
+	vecfree(item->obuf);
+	sdsfree((item)->ibuf);
 
-static int is_item_done(hp_iocp_item * item)
-{
-	assert(item);
-	return (!hp_sock_is_valid(item->sock) && item->n_rb == 0 && item->n_wb == 0);
-}
+	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, 0);
 
-static void rm_item_obuf(hp_iocp_item * item)
-{
-	assert(item);
-	if (item && item->obuf) {
-		for (; !cvector_empty(item->obuf); ) {
-			struct hp_iocp_obuf * obuf = item->obuf[0];
-			if (obuf->free)
-				obuf->free(obuf->ptr);
+	if(item->on_error)
+		item->on_error(iocp, item->arg, item->err, item->errstr);
 
-			cvector_remove(item->obuf, item->obuf);
-			free(obuf);
-		}
+	int i = item - iocp->items, n = vecsize(iocp->items);
 
-		cvector_free(item->obuf);
-		item->obuf = 0;
+	if (i + 1 < vecsize(iocp->items)) {
+		memmove(iocp->items + (i), iocp->items + (i)+1, sizeof(hp_iocp_item) * (n - (i + 1)));
+		rc = 1;
 	}
-	sdsclear(item->ibuf);
-}
-
-static void hp_iocp_on_item_error(hp_iocp * iocpctx, hp_iocp_item * item
-	, int flags
-	, int err, char const * errstr)
-{
-	hp_iocp_close_socket(iocpctx, item, flags);
-	if (item->n_wb == 0) { rm_item_obuf(item); }
-
-	if (is_item_done(item) && item->on_error) {
-		item->on_error(iocpctx, item->id, err, errstr);
-	}
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-static int hp_iocp_def_pack(hp_iocp * iocpctx, int index, char * buf, size_t len)
-{
-	assert(iocpctx && buf && len);
-
-	hp_log(stderr, "%s: dropped, len=%u\n" , __FUNCTION__, len);
-	return 1; /* need one more bytes :) */
+	--vecsize(iocp->items);
+	return rc;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -316,7 +220,7 @@ static struct hp_iocp_overlapped * hp_iocp_overlapped_get(WSAOVERLAPPED * overla
 	return iocpol;
 }
 
-static WSAOVERLAPPED * hp_iocp_overlapped_alloc(int id, hp_sock_t sock, char io, WSABUF * bufs, size_t n_bufs, void * arg)
+static WSAOVERLAPPED * hp_iocp_overlapped_alloc(int id, SOCKET fd, char io, WSABUF * bufs, size_t n_bufs, void * arg)
 {
 	if (!(bufs && n_bufs > 0))
 		return 0;
@@ -347,7 +251,7 @@ static void hp_iocp_overlapped_free(WSAOVERLAPPED * overlapped)
 }
 
 /* for users use */
-#define wsaoverlapped_alloc(id, sock, io, bufs, n_bufs, arg) (hp_iocp_overlapped_alloc((id), (sock), (io), (bufs), (n_bufs), arg))
+#define wsaoverlapped_alloc(id, fd, io, bufs, n_bufs, arg) (hp_iocp_overlapped_alloc((id), (fd), (io), (bufs), (n_bufs), arg))
 #define wsaoverlapped_free(overlapped) ((hp_iocp_overlapped_free(overlapped)))
 #define wsaoverlapped_id(overlapped) ((hp_iocp_overlapped_get(overlapped))->id)
 #define wsaoverlapped_io(overlapped) ((hp_iocp_overlapped_get(overlapped))->io)
@@ -362,11 +266,10 @@ static char zreadchar[1];
 /*
  * the actual I/O functions
  * */
-static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
+static int hp_iocp_do_read(hp_iocp * iocp, hp_iocp_item * item)
 {
-	assert((iocpctx && item));
-
-	if (!hp_sock_is_valid(item->sock)) { return 0; }
+	assert((iocp && item));
+	int rc = 0;
 
 	// Use zero length read with overlapped to get notification
 	// of when data is available
@@ -375,41 +278,43 @@ static int hp_iocp_do_read(hp_iocp * iocpctx, hp_iocp_item * item)
 	bufs[0].buf = zreadchar;
 	bufs[0].len = 0;
 
-	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->sock, 0, bufs, 1, 0);
+	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->fd, 0, bufs, 1, 0);
 	DWORD flags = 0;
-	int rc = WSARecv(item->sock, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
+	rc = WSARecv(item->fd, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
 		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
 	DWORD err = WSAGetLastError();
 
 	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
 		wsaoverlapped_free(overlapped);
 
-		hp_err_t errstr = "WSARecv: %s";
-		hp_iocp_on_item_error(iocpctx, item, 1, err, hp_err(err, errstr));
-		return -1;
+		item->err = err;
+		hp_err(err, item->errstr);
+		rc = -1;
 	}
 	else {
-		++item->n_rb;
+		item->err = 0;
+		rc = 0;
 	}
-	return 0;
+
+	return rc;
 }
 
-static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
+static int hp_iocp_do_write(hp_iocp * iocp, hp_iocp_item *  item)
 {
-	assert ((iocpctx && item && item->obuf));
+	assert ((iocp && item && item->obuf));
+	int rc = 0;
 
-	if (!hp_sock_is_valid(item->sock)) { return; }
-	if(cvector_empty(item->obuf)) { return; }
+	if(vecempty(item->obuf)) { return 0; }
 
-	struct hp_iocp_obuf * obuf = item->obuf[0];
-	cvector_remove(item->obuf, item->obuf);
+	hp_iocp_obuf * obuf = item->obuf[0];
+	vecrm(item->obuf, item->obuf);
 
 	WSABUF bufs[1];
 	bufs[0].buf = obuf->buf.buf;
 	bufs[0].len = obuf->buf.len;
-	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->sock, 1, bufs, 1, obuf);
+	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->fd, 1, bufs, 1, obuf);
 	DWORD flags = 0;
-	int rc = WSASend(item->sock, (LPWSABUF)wsaoverlapped_bufs(overlapped)
+	rc = WSASend(item->fd, (LPWSABUF)wsaoverlapped_bufs(overlapped)
 		, (DWORD)wsaoverlapped_n_bufs(overlapped)
 		, (LPDWORD)0, flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
 	DWORD err = WSAGetLastError();
@@ -420,192 +325,212 @@ static void hp_iocp_do_write(hp_iocp * iocpctx, hp_iocp_item *  item)
 		if (obuf->free) { obuf->free(obuf->ptr); }
 		free(obuf);
 
-		hp_err_t errstr = "WSASend: %s";
-		hp_iocp_on_item_error(iocpctx, item, 1, err, hp_err(err, errstr));
+		item->err = err;
+		hp_err(err, item->errstr);
+		rc = -1;
 	}
 	else {
-		++item->n_wb;
+		item->err = 0;
+		rc = 0;
 	}
+
+	return rc;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
  * message handler
+ * 
+ * because this IOCP wrapper use Windows message queue to sync
+ * user thread must call this function in message process routine, this is done by call hp_iocp_run()
+ * @see https://docs.microsoft.com/zh-cn/windows/desktop/winmsg/using-messages-and-message-queues
+ *
+ * @param message:    the message context, message ID, see hp_iocp_init
+ * @param wParam:     the message context
+ * @param lParam:     the message context
+ *
+ * @return:           0 on OK
  * */
-
-static hp_iocp_item * hp_iocp_item_find_by_sock(hp_iocp * iocpctx, hp_sock_t  sock)
+static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	int i;
-	int sz = cvector_capacity(iocpctx->items);
-	for (i = 0; i < sz; ++i) {
-		hp_sock_t s = iocpctx->items[i].sock;
+	assert((iocp));
+	assert (IS_HP_IOCP_WM(iocp, message));
+	int rc = 0;
 
-		if (hp_sock_is_valid(s) && s == sock)
-			return iocpctx->items + i;
-	}
-	return 0;
-}
+	if(message == HP_IOCP_WM_FD(iocp)){
+		int id = wParam, flags = lParam;;
+		hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
+		if(!item) {
+#ifndef NDEBUG
+			++iocp->n_dmsg0;
+			if(iocp->n_dmsg0 > 0 && iocp->n_dmsg0 % 10 == 0 && hp_log_level > 5)
+				hp_log(stdout, "%s: HP_IOCP_WM_FD message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg0);
+#endif /* NDEBUG */
+			return 0;
+		}
 
-int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	if (!iocpctx)
-		return -2;
-	if (!IS_HP_IOCP_WM(iocpctx, message))
-		return -1;
-
-	int rc;
-	struct hp_iocp_msg * iocpmsg = (struct hp_iocp_msg *)wParam;
-	assert(iocpmsg);
-	hp_iocp_item * item;
-
-	if(message == HP_IOCP_WM_FD(iocpctx)){
-		item = hp_iocp_item_find_by_sock(iocpctx, iocpmsg->sock);
-		if (item) {
-			if (iocpmsg->flags & HP_IOCP_WMF_FDE) {
-				hp_iocp_on_item_error(iocpctx, item, 0, 0, "fd exception");
+		if(flags & (POLLERR | POLLHUP)) rc = flags;
+		else{
+			if (flags & POLLIN) {
+				assert(item->on_data || item->on_accept);
+				if(item->on_data) { rc = hp_iocp_do_read(iocp, item);
+					hp_log(stdout, "%s: _____________________n_on_data=%d\n", __FUNCTION__, ++iocp->n_on_data);
+				}
+				else  {             item->on_accept(iocp, item->arg);
+					hp_log(stdout, "%s: _____________________n_on_accept=%d\n", __FUNCTION__, ++iocp->n_on_accept);
+				}
 			}
-			else {
-				if (iocpmsg->flags & HP_IOCP_WMF_FDR) {
-					if(item->on_data) { rc = hp_iocp_do_read(iocpctx, item); }
-					else { item->connect(iocpctx, item->id); }
-				}
-				if (iocpmsg->flags & HP_IOCP_WMF_FDW) {
-					hp_iocp_do_write(iocpctx, item);
-				}
+			if ((flags & POLLOUT)){
+				rc = hp_iocp_do_write(iocp, item);
+				hp_log(stdout, "%s: _____________________n_on_pollout=%d\n", __FUNCTION__, ++iocp->n_on_pollout);
 			}
 		}
+		if(rc != 0 || item->err)
+			hp_iocp_item_on_error(iocp, item);
 	}
-	else if (message == HP_IOCP_WM_IO(iocpctx)) {
-		assert(cvector_in(iocpctx->items, iocpmsg->id));
-		item = iocpctx->items + iocpmsg->id;
-		assert(item);
-
-		WSAOVERLAPPED * overlapped = iocpmsg->overlapped;
+	else if (message == HP_IOCP_WM_IO(iocp)) {
+		WSAOVERLAPPED * overlapped = (WSAOVERLAPPED *)wParam;
 		assert(overlapped);
-		WSABUF * wsabuf = wsaoverlapped_bufs(overlapped);
-		assert(wsabuf);
-		size_t nbuf = (size_t)overlapped->InternalHigh;
-		/*
-		* TODO:
-		* hp_iocp_overlapped support gatter I/O, (e.g. writev/readv)
-		* but for simplicity, current implementation(hp_iocp_read/hp_iocp_do_write) only read/write one buffer per time
-		* */
-		assert(wsaoverlapped_n_bufs(overlapped) == 1);
 
-		if (wsaoverlapped_io(overlapped) == 0) { /* read done */
-			assert(wsabuf && wsabuf->buf && wsabuf->len == 0 && nbuf == 0);
-			int err = 0;
-			--item->n_rb;
-			nbuf = (int)read_a(item->sock, &err, item->ibuf + sdslen(item->ibuf), sdsavail(item->ibuf), 0);
-			if (EAGAIN == err) {
-				if (nbuf > 0) {
-					sdsIncrLen(item->ibuf, nbuf);
-					item->ibytes += nbuf;
+		int id = wsaoverlapped_id(overlapped);
+		hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
 
-					size_t ibufL, ibufl;
-					ibufL = ibufl = sdslen(item->ibuf);
-					rc = item->on_data(iocpctx, item->id, item->ibuf, &ibufl);
-					sdsIncrLen(item->ibuf, ibufl - ibufL);
+		if(item){
+			WSABUF * wsabuf = wsaoverlapped_bufs(overlapped);
+			assert(wsabuf);
+			size_t nbuf = (size_t)overlapped->InternalHigh;
+			/*
+			* TODO:
+			* hp_iocp_overlapped support gatter I/O, (e.g. writev/readv)
+			* but for simplicity, current implementation(hp_iocp_read/hp_iocp_do_write) only read/write one buffer per time
+			* */
+			assert(wsaoverlapped_n_bufs(overlapped) == 1);
 
-					if (rc < 0) { /* close by user */
-						hp_iocp_close_socket(iocpctx, item, 1);
-						if (item->n_wb == 0) { rm_item_obuf(item); }
+			if (wsaoverlapped_io(overlapped) == 0) { /* read done */
+				assert(wsabuf && wsabuf->buf && wsabuf->len == 0 && nbuf == 0);
 
-						item->err = 0;
-						strncpy(item->errstr, "user callback", sizeof(item->errstr));
+				nbuf = (int)read_a(item->fd, &item->err, item->ibuf + sdslen(item->ibuf), sdsavail(item->ibuf), 0);
+				if (EAGAIN == item->err) {
+					item->err = 0;
+
+					if (nbuf > 0) {
+						sdsIncrLen(item->ibuf, nbuf);
+						item->ibytes += nbuf;
+
+						size_t ibufL, ibufl;
+						ibufL = ibufl = sdslen(item->ibuf);
+						rc = item->on_data(iocp, item->arg, item->ibuf, &ibufl);
+						sdsIncrLen(item->ibuf, ibufl - ibufL);
+						if(rc < 0 && hp_iocp_do_read(iocp, item) != 0)
+							hp_iocp_item_on_error(iocp, item);
 					}
 				}
+				else { /* read error, EOF? */
+					item->err = lParam;
+					hp_err(item->err, item->errstr);
+					hp_iocp_item_on_error(iocp, item);
+				}
+				hp_log(stdout, "%s: _____________________n_on_i=%d, nbuf=%zu\n", __FUNCTION__, ++iocp->n_on_i, nbuf);
 			}
-			else { /* read error, EOF? */
-				hp_iocp_close_socket(iocpctx, item, 1);
-				if (item->n_wb == 0) { rm_item_obuf(item); }
+			else { /* write done */
+				hp_log(stdout, "%s: _____________________n_on_o=%d\n", __FUNCTION__, ++iocp->n_on_o);
+				assert(nbuf <= wsabuf->len);    /* finished bytes should NOT bigger than committed */
+				hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
+				assert(obuf);
 
-				item->err = iocpmsg->err;
-				strncpy(item->errstr, iocpmsg->errstr, sizeof(item->errstr));
-			}
-		}
-		else { /* write done */
-			assert(nbuf <= wsabuf->len);    /* finished bytes should NOT bigger than committed */
-			struct hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
-			assert(obuf);
-			--item->n_wb;
+				if (nbuf > 0 && nbuf != wsabuf->len) {
+					item->obytes += nbuf;
+					/* write some, update for recommit */
 
-			if (nbuf > 0 && nbuf != wsabuf->len) {
-				item->obytes += nbuf;
-				/* write some, update for recommit */
-				assert(item->n_wb == 0);
+					obuf->buf.buf = (char *)wsabuf->buf + nbuf;
+					obuf->buf.len = (wsabuf->len - nbuf);
+					vecpush(item->obuf, obuf);
+					hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, POLLIN | POLLOUT);
+				}
+				else { /* write done or error, EOF? */
+					if (obuf->free) { obuf->free(obuf->ptr); }
+					free(obuf);
 
-				obuf->buf.buf = (char *)wsabuf->buf + nbuf;
-				obuf->buf.len = (wsabuf->len - nbuf);
-				cvector_push_back(item->obuf, obuf);
-			}
-			else { /* write done or error, EOF? */
-				if (obuf->free) { obuf->free(obuf->ptr); }
-				free(obuf);
-
-				if (nbuf == 0) {
-					hp_iocp_close_socket(iocpctx, item, 1);
-					if (item->n_wb == 0) { rm_item_obuf(item); }
+					if (nbuf == 0)
+						hp_iocp_item_on_error(iocp, item);
 				}
 			}
 		}
-		/* this is a place where we need to check if item still works fine */
-		if(!hp_sock_is_valid(item->sock) && item->n_wb == 0) { 
-			rm_item_obuf(item); 
+		else {
+#ifndef NDEBUG
+			++iocp->n_dmsg1;
+			if(iocp->n_dmsg1 > 0 && iocp->n_dmsg1 % 10 == 0 && hp_log_level > 5)
+				hp_log(stdout, "%s: HP_IOCP_WM_IO message drooped, total=%d\n", __FUNCTION__, iocp->n_dmsg1);
+#endif /* NDEBUG */
+
+			hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
+			if (obuf) {
+				if (obuf->free)
+					obuf->free(obuf->ptr);
+				free(obuf);
+			}
 		}
-		if (is_item_done(item) && item->on_error) {
-			item->on_error(iocpctx, item->id, item->err, item->errstr);
-		}
+
 		wsaoverlapped_free(overlapped);
 	}
 	else{
-		assert(0 && "hp/hp_iocp_handle_msg");
+		assert(0);
 	}
-	free(iocpmsg);
 	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+//select/poll fds
+
+typedef struct hp_iocp_polld {
+	int    id;
+	SOCKET fd;
+#ifndef LIBHP_WITH_WSAPOLL
+	int    flags;
+#endif
+} hp_iocp_polld;
+
+#define hp_iocp_poll_rm_at(pds, nfds, i) do {                               \
+	memmove(pds + (i), pds + (i) + 1, sizeof(hp_iocp_polld) * (nfds - (i + 1))); \
+}while(0)
+
+static int hp_iocp_polld_find_by_fd(const void * k, const void * e)
+{
+	assert(e && k);
+	SOCKET kfd = *(SOCKET *)k;
+	hp_iocp_polld * pd = (hp_iocp_polld *)e;
+
+	return !(pd->fd == kfd);
+}
+
+static int hp_iocp_polld_find_by_id2(const void * k, const void * e)
+{
+	assert(e && k);
+	int kid = *(int *)k;
+	hp_iocp_polld * pd = (hp_iocp_polld *)e;
+
+	if(kid < pd->id)       return -1;
+	else if(kid == pd->id) return 0;
+	else                     return 1;
+}
+/////////////////////////////////////////////////////////////////////////////////////////
 /*
  * select thread function
  * */
-hp_tuple2_t(hp_select_sock, hp_sock_t /* the socket */, int /* num of write blocks */);
-static inline hp_select_sock * select_sock_alloc(hp_sock_t sock) {
-	hp_select_sock * p = calloc(1, sizeof(hp_select_sock)); 
-	p->_1 = sock; 
-	return p;
-};
-
-static void select_sock_free(void *ptr)
-{
-	hp_select_sock * sock = (hp_select_sock *)ptr;
-	assert(ptr);
-	free(ptr);
-}
-
-static int select_sock_match(void *ptr, void *key)
-{
-	assert(ptr);
-	hp_select_sock * sock = (hp_select_sock *)ptr;
-	hp_sock_t k = key? *(hp_sock_t *)key : hp_sock_invalid;
-	return (k == sock->_1);
-}
-
 static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 {
 #ifndef NDEBUG
 	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
-	hp_iocp * iocpctx = (hp_iocp *)arg;
-	assert(iocpctx);
-	int rc, exit_ = 0;
-	list * socks = listCreate();
-	listSetFreeMethod(socks, select_sock_free);
-	listSetMatchMethod(socks, select_sock_match);
+	hp_iocp * iocp = (hp_iocp *)arg;
+	assert(iocp);
+
+	int rc = 0, i, nfds = 0;
+	hp_iocp_polld * pds = calloc(iocp->maxfd, sizeof(hp_iocp_polld));
 
 	struct fd_set rfds_obj, wfds_obj, exceptfds_obj;
 	struct fd_set * rfds = &rfds_obj, *wfds = &wfds_obj, * exceptfds = &exceptfds_obj;
-	struct timeval timeoutobj = { 0, iocpctx->stime_out * 1000 }, * timeout = &timeoutobj;
+	struct timeval timeoutobj = { 0, 0 }, * timeout = &timeoutobj;
 
 	for (;;) {
 		/* reset fd_sets for select */
@@ -613,115 +538,190 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 		FD_ZERO(wfds);
 		FD_ZERO(exceptfds);
 		/* try to get fd for select */
-		MSG msgobj = { 0 }, *message = &msgobj;
-		for(; PeekMessage((LPMSG)message, (HWND)-1
-				, (UINT)HP_IOCP_WM_FD_FIRST, (UINT)HP_IOCP_WM_FD_LAST
+		MSG msgobj = { 0 }, *msg = &msgobj;
+		for(; PeekMessage((LPMSG)msg, (HWND)-1
+				, (UINT)HP_IOCP_WM_FIRST(iocp), (UINT)HP_IOCP_WM_LAST(iocp)
 				, PM_REMOVE | PM_NOYIELD); ) {
-			struct hp_iocp_msg * msg = (struct hp_iocp_msg *)message->wParam;
+			if(hp_iocp_is_quit(iocp)) { break; }
 
-			if(message->message == HP_IOCP_WM_FD_END) { exit_ = 1; }
-			else {
-				if(!msg) { continue; }
+			int id = msg->wParam;
+			if (msg->message == HP_IOCP_WM_ADD(iocp)) {
+				SOCKET fd = msg->lParam;
 
-				if (message->message == HP_IOCP_WM_FD_ADD) {
-					listAddNodeTail(socks, select_sock_alloc(msg->sock));
-				}
-				else{
-					listNode * node = listSearchKey(socks, &msg->sock);
-					if (node) {
-						hp_select_sock * ssock = listNodeValue(node);
+				hp_iocp_polld * pd = hp_lfind(&fd, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_fd);
+				assert(!pd);
 
-						if (message->message == HP_IOCP_WM_FD_RM) { listDelNode(socks, node); }
-						else if (message->message == HP_IOCP_WM_FD_WINC && ssock) { ++ssock->_2; }
-						else if (message->message == HP_IOCP_WM_FD_WDEC && ssock) { --ssock->_2; }
-					}
-				}
-				free(msg);
+
+				pds[nfds].id = id;
+				pds[nfds].fd = fd;
+				pds[nfds].flags = POLLIN;
+				++nfds;
 			}
+			else if (msg->message == HP_IOCP_WM_RM(iocp)) {
+				hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
+				if(!pd) continue;
+
+				pd->flags =  msg->lParam;
+				if(pd->flags == 0){
+					i = pd - pds;
+					if(i + 1 < nfds){
+						hp_iocp_poll_rm_at(pds, nfds, i);
+					}
+					--nfds;
+				}
+			} else assert(0);
 		}
-		/* if no fd to select, just sleep */
-		if (!(listLength(socks) > 0)) {
-			if(exit_) { break; }
-			Sleep(iocpctx->stime_out);
-			continue;
+		if(hp_iocp_is_quit(iocp)) { break; }
+		if(nfds == 0) { Sleep(iocp->stime_out); continue; }
+
+		for(i = 0; i < nfds; ++i){
+			if(pds[i].flags & POLLIN)
+				FD_SET(pds[i].fd, rfds);
+			if(pds[i].flags & POLLOUT)
+				FD_SET(pds[i].fd, wfds);
+			FD_SET(pds[i].fd, exceptfds);
 		}
 
-		listNode * node;
-		listIter * iter = listGetIterator(socks, 0);
-		for (node = 0; (node = listNext(iter));) {
-			hp_select_sock * sock = listNodeValue(node);
-
-			_fd_set(sock->_1, rfds);
-			_fd_set(sock->_1, wfds);
-			_fd_set(sock->_1, exceptfds);
-		}
-		listReleaseIterator(iter);
-
-		int n = select(listLength(socks), rfds, wfds, (fd_set *)exceptfds, timeout);
-		if(n == 0) /* timedout */
-			continue; 
+		int n = select(nfds, rfds, wfds, exceptfds, timeout);
+		if (n == 0) { Sleep(iocp->stime_out); continue; }
 		else if (n == SOCKET_ERROR) {
-			/* see https://docs.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-select
+			/* see https://learn.microsoft.com/zh-cn/windows/win32/api/winsock2/nf-winsock2-wsapoll
 			 * for more error codes */
 			int err = WSAGetLastError();
-			hp_err_t errstr = "select: %s";
-			hp_log(stderr, "%s: select error, err=%d/'%s'\n", __FUNCTION__, err, hp_err(err, errstr));
+			if(hp_log_level > 0){
+				hp_err_t errstr = "select: %s";
+				hp_log(stderr, "%s: select error, err=%d/'%s'\n", __FUNCTION__, err, hp_err(err, errstr));
+			}
 			if((err == WSAEINTR || err == WSAEINPROGRESS))
 				continue;
-			/* socket is closed by user? */
-			listIter * iter = listGetIterator(socks, 0);
-			for (node = 0; (node = listNext(iter));) {
-				hp_select_sock * sock = listNodeValue(node);
-
-				/* see https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getsockopt */
-				int optval = 0;
-				int optlen = sizeof(int);
-				rc = getsockopt(sock->_1, SOL_SOCKET, SO_TYPE, (char*)&optval, &optlen);
-				if (rc != 0) {
-					struct hp_iocp_msg * msg = hp_iocp_msg_alloc(sock->_1);
-					msg->flags = HP_IOCP_WMF_FDE;
-
-					hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_FD(iocpctx), msg);
-					listDelNode(socks, node);
-				}
-			}
-			listReleaseIterator(iter);
-
 			continue; /* stop this time */
 		}
 
-		iter = listGetIterator(socks, 0);
-		for (; (node = listNext(iter));) {
+		for(i = 0; i < nfds; ++i){
 
-			hp_select_sock * sock = listNodeValue(node);
-			if (_fd_isset(sock->_1, rfds)
-				|| (_fd_isset(sock->_1, wfds) && sock->_2 > 0)
-				|| _fd_isset(sock->_1, exceptfds)) {
+			if(!(FD_ISSET(pds[i].fd, rfds)
+				|| (FD_ISSET(pds[i].fd, wfds))
+				|| FD_ISSET(pds[i].fd, exceptfds))) continue;
 
-				struct hp_iocp_msg * msg = hp_iocp_msg_alloc(sock->_1);
-				if (_fd_isset(sock->_1, exceptfds)) {
-					listDelNode(socks, node);
-					msg->flags = HP_IOCP_WMF_FDE;
+			int flags = 0;
+			if(FD_ISSET(pds[i].fd, rfds)) flags |= POLLIN;
+			if(FD_ISSET(pds[i].fd, wfds)) { flags |= POLLOUT; pds[i].flags &= ~POLLOUT; }
+			if(FD_ISSET(pds[i].fd, exceptfds)) flags = POLLERR;
+
+			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, flags);
+			//POLLERR | POLLHUP | POLLNVAL
+			if(flags & (POLLERR | POLLHUP)) {
+				//fd closed(by user?) or exception
+				if(i + 1 < nfds){
+					hp_iocp_poll_rm_at(pds, nfds, i);
+					//i+1 becomes i
+					--i;
 				}
-				else {
-					if (_fd_isset(sock->_1, rfds))
-						msg->flags |= HP_IOCP_WMF_FDR;
-					if (_fd_isset(sock->_1, wfds) && sock->_2 > 0)
-						msg->flags |= HP_IOCP_WMF_FDW;
-				}
-
-				hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_FD(iocpctx), msg);
+				--nfds;
 			}
 		}
-		listReleaseIterator(iter);
-
-		Sleep(iocpctx->stime_out);
+		Sleep(iocp->stime_out * ( 1 + nfds / iocp->maxfd));
 	}
 
-	listRelease(socks);
-	/* post "exit" message */
-	hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_END(iocpctx), GetCurrentThread());
+	free(pds);
+#ifndef NDEBUG
+	hp_log(stdout, "%s: exit thread function\n", __FUNCTION__);
+#endif /* NDEBUG */
+	return 0;
+}
 
+/////////////////////////////////////////////////////////////////////////////////////////
+//poll version
+
+static unsigned WINAPI hp_iocp_poll_threadfn(void * arg)
+{
+#ifndef NDEBUG
+	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
+#endif /* NDEBUG */
+	hp_iocp * iocp = (hp_iocp *)arg;
+	assert(iocp);
+
+	int rc = 0, i, nfds = 0;
+
+	WSAPOLLFD * fds = calloc(iocp->maxfd, sizeof(WSAPOLLFD));
+	hp_iocp_polld * pds = calloc(iocp->maxfd, sizeof(hp_iocp_polld));
+
+	for (;;) {
+		/* try to get fd for select */
+		MSG msgobj = { 0 }, *msg = &msgobj;
+		for(; PeekMessage((LPMSG)msg, (HWND)-1
+				, (UINT)HP_IOCP_WM_FIRST(iocp), (UINT)HP_IOCP_WM_LAST(iocp)
+				, PM_REMOVE | PM_NOYIELD); ) {
+			if(hp_iocp_is_quit(iocp)) { break; }
+
+			int id = msg->wParam;
+			if (msg->message == HP_IOCP_WM_ADD(iocp)) {
+				SOCKET fd = msg->lParam;
+
+				pds[nfds].id = id;
+				pds[nfds].fd = fd;
+
+				fds[nfds].fd = fd;
+				fds[nfds].events = POLLIN;
+
+				++nfds;
+			}
+			else{
+				hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
+				if(!pd) continue;
+				i = pd - pds;
+
+				int flags =  msg->lParam;
+				fds[i].events = flags;
+
+				if(fds[i].events == 0){
+					if(i + 1 < nfds){
+						memmove(fds + (i), fds + (i) + 1, sizeof(WSAPOLLFD) * (nfds - (i + 1)));
+						hp_iocp_poll_rm_at(pds, nfds, i);
+					}
+					--nfds;
+				}
+			}
+		}
+		if(hp_iocp_is_quit(iocp)) { break; }
+		if(nfds == 0) { Sleep(iocp->stime_out); continue; }
+
+		int n = WSAPoll(fds, nfds, 0);
+		if (n == 0) { Sleep(iocp->stime_out); continue; }
+		else if (n == SOCKET_ERROR) {
+			/* see https://learn.microsoft.com/zh-cn/windows/win32/api/winsock2/nf-winsock2-wsapoll
+			 * for more error codes */
+			int err = WSAGetLastError();
+			if(hp_log_level > 0){
+				hp_err_t errstr = "WSAPoll: %s";
+				hp_log(stderr, "%s: WSAPoll error, err=%d/'%s'\n", __FUNCTION__, err, hp_err(err, errstr));
+			}
+			if((err == WSAEINTR || err == WSAEINPROGRESS))
+				continue;
+			continue; /* stop this time */
+		}
+
+		for(i = 0; i < nfds; ++i){
+			if(fds[i].revents == 0) continue;
+			
+			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, fds[i].revents);
+			//POLLERR | POLLHUP | POLLNVAL
+			if(fds[i].revents & (POLLERR | POLLHUP)) {
+				//fd closed(by user?) or exception
+				if(i + 1 < nfds){
+					memmove(fds + (i), fds + (i) + 1, sizeof(WSAPOLLFD) * (nfds - (i + 1)));
+					hp_iocp_poll_rm_at(pds, nfds, i);
+					//i+1 becomes i
+					--i;
+				}
+				--nfds;
+			}
+		}
+		Sleep(iocp->stime_out);
+	}
+
+	free(fds);
+	free(pds);
 #ifndef NDEBUG
 	hp_log(stdout, "%s: exit thread function\n", __FUNCTION__);
 #endif /* NDEBUG */
@@ -737,8 +737,8 @@ static unsigned WINAPI hp_iocp_threadfn(void * arg)
 #ifndef NDEBUG
 	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
-	hp_iocp * iocpctx = (hp_iocp *)arg;
-	assert(iocpctx);
+	hp_iocp * iocp = (hp_iocp *)arg;
+	assert(iocp);
 
 	BOOL rc;
 	DWORD err = 0;
@@ -747,19 +747,16 @@ static unsigned WINAPI hp_iocp_threadfn(void * arg)
 	WSAOVERLAPPED * overlapped = 0;
 
 	for (;;) {
-		rc = GetQueuedCompletionStatus(iocpctx->hiocp, &iobytes, (LPDWORD)&key, (LPOVERLAPPED * )&overlapped, (DWORD)1000);
+		rc = GetQueuedCompletionStatus(iocp->hiocp, &iobytes, (LPDWORD)&key, (LPOVERLAPPED * )&overlapped,
+										(DWORD)iocp->stime_out);
 		err = WSAGetLastError();
 
 		if (rc || overlapped) { /* OK or quit */
 			if (rc && !overlapped) 
 				break;  /* PostQueuedCompletionStatus called */
 			assert(overlapped);
-			struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
-			msg->err = err;
-			msg->overlapped = overlapped;
-			msg->id = wsaoverlapped_id(overlapped);
 
-			hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_IO(iocpctx), msg);
+			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_IO(iocp), overlapped, err);
 		}
 		else {
 			if (err == WAIT_TIMEOUT)
@@ -772,264 +769,317 @@ static unsigned WINAPI hp_iocp_threadfn(void * arg)
 			}
 		}
 	}
-	/* post "exit" message */
-	hp_iocp_msg_post(iocpctx->ctid, iocpctx->hwnd, HP_IOCP_WM_END(iocpctx), GetCurrentThread());
-
 #ifndef NDEBUG
 	hp_log(stdout, "%s: exit thread function\n", __FUNCTION__);
 #endif /* NDEBUG */
 	return 0;
 }
 
-int hp_iocp_run(hp_iocp * iocpctx, int tid, HWND hwnd)
-{
-	if (!iocpctx)
-		return -1;
-	if (!(tid > 0 || hwnd))
-		return -2;
+/////////////////////////////////////////////////////////////////////////////////////////
 
-	iocpctx->ctid = tid;
-	iocpctx->hwnd = hwnd;
-	/* IOCP and the threads */
-	iocpctx->hiocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, (HANDLE)0, (ULONG_PTR)0, (DWORD)iocpctx->n_threads);
-	assert(iocpctx->hiocp);
+int hp_iocp_run(hp_iocp * iocp, int mode)
+{
+	if(!(iocp))
+		return -1;
 
 	int i;
-	for (i = 0; i < iocpctx->n_threads; i++) {
-		uintptr_t hdl = _beginthreadex(NULL, 0, hp_iocp_threadfn, (void *)iocpctx, 0, 0);
-		assert(hdl);
-		iocpctx->threads[i] = (HANDLE)hdl;
-	} {
-		uintptr_t hdl = _beginthreadex(NULL, 0, hp_iocp_select_threadfn, (void *)iocpctx, 0, 0);
-		assert(hdl);
-		iocpctx->sthread = (HANDLE)hdl;
+	for (; ;) {
+		MSG msgobj = { 0 }, *msg = &msgobj;
+		for (; PeekMessage((LPMSG)msg, (HWND)-1
+			, (UINT)HP_IOCP_WM_FIRST(iocp), (UINT)HP_IOCP_WM_LAST(iocp)
+			, PM_REMOVE | PM_NOYIELD); ) {
+			hp_iocp_handle_msg(iocp, msg->message, msg->wParam, msg->lParam);
+		}
+
+		for (i = 0; i < vecsize(iocp->items); ++i) {
+			hp_iocp_item * item = iocp->items + i;
+			if (item->on_loop && item->on_loop(item->arg) < 0){
+				if(hp_iocp_item_on_error(iocp, item))
+					--i;
+			}
+		}
+
+		if (mode != 0)
+			break;
 	}
 
 	return 0;
 }
 
-int hp_iocp_init(hp_iocp * iocpctx, int nthreads, int wmuser, int stime_out, void * user)
+int hp_iocp_init(hp_iocp * iocp, int maxfd, HWND hwnd, int nthreads, int wmuser, int stime_out, void * user)
 {
 	int i;
-	if(!iocpctx)
+	if(!(iocp && maxfd >= 0 && nthreads >= 0))
 		return -1;
-	memset(iocpctx, 0, sizeof(hp_iocp));
-
-	if(wmuser < WM_USER)
-		wmuser = WM_USER + 2021;
-	iocpctx->wmuser = wmuser;
 
 	if (nthreads > HP_IOCP_TMAX)
 		nthreads = HP_IOCP_TMAX;
-	if (nthreads <= 0) {
+	if (nthreads == 0) {
 		SYSTEM_INFO sysInfo;
 		GetSystemInfo(&sysInfo);
 		nthreads = (int)sysInfo.dwNumberOfProcessors - 1;
 	}
-	if (nthreads <= 0) 
-		nthreads = 1;
+	if(wmuser < WM_USER)
+		wmuser = WM_USER + 2021;
 
-	iocpctx->n_threads = nthreads;
-	iocpctx->stime_out = stime_out;
-	iocpctx->user = user;
-	
-	cvector_init(iocpctx->items, 2);
-	for (i = 0; i < cvector_capacity(iocpctx->items); ++i) {
-		memset(iocpctx->items + i, 0, sizeof(hp_iocp_item));
-		iocpctx->items[i].id = i;
-		iocpctx->items[i].sock = hp_sock_invalid;
-		iocpctx->items[i].ibuf = sdsempty();
+	if(maxfd == 0)
+		maxfd = 65535;
+
+	memset(iocp, 0, sizeof(hp_iocp));
+	iocp->ctid = (int)GetCurrentThreadId();
+
+	if (!(iocp->ctid > 0 || iocp->hwnd))
+		return -3;
+
+	iocp->hwnd = hwnd;
+	iocp->wmuser = wmuser;
+	iocp->n_threads = nthreads;
+	iocp->stime_out = max(stime_out, 200);
+	iocp->maxfd = maxfd;
+	iocp->user = user;
+	vecinit(iocp->items, maxfd);
+
+	/* IOCP and the threads */
+	iocp->hiocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, (HANDLE)0, (ULONG_PTR)0, (DWORD)iocp->n_threads);
+	assert(iocp->hiocp);
+
+	for (i = 0; i < iocp->n_threads; i++) {
+		uintptr_t hdl = _beginthreadex(NULL, 0, hp_iocp_threadfn, (void *)iocp, 0, 0);
+		assert(hdl);
+		iocp->threads[i] = (HANDLE)hdl;
 	}
+	{
+		unsigned (* poll_fn)(void * arg) =
+#ifndef LIBHP_WITH_WSAPOLL
+			hp_iocp_select_threadfn;
+#else
+			hp_iocp_poll_threadfn;
+#endif //#ifndef LIBHP_WITH_WSAPOLL
+		uintptr_t hdl = _beginthreadex(NULL, 0, poll_fn, (void *)iocp, 0, 0);
+		assert(hdl);
+		iocp->sthread = (HANDLE)hdl;
+		iocp->ptid = GetThreadId(iocp->sthread);
+	}
+
 	return 0;
 }
 
-void hp_iocp_uninit(hp_iocp * iocpctx)
+/////////////////////////////////////////////////////////////////////////////////////
+
+static int hp_iocp_def_on_accept(hp_iocp * iocp, void * arg)
+{
+	assert(iocp);
+	return -1;
+}
+static int hp_iocp_def_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
+{
+	assert(iocp && buf && len);
+	return -1;
+}
+
+static int hp_iocp_def_on_loop(void * arg) { return -1; }
+
+static int hp_iocp_def_on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
+{
+	assert(iocp);
+	return 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+void hp_iocp_uninit(hp_iocp * iocp)
 {
 	int i, rc;
-	if (!iocpctx) { return; }
-
-	HANDLE * threads =  iocpctx->threads;
-	int nthreads = iocpctx->n_threads + 1;
-	int tid = GetThreadId(iocpctx->sthread);
-	threads[iocpctx->n_threads] = iocpctx->sthread;
-	int sz = cvector_capacity(iocpctx->items);
-
-	/* close fds */
-	for (i = 0; i < sz; ++i) {
-		hp_sock_t s = iocpctx->items[i].sock;
-
-		if (hp_sock_is_valid(iocpctx->items[i].sock)) {
-			hp_iocp_close_socket(iocpctx, iocpctx->items + i, 1);
-		}
-	}
-
-	/* wait for all I/O done */
-	for (;;) {
-	again:
-		MSG msgobj = { 0 }, *msg = &msgobj;
-		for (; PeekMessage((LPMSG)msg, (HWND)-1
-			, (UINT)HP_IOCP_WM_FIRST(iocpctx), (UINT)HP_IOCP_WM_LAST(iocpctx)
-			, PM_REMOVE | PM_NOYIELD); ) {
-
-			assert(IS_HP_IOCP_WM(iocpctx, msg->message));
-			rc = hp_iocp_handle_msg(iocpctx, msg->message, msg->wParam, msg->lParam);
-		}
-
-		/* check if all clear */
-		for (i = 0; i < sz; ++i) {
-			hp_iocp_item * item = iocpctx->items + i;
-
-			if(hp_sock_is_valid(item->sock) ||  /* socket is OK */
-				item->n_rb != 0 ||  /* still has read block */
-				item->n_wb != 0     /* still has write request */
-				) {
-				goto again;
-			}
-		}
-		break;
-	}
+	if (!iocp) { return; }
 
 	/* stop all working threads */
-	for (i = 0; i < iocpctx->n_threads; i++) {
-		PostQueuedCompletionStatus(iocpctx->hiocp, (DWORD)0, (ULONG_PTR)0, (LPOVERLAPPED)0);
+	for (i = 0; i < iocp->n_threads; i++) {
+		PostQueuedCompletionStatus(iocp->hiocp, (DWORD)0, (ULONG_PTR)0, (LPOVERLAPPED)0);
 	}
-	hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_END, 0);
 
-	rc = WaitForMultipleObjects(nthreads, threads, TRUE, INFINITE);
+	rc = WaitForMultipleObjects(iocp->n_threads, iocp->threads, TRUE, INFINITE);
 	if (rc == WAIT_OBJECT_0) {
-		CloseHandle(iocpctx->hiocp);
+		CloseHandle(iocp->hiocp);
 	}
-
-	/* free*/
-	for (i = 0; i < sz; ++i) {
-		hp_iocp_item * item = iocpctx->items + i;
-		rm_item_obuf(item);
-		sdsfree(iocpctx->items[i].ibuf);
+	for(i = 0; i < iocp->n_threads; ++i){
+		CloseHandle(iocp->threads[i]);
 	}
-
-	cvector_free(iocpctx->items);
-
+	//reset to defaults to avoid notifications to user
+	for (i = 0; i < vecsize(iocp->items); ++i) {
+		hp_iocp_item * item = iocp->items + i;
+		item->on_accept = item->on_accept ? hp_iocp_def_on_accept : 0;
+		item->on_data = item->on_data ? hp_iocp_def_on_data : 0;
+		item->on_error = item->on_error ? hp_iocp_def_on_error : 0;
+	}
 	/* reset thread message queue */
 	MSG msgobj = { 0 }, *msg = &msgobj;
 	for (; PeekMessage((LPMSG)msg, (HWND)-1
-		, (UINT)HP_IOCP_WM_FIRST(iocpctx), (UINT)HP_IOCP_WM_LAST(iocpctx)
+		, (UINT)HP_IOCP_WM_FIRST(iocp), (UINT)HP_IOCP_WM_LAST(iocp)
 		, PM_REMOVE | PM_NOYIELD); ) {
 
-		assert(IS_HP_IOCP_WM(iocpctx, msg->message));
-
-		if (msg->message == HP_IOCP_WM_END(iocpctx)) {
-			for (i = 0; i < nthreads; i++) {
-				if (threads[i] == msg->wParam) {
-					threads[i] = 0;
-				}
-			}
-		}
-		else { 
-			free((struct hp_iocp_msg *)msg->wParam); 
-		}
+		hp_iocp_handle_msg(iocp, msg->message, msg->wParam, msg->lParam);
 	}
-	/*TODO: assert threads[i]==0? */
+
+	iocp->ioid = -1;
+	rc = WaitForSingleObject(iocp->sthread, INFINITE);
+	if (rc == WAIT_OBJECT_0) {
+		CloseHandle(iocp->sthread);
+	}
+
+	/* free */
+	vecfree(iocp->items);
+
 	return;
 }
 
-int hp_iocp_add(hp_iocp * iocpctx
-	, int rb_max, int rb_size
-	, hp_sock_t sock
-	, hp_sock_t(* on_connect)(hp_iocp * iocpctx, int index)
-	, int (* on_data)(hp_iocp * iocpctx, int index, char * buf, size_t * len)
-	, int (* on_error)(hp_iocp * iocpctx, int index, int on_error, char const * errstr)
-	, void * arg
-	)
+/////////////////////////////////////////////////////////////////////////////////////
+
+static int find_by_fd(const void * k, const void * e)
+{
+	assert(e && k);
+	SOCKET kfd = *(SOCKET *)k;
+	hp_iocp_item * item = (hp_iocp_item *)e;
+
+	return !(item->fd == kfd);
+}
+
+int hp_iocp_add(hp_iocp * iocp
+	, int nibuf , SOCKET fd
+	, int (* on_accept)(hp_iocp * iocp, void * arg)
+	, int (* on_data)(hp_iocp * iocp, void * arg, char * buf, size_t * len)
+	, int (* on_error)(hp_iocp * iocp, void * arg, int on_error, char const * errstr)
+	, int (* on_loop)(void * arg)
+	, void * arg)
 {
 	int rc;
-	if (!(iocpctx))
+	if (!(iocp && nibuf >= 0 && fd != INVALID_SOCKET && (on_data || on_accept)))
 		return -1;
+	if(nibuf == 0)
+		nibuf = HP_IOCP_RBUF;
 
-	int is_c = (on_data && ((hp_sock_is_valid(sock)) || on_connect));
-	int is_l = (!on_data && on_connect && (hp_sock_is_valid(sock)));
-	if(!(is_c || is_l))
-		return -2;
-	
-	if (!(iocpctx->ctid > 0 || iocpctx->hwnd))
-		return -3;
-
-	hp_iocp_item * item = 0;
-	int i, j, k;
-	for (k = 0;;) {
-		for (i = k; i < cvector_capacity(iocpctx->items); ++i) {
-			if (is_item_avail(iocpctx->items + i)) {
-				item = iocpctx->items + i;
-				goto item_done;
-			}
-		}
-		k = cvector_capacity(iocpctx->items);
-		cvector_grow(iocpctx->items, k * 2);
-
-		for (j = k; j < cvector_capacity(iocpctx->items); ++j) {
-			memset(iocpctx->items + j, 0, sizeof(hp_iocp_item));
-			iocpctx->items[j].id = j;
-			iocpctx->items[j].sock = hp_sock_invalid;
-			iocpctx->items[j].ibuf = sdsempty();
-		}
+	hp_iocp_item * item = (hp_iocp_item *)hp_lfind(&fd, (iocp)->items, vecsize((iocp)->items)
+			, sizeof(hp_iocp_item), find_by_fd);
+	if(item){
+		assert(item->fd == fd);
+		item->on_accept = on_accept;
+		item->on_data = on_data;
+		item->on_error = on_error;
+		item->on_loop = on_loop;
+		item->arg = arg;
+		if(nibuf > sdslen(item->ibuf))
+			item->ibuf = sdsMakeRoomFor(item->ibuf, nibuf - sdslen(item->ibuf));
+		return item->id;
 	}
-item_done:
-	item->sock = sock;
-	item->rb_size = (rb_size <= 0 ? (int)HP_IOCP_RBUF : rb_size);
-	item->rb_max = 0; //(rb_max <= 0 ? 4 : rb_max);
-	item->connect = on_connect;
+
+	if(vecsize(iocp->items) == veccap(iocp->items))
+		return -2;
+	if(iocp->ioid == INT_MAX - 1){
+		iocp->ioid = 0;
+	}
+
+	item = iocp->items + vecsize(iocp->items);
+	memset(item, 0, sizeof(hp_iocp_item));
+
+	item->id = iocp->ioid;
+	item->fd = fd;
+	item->on_accept = on_accept;
 	item->on_data = on_data;
 	item->on_error = on_error;
+	item->on_loop = on_loop;
 	item->arg = arg;
-	item->ibuf = sdsMakeRoomFor(item->ibuf, 1024 * 128);
-	/* connect */
-	if (hp_sock_is_valid(item->sock)) {
-		rc = hp_iocp_do_socket(iocpctx, item);
-		if(rc != 0)
-			return -3;
-	}
-	else {
-		rc = hp_iocp_connect(iocpctx, item);
-		if(rc != 0)
-			return -3;
-	}
-	cvector_init(item->obuf, 1);
+
+	rc = hp_iocp_do_socket(iocp, item);
+	if(rc != 0)
+		return -3;
+
+	item->ibuf = sdsMakeRoomFor(sdsempty(), nibuf);
+	vecinit(item->obuf, 1);
+	++iocp->ioid;
+	++vecsize(iocp->items);
 
 	return item->id;
 }
 
-int hp_iocp_size(hp_iocp * iocpctx)
-{
-	if(!iocpctx)
-		return -1;
+/////////////////////////////////////////////////////////////////////////////////////
 
-	int i, n = 0;
-	for (i = 0; i < cvector_capacity(iocpctx->items); ++i) {
-		if (!is_item_avail(iocpctx->items + i))
+int hp_iocp_rm(hp_iocp * iocp, int id)
+{
+	if(!(iocp && id >= 0)) return -1;
+
+	hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
+	if(!item) return -2;
+
+	//reset to defaults
+	item->on_accept = item->on_accept? hp_iocp_def_on_accept : 0;
+	item->on_data = item->on_data? hp_iocp_def_on_data : 0;
+	item->on_loop = item->on_loop? hp_iocp_def_on_loop : 0;
+	item->on_error = item->on_error? hp_iocp_def_on_error : 0;
+
+	return 0;
+}
+
+int hp_iocp_size(hp_iocp * iocp)
+{
+	if(!(iocp))
+		return -1;
+	int i, n;
+
+	n = 0;
+	for(i = 0; i < vecsize(iocp->items); ++i){
+		hp_iocp_item * item = iocp->items + i;
+		if(!hp_iocp_item_is_removed(item))
 			++n;
 	}
 	return n;
 }
 
-void * hp_iocp_arg(hp_iocp * iocpctx, int index)
-{   
-	return ((iocpctx && cvector_in(iocpctx->items, index))? iocpctx->items[index].arg : 0);
+/////////////////////////////////////////////////////////////////////////////////////
+
+hp_tuple2_t(hp_dofind_tuple, void * /*key*/, hp_cmp_fn_t /*on_cmp*/);
+
+static int hp_iocp_do_find(const void * k, const void * e)
+{
+	assert(e && k);
+	hp_dofind_tuple tu = *(hp_dofind_tuple *)k;
+	hp_iocp_item * item = (hp_iocp_item *)e;
+	return !(tu._2? tu._2(tu._1, item->arg) : tu._1 == item->arg);
 }
 
-int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
-	, hp_iocp_free_t freecb, void * ptr)
+void * hp_iocp_find(hp_iocp * iocp, void * key, int (* on_cmp)(const void *key, const void *ptr))
+{
+	if(!(iocp))
+		return 0;
+	hp_iocp_item * item = 0;
+	if(on_cmp){
+		hp_dofind_tuple k = { ._1 = key, ._2 = on_cmp };
+		item = (hp_iocp_item *)hp_lfind(&k, iocp->items, vecsize(iocp->items)
+				, sizeof(hp_iocp_item), hp_iocp_do_find);
+	}
+	else if(key){
+		item = hp_iocp_item_find(iocp, (int *)key);
+	}
+	return item && !hp_iocp_item_is_removed(item)? item->arg : 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+int hp_iocp_write(hp_iocp * iocp, int id, void * data, size_t ndata
+	, hp_free_t freecb, void * ptr)
 {
 	int rc = 0;
-	if(!(iocpctx && cvector_in(iocpctx->items, index) && data && ndata > 0)){
+	hp_iocp_item * item;
+	if(!(iocp && data && ndata > 0)){
 		rc = -1;
 		goto ret;
 	}
-	hp_iocp_item * item = iocpctx->items + index;
-	if (!item->obuf) {
+	item = hp_iocp_item_find(iocp, &id);
+	if (!item || hp_iocp_item_is_removed(item)) {
 		rc = -2;
 		goto ret;
 	}
+	assert(item->obuf);
 
-	struct hp_iocp_obuf * obuf = calloc(1, sizeof(struct hp_iocp_obuf));
+	hp_iocp_obuf * obuf = calloc(1, sizeof(hp_iocp_obuf));
 	obuf->ptr = ptr;
 	if (!obuf->ptr)
 		obuf->ptr = data;
@@ -1047,40 +1097,449 @@ int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
 		obuf->LEN = obuf->buf.len = ndata;
 	}
 
-	cvector_push_back(item->obuf, obuf);
-
-	/* tell select thread */
-	//struct hp_iocp_msg * msg = calloc(1, sizeof(struct hp_iocp_msg));
-	//msg->id = item->id;
-	//msg->sock = item->sock;
-	//int tid = GetThreadId(iocpctx->sthread);
-	//hp_iocp_msg_post(tid, (HWND)0, HP_IOCP_WM_FD_WINC, msg);
+	vecpush(item->obuf, obuf);
+	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, POLLIN | POLLOUT);
 ret:
-	if (rc != 0 && freecb && (freecb != (void *)-1)) { freecb(ptr ? ptr : data); }
+	if (rc != 0 && freecb) { freecb(ptr ? ptr : data); }
 	return rc;
 }
 
-int hp_iocp_try_write(hp_iocp * iocpctx, int index)
-{
-	if (!(iocpctx && cvector_in(iocpctx->items, index)))
-		return -1;
-	hp_iocp_item * item = iocpctx->items + index;
-	if (!item->obuf)
-		return -2;
-	hp_iocp_do_write(iocpctx, item);
-
-	return 0;
-}
 /////////////////////////////////////////////////////////////////////////////////////
 /* tests */
 #ifndef NDEBUG
 
 #include <time.h>			/* difftime */
 #include "http-parser/http_parser.h"
-#include "hp/hp_net.h" //hp_net_connect
+#include "hp/hp_net.h" //hp_tcp_connect
+#include "hp/hp_assert.h" //hp_assert
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "gbk-utf8/utf8.h"
+#include "hp/hp_config.h"	//hp_config_test
+#include "hp/hp_log.h"	//hp_log
+#include "hp/hp_stdlib.h"	//hp_free_t
+#define cfg hp_config_test
+#define cfgi(key) atoi(hp_config_test(key))
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+static int simple_tests()
+{
+	int rc;
+	hp_sock_t fd = 3;
+	{
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, 0, 0, 0);
+		assert(!ol);
+	}
+	{
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, 0, 1, 0);
+		assert(!ol);
+	}
+	{
+		WSABUF buf[1];
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, 0, 0);
+		assert(!ol);
+	}
+	{
+		WSABUF buf[1] = { 0 };
+		buf[0].len = 10;
+		buf[0].buf = malloc(10);
+
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, sizeof(buf) / sizeof(buf[0]), 0);
+		assert(ol);
+		assert(wsaoverlapped_id(ol) == 1);
+		assert(wsaoverlapped_io(ol) == 0);
+		assert(wsaoverlapped_n_bufs(ol) == 1);
+
+		WSABUF * bufs = wsaoverlapped_bufs(ol);
+		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
+		assert(bufs[0].buf == buf[0].buf);
+		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
+
+		wsaoverlapped_free(ol);
+		free(buf[0].buf);
+	}
+	/* tests for hp_iocp_overlapped::arg */
+	{
+		WSABUF buf[1] = { 0 };
+		buf[0].len = 10;
+		buf[0].buf = malloc(10);
+
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, sizeof(buf) / sizeof(buf[0]), buf);
+		assert(ol);
+		assert(wsaoverlapped_io(ol) == 0);
+		assert(wsaoverlapped_n_bufs(ol) == 1);
+		assert(wsaoverlapped_arg(ol) == buf);
+
+		WSABUF * bufs = wsaoverlapped_bufs(ol);
+		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
+		assert(bufs[0].buf == buf[0].buf);
+		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
+
+		wsaoverlapped_free(ol);
+		free(buf[0].buf);
+	}
+	{
+		WSABUF buf[1024] = { 0 };
+		buf[0].len = 10;
+		buf[0].buf = malloc(10);
+		buf[1023].len = 10;
+		buf[1023].buf = malloc(1024 * 1024 * 10);
+
+		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 1, buf, sizeof(buf) / sizeof(buf[0]), 0);
+		assert(ol);
+		assert(wsaoverlapped_io(ol) == 1);
+		assert(wsaoverlapped_n_bufs(ol) == 1024);
+
+		WSABUF * bufs = wsaoverlapped_bufs(ol);
+		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
+		assert(bufs[0].buf == buf[0].buf);
+		assert(bufs[1023].buf == buf[1023].buf);
+
+		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
+		assert(memcmp(buf[1023].buf, bufs[1023].buf, 1024 * 1024 * 10) == 0);
+
+		wsaoverlapped_free(ol);
+
+		free(buf[0].buf);
+		free(buf[1023].buf);
+	}
+
+	{
+		hp_iocp iocpobj = { 0 }, *iocp = &iocpobj;
+		int id;
+		rc = hp_iocp_init(iocp, 0/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/, 200/*timeout*/, 0/*arg*/);
+		assert(rc == 0);
+		id = hp_iocp_add(iocp, 0/*nibuf*/, 0/*fd*/,
+						0/*on_accept*/, 0/*on_data*/, 0/*on_error*/, 0/*on_loop*/, 0/*arg*/);
+		assert(id < 0);
+		hp_iocp_uninit(iocp);
+	}
+	/* hp_iocp basics */
+	{
+		hp_iocp iocpobj = { 0 }, *iocp = &iocpobj;
+		rc = hp_iocp_init(iocp, 0/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/, 200/*timeout*/, 0/*arg*/);
+		assert(rc == 0);
+		assert(hp_iocp_size(iocp) == 0);
+		hp_iocp_uninit(iocp);
+	}
+
+	return rc;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+typedef struct server {
+	int test;
+	hp_sock_t listen_fd;
+} server;
+
+// for simplicity, we use the same "client" struct for both server and client side code
+typedef struct client {
+	int id;
+	hp_sock_t fd;
+	sds in;
+	server * s;
+	char addr[64];
+	int test;
+} client;
+
+static int s_on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
+{
+	assert(iocp && arg);
+	client * req = (client *)arg;
+	assert(req->s);
+	closesocket(req->fd);
+
+	hp_log(stdout, "%s: delete TCP connection '%s', %d/'%s', IO total=%d\n", __FUNCTION__
+			, req->addr, err, errstr, hp_iocp_size(iocp));
+	return 0;
+}
+
+int s_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
+{
+	assert(iocp && arg && buf && len);
+	client * c = (client *)arg;
+	assert(c->s);
+
+	int rc;
+	c->in = sdscatlen(c->in, buf, *len);
+	*len = 0;
+
+	if(strncmp(c->in, "hello", strlen("hello")) == 0){
+
+		rc = hp_iocp_write(iocp, c->id, sdsnew("world"), strlen("world"), (hp_free_t)(sdsfree), 0);
+		assert(rc == 0);
+
+		c->test = 0;
+	}
+
+	return 0;
+}
+
+static int s_on_accept(hp_iocp * iocp, void * arg)
+{
+	assert(iocp && arg);
+	server * s = (server * )arg;
+	int rc;
+
+	for(;;){
+		struct sockaddr_in addr;
+		int len = (int)sizeof(addr);
+		hp_sock_t confd = accept(s->listen_fd, (struct sockaddr *)&addr, &len);
+		if(confd == INVALID_SOCKET){
+			int err = WSAGetLastError();
+			if(WSAEWOULDBLOCK == err) { return 0; }
+			hp_err_t errstr = "accept: %s";
+			hp_log(stderr, "%s: accept failed, errno=%d, error='%s'\n", __FUNCTION__, err, hp_err(err, errstr));
+			return -1;
+		}
+		u_long sockopt = 1;
+		if(ioctlsocket(confd, FIONBIO, &sockopt) < 0)
+			{ hp_close(confd); continue; }
+
+		client * req = calloc(1, sizeof(client));
+		req->s = s;
+		req->in = sdsempty();
+		req->test = s->test;
+
+		req->id = hp_iocp_add(iocp, 0/*nibuf*/, confd, 0/*on_accept*/, s_on_data , s_on_error, 0/*on_loop*/, req);
+		assert(req->id >= 0);
+
+		hp_log(stdout, "%s: new TCP connection from '%s', IO total=%d\n", __FUNCTION__
+				, hp_addr4name(&addr, ":", req->addr, sizeof(req->addr)), hp_iocp_size(iocp));
+	}
+
+	return 0;
+}
+
+
+int c_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
+{
+	assert(iocp && arg && buf && len);
+	client * c = (client *)arg;
+	assert(!c->s);
+
+	c->in = sdscatlen(c->in, buf, *len);
+	*len = 0;
+
+	if(strncmp(buf, "world", strlen("world")) == 0){
+		hp_log(stdout, "%s: client %d test done!\n", __FUNCTION__, c->id);
+		// client done
+		shutdown(c->fd, SD_BOTH);
+		c->test = 0;
+		return -1;
+	}
+
+	return 0;
+}
+
+static int c_on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
+{
+	assert(iocp && arg);
+	client * c = (client *)arg;
+	assert(!c->s);
+	closesocket(c->fd);
+
+	hp_log(stdout, "%s: %d disconnected err=%d/'%s'\n", __FUNCTION__, c->id, err, errstr);
+
+	return 0;
+}
+
+static int checkiftestrunning(const void *key, const void *ptr)
+{
+	assert(ptr && key);
+	//ignore listen fd
+	if(ptr == key)
+		return 0;
+	client * c = (client *)ptr;
+	return (c->test != 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+static int search_test_on_cmp(const void *k, const void *e)
+{
+	assert(e && k);
+	int kid = *(int *)k;
+	int id = *(int *)e;
+
+	return (kid == id);
+}
+static void search_test(int n)
+{
+	int rc, i;
+	hp_sock_t fd[1024];
+	int id[1024] = { 0 };
+	hp_iocp iocpobj = { 0 }, * iocp = &iocpobj;
+
+	rc = hp_iocp_init(iocp, n/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/,
+						200/*timeout*/, 0/*arg*/);
+	assert(rc == 0);
+	assert(hp_iocp_size(iocp) == 0);
+
+	for(i = 0; i < n; ++i){
+		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
+		fd[i] = confd;
+
+		id[i] = hp_iocp_add(iocp, 0/*nibuf*/, fd[i]/*fd*/ ,
+						0/*on_accept*/, c_on_data/*on_data*/, 0/*on_error*/, 0/*on_loop*/, id + i/*arg*/);
+		assert(id[i] >= 0);
+
+		assert(hp_iocp_size(iocp) == i + 1);
+
+		assert(hp_iocp_find(iocp, id + i, search_test_on_cmp));
+
+		rc = hp_iocp_rm(iocp, id[i]);
+		assert(rc == 0);
+
+		assert(!hp_iocp_find(iocp, id + i, search_test_on_cmp));
+
+		id[i] = hp_iocp_add(iocp, 0/*nibuf*/, fd[i]/*fd*/ ,
+					0/*on_accept*/ , c_on_data/*on_data*/, 0/*on_error*/, 0/*on_loop*/, id + i/*arg*/);
+		assert(id[i] >= 0);
+	}
+
+	for(i = 0; i < n; ++i){
+		rc = hp_iocp_rm(iocp, id[i]);
+		assert(rc == 0);
+	}
+	assert(hp_iocp_size(iocp) == 0);
+	hp_iocp_uninit(iocp);
+
+	for(i = 0; i < n; ++i){
+		hp_close(fd[i]);
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+static int add_remove_test(int n)
+{
+	int rc = 0, i, id;
+	hp_sock_t fd[1024];
+
+	hp_sock_t listenfd = hp_tcp_listen(cfgi("test_hp_iocp_main.port"));
+	assert(hp_sock_is_valid(listenfd));
+
+	hp_iocp iocpobj = { 0 }, *iocp = &iocpobj;
+	rc = hp_iocp_init(iocp, n + 1/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/, 200/*timeout*/, 0/*arg*/);
+	assert(rc == 0);
+	// add listen fd
+	for (i = 0; i < 2; ++i) {
+		id = hp_iocp_add(iocp, 0/*nibuf*/, listenfd/*fd*/ ,
+						s_on_accept , 0/*on_data*/, 0/*on_error*/, 0/*on_loop*/, 0/*arg*/);
+		assert(id >= 0);
+	}
+	assert(hp_iocp_size(iocp) == 1);
+
+	// add connect fd
+	for (i = 0; i < n; ++i) {
+
+		hp_sock_t confd = hp_tcp_connect(cfg("test_hp_iocp_main.ip"), cfgi("test_hp_iocp_main.port") + 1);
+		assert(hp_sock_is_valid(confd));
+		fd[i] = confd;
+
+		id = hp_iocp_add(iocp, 0/*nibuf*/, fd[i], 0/*on_accept*/, c_on_data , c_on_error, 0/*on_loop*/, 0/*arg*/);
+		assert(id >= 0);
+		//add same fd
+		int id2 = hp_iocp_add(iocp, 0/*nibuf*/, fd[i], 0/*on_accept*/, c_on_data, c_on_error, 0/*on_loop*/, 0/*arg*/);
+		assert(id == id2);
+	}
+	assert(hp_iocp_size(iocp) == i + 1);
+	{
+		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
+
+		id = hp_iocp_add(iocp, 0/*nibuf*/, fd[i], 0/*on_accept*/, c_on_data , c_on_error, 0/*on_loop*/, 0/*arg*/);
+		assert(id < 0);
+		hp_close(confd);
+	}
+
+	hp_iocp_uninit(iocp);
+	for (i = 0; i < n; ++i) {
+		hp_close(fd[i]);
+	}
+
+	hp_close(listenfd);
+
+	return rc;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+static int client_server_echo_test(int test, int n)
+{
+	int rc, i;
+
+	server sobj = { 0 }, * s = &sobj;
+	hp_iocp iocpctxbj, * iocp = &iocpctxbj;
+
+	client * c = (client *)calloc(70000, sizeof(client));
+	assert(c);
+
+	hp_sock_t listen_fd = hp_tcp_listen(cfgi("tcp.port"));
+	assert(hp_sock_is_valid(listen_fd));
+
+	s->test = test;
+	s->listen_fd = listen_fd;
+
+	rc = hp_iocp_init(iocp, 2 * n + 1/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/,
+			500/*timeout*/, s/*arg*/);
+	assert(rc == 0);
+
+	/* add listen socket */
+	int id = hp_iocp_add(iocp, 0/*nibuf*/ , listen_fd/*fd*/ ,
+					s_on_accept, 0/*on_data*/, s_on_error, 0/*on_loop*/, s/*arg*/);
+	assert(id >= 0);
+
+	/* add connect socket */
+	for(i = 0; i < n; ++i){
+
+		c[i].in = sdsempty();
+		c[i].test = test;
+
+		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("tcp.port"));
+		assert(hp_sock_is_valid(confd));
+
+		c[i].fd = confd;
+
+		c[i].id = hp_iocp_add(iocp, 0/*nibuf*/ , confd/*fd*/ , 0/*on_accept*/, c_on_data, c_on_error, 0/*on_loop*/, c + i/*arg*/);
+		assert(c[i].id >= 0);
+
+		if(test == 1){
+			rc = hp_iocp_write(iocp, c[i].id, sdsnew("hello"), strlen("hello"), (hp_free_t)(sdsfree), 0);
+			assert(rc == 0);
+		}
+	}
+	hp_log(stdout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("tcp.port"));
+	/* run event loop, 1 for listenio  */
+	int s_tdone = 0;
+	for (;; ) {
+		hp_iocp_run(iocp, 1/*mode*/);
+
+		if(s_tdone && hp_iocp_size(iocp) <= 1) break;
+		if(s_tdone == 0){
+
+			client * fc = (client *)hp_iocp_find(iocp, s, checkiftestrunning);
+			if(!fc)
+				s_tdone = 1;
+		}
+	}
+
+	hp_iocp_uninit(iocp);
+
+	/*clear*/
+	for(i = 0; c[i].in; ++i){
+		sdsfree(c[i].in);
+	}
+	hp_close(listen_fd);
+	free(c);
+
+	return rc;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
 
 static char server_ip[128] = "";
 static char s_url[1024] = "";
@@ -1143,10 +1602,10 @@ do {                                                                 \
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-static int http_get_file__on_error(hp_iocp * iocpctx, int index, int err, char const * errstr)
+static int http_get_file__on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
 {
-	assert(iocpctx && iocpctx->user);
-	struct http_get_file * fctx = (struct http_get_file *)iocpctx->user;
+	assert(iocp && iocp->user);
+	struct http_get_file * fctx = (struct http_get_file *)iocp->user;
 
 	hp_log(stdout, "%s: disconnected, err=%d/'%s'\n", __FUNCTION__
 		, err, errstr);
@@ -1159,24 +1618,11 @@ static int http_get_file__on_error(hp_iocp * iocpctx, int index, int err, char c
 	return 0;
 }
 
-/* create the socket */
-static hp_sock_t http_get_file__on_connect(hp_iocp * iocpctx, int index)
-{
-	assert(iocpctx);
-	hp_sock_t sock = hp_net_connect(server_ip, server_port);
-
-	sds ssock = sdsfromlonglong(sock);
-	hp_log(stdout, "%s: connect to  server='%s:%d', socket=%s\n", __FUNCTION__
-		, server_ip, server_port, ssock);
-	sdsfree(ssock);
-	return sock;
-}
-
-int http_get_file__on_unpack(hp_iocp * iocpctx, int index, char * buf, size_t * len)
+int http_get_file__on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
 {
 	assert(buf && len);
-	assert(iocpctx && iocpctx->user);
-	struct http_get_file * fctx = (struct http_get_file *)iocpctx->user;
+	assert(iocp && iocp->user);
+	struct http_get_file * fctx = (struct http_get_file *)iocp->user;
 
 	size_t buflen = *len,  nparsed = http_parser_execute(&fctx->parser, &s_settings, buf, *len);
 
@@ -1249,7 +1695,7 @@ static int on_body(http_parser* p, const char *at, size_t length)
 		CloseHandle(fctx->s_hfile);
 		/* */
 		rc = -1;
-		//closesocket(s);
+		//hp_close(s);
 	}
 
 	static time_t lastlog = 0;
@@ -1268,34 +1714,13 @@ static int on_body(http_parser* p, const char *at, size_t length)
 
 	return rc;
 }
+
 /////////////////////////////////////////////////////////////////////////////////////
 
-int test_hp_iocp_main(int argc, char ** argv)
+static int get_http_file()
 {
-	int i,rc;
-	hp_sock_t sock = 3;
-	sds url = 0;
-
-	/* parse argc/argv */
-	struct optparse_long longopts[] = {
-		{"url", 'u', OPTPARSE_REQUIRED},
-		{0}
-	};
-	struct optparse options;
-	optparse_init(&options, argv);
-
-	for (; (rc = optparse_long(&options, longopts, NULL)) != -1; ) {
-		switch (rc) {
-		case 'u':
-			url = sdsnew(options.optarg ? options.optarg : "");
-			break;
-		case '?':
-			fprintf(stdout, "%s --url,-u=STRING\n", argv[0]);
-			break;
-		}
-	}
-	if(!url)	
-		return -2;
+	int rc;
+	sds url = sdsnew(cfg("http://127.0.1:7006/")); assert(sdslen(url) > 0);
 
 	/* parse URL */
 	struct http_parser_url uobj, *u = &uobj;
@@ -1304,197 +1729,89 @@ int test_hp_iocp_main(int argc, char ** argv)
 
 	url_field(u, url, UF_PATH, s_url);
 	url_field(u, url, UF_HOST, server_ip);
-	server_port = u->port > 0? u->port : 80;
+	server_port = u->port > 0 ? u->port : 80;
 
-	if(!(strlen(s_url) > 0 && strlen(server_ip) > 0))
+	if (!(strlen(s_url) > 0 && strlen(server_ip) > 0))
 		return -2;
 
+	hp_sock_t confd = hp_tcp_connect(server_ip, server_port);
+	assert(hp_sock_is_valid(confd));
+
+	struct http_get_file s_httpgetfileobj = { 0 }, *fctx = &s_httpgetfileobj;
+	http_parser_init(&fctx->parser, HTTP_RESPONSE);
+	fctx->parser.data = fctx;
+
+	/* the IOCP context */
+	hp_iocp iocpobj = { 0 }, *iocp = &iocpobj;
+	rc = hp_iocp_init(iocp, 2/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/, 200/*timeout*/, fctx/*arg*/);
+	assert(rc == 0);
+
+	/* prepare for I/O */
+	int id = hp_iocp_add(iocp, 0/*nibuf*/ , confd, 0 /*on_accept*/
+		, http_get_file__on_data , http_get_file__on_error, 0/*on_loop*/, 0/*arg*/);
+	assert(id >= 0);
+
+	sds data = sdscatprintf(sdsempty(), "GET %s HTTP/1.1\r\nHost: %s:%d\r\n\r\n"
+				, s_url, server_ip, server_port);
+
+	rc = hp_iocp_write(iocp, id, data, strlen(data), 0, 0);
+	assert(rc == 0);
+
+	hp_log(stdout, "%s: %s\n", __FUNCTION__, dumpstr(data, sdslen(data), sdslen(data)));
+
+	for (rc = 0; !fctx->s_quit;) {
+		hp_iocp_run(iocp, 1/*mode*/);
+	}
+	hp_iocp_uninit(iocp);
+	sdsfree(data);
+
+	sdsfree(fctx->fname);
+	sdsfree(url);
+
+	return 0;
+}
+/////////////////////////////////////////////////////////////////////////////////////
+
+int test_hp_iocp_main(int argc, char ** argv)
+{
+	int rc;
+	hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
+			",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
+		POLLIN, POLLOUT, POLLERR, POLLHUP
+		, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
+		, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
+		, FD_SETSIZE);
 	/* simple test */
+	simple_tests();
+	//add,remove test
 	{
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 0, 0, 0, 0);
-		assert(!ol);
-	} 
-	{ 
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 0, 0, 1, 0); 
-		assert(!ol);
+		rc = add_remove_test(1); assert(rc == 0);
+		rc = add_remove_test(2); assert(rc == 0);
+		rc = add_remove_test(3); assert(rc == 0);
+		rc = add_remove_test(500); assert(rc == 0);
 	}
+	// search test
 	{
-		WSABUF buf[1];
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 0, buf, 0, 0);
-		assert(!ol);
-	}
+		search_test(1);
+		search_test(2);
+		search_test(3);
+		search_test(500);
+	}	/*
+	 * simple echo server, client sent "hello", server reply with "world"
+	 *  */
 	{
-		WSABUF buf[1] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 0, buf, sizeof(buf) / sizeof(buf[0]), 0);
-		assert(ol);
-		assert(wsaoverlapped_id(ol) == 1);
-		assert(wsaoverlapped_io(ol) == 0);
-		assert(wsaoverlapped_n_bufs(ol) == 1);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0); 
-
-		wsaoverlapped_free(ol);
-		free(buf[0].buf);
-	}
-	/* tests for hp_iocp_overlapped::arg */
-	{
-		WSABUF buf[1] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 0, buf, sizeof(buf) / sizeof(buf[0]), buf);
-		assert(ol);
-		assert(wsaoverlapped_io(ol) == 0);
-		assert(wsaoverlapped_n_bufs(ol) == 1);
-		assert(wsaoverlapped_arg(ol) == buf);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
-
-		wsaoverlapped_free(ol);
-		free(buf[0].buf);
-	}
-	{
-		WSABUF buf[1024] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-		buf[1023].len = 10;
-		buf[1023].buf = malloc(1024 * 1024 * 10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, sock, 1, buf, sizeof(buf) / sizeof(buf[0]), 0);
-		assert(ol);
-		assert(wsaoverlapped_io(ol) == 1);
-		assert(wsaoverlapped_n_bufs(ol) == 1024);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(bufs[1023].buf == buf[1023].buf);
-
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
-		assert(memcmp(buf[1023].buf, bufs[1023].buf, 1024 * 1024 * 10) == 0);
-
-		wsaoverlapped_free(ol);
-
-		free(buf[0].buf);
-		free(buf[1023].buf);
-	}
-	
-	{
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		int index;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200, 0);
-		assert(rc == 0);
-		index = hp_iocp_add(iocpctx, 0, 0, 0, 0, 0, 0, 0); assert(index < 0);
+		rc = client_server_echo_test(1, 1); assert(rc == 0);
+		rc = client_server_echo_test(1, 2); assert(rc == 0);
+		rc = client_server_echo_test(1, 3); assert(rc == 0);
+		rc = client_server_echo_test(1, 1000); assert(rc == 0);
 	}
 
-	/* hp_iocp basics */
-	{
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200,0);
-		assert(rc == 0);
-
-		int tid = (int)GetCurrentThreadId();
-		rc = hp_iocp_run(iocpctx, tid, 0);
-		assert(rc == 0);
-
-		assert(hp_iocp_size(iocpctx) == 0);
-
-		hp_iocp_uninit(iocpctx);
-	}
-	{
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200, 0);
-		assert(rc == 0);
-
-		int tid = (int)GetCurrentThreadId();
-		rc = hp_iocp_run(iocpctx, tid, 0);
-		assert(rc == 0);
-
-		size_t i;
-		for (i = 0; i < 1; ++i) {
-			int index = hp_iocp_add(iocpctx, 0, 0, 0, http_get_file__on_connect
-				, 0, 0, 0);
-			assert(index >= 0);
-		}
-		assert(hp_iocp_size(iocpctx) == 1);
-
-		hp_iocp_uninit(iocpctx);
-	}
-	{
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200, 0);
-		assert(rc == 0);
-
-		int tid = (int)GetCurrentThreadId();
-		rc = hp_iocp_run(iocpctx, tid, 0);
-		assert(rc == 0);
-
-		size_t i;
-		for (i = 0; i < 2; ++i) {
-			int index = hp_iocp_add(iocpctx, 0, 0, 0, http_get_file__on_connect
-				, 0, 0, 0);
-			assert(index >= 0);
-		}
-		assert(hp_iocp_size(iocpctx) == 2);
-
-		hp_iocp_uninit(iocpctx);
-	}
 	//
 	/////////////////////////////////////////////////////////////////////////////////////
 	// test: HTTP client get HTTP file
-	{
-		struct http_get_file s_httpgetfileobj = { 0 }, *fctx = &s_httpgetfileobj;
-		http_parser_init(&fctx->parser, HTTP_RESPONSE);
-		fctx->parser.data = fctx;
-
-		/* the IOCP context */
-		struct hp_iocp iocpcctxobj = { 0 }, *iocpctx = &iocpcctxobj;
-		rc = hp_iocp_init(iocpctx, 2, WM_USER + 100, 200, fctx);
-		assert(rc == 0);
-
-		int tid = (int)GetCurrentThreadId();
-		rc = hp_iocp_run(iocpctx, tid, 0);
-		assert(rc == 0);
-
-		/* prepare for I/O */
-		int index = hp_iocp_add(iocpctx, 0, 0
-			, 0, http_get_file__on_connect
-			, http_get_file__on_unpack
-			, http_get_file__on_error
-			, 0);
-		assert(index >= 0);
-
-		sds data = sdscatprintf(sdsempty(), "GET %s HTTP/1.1\r\nHost: %s:%d\r\n\r\n"
-					, s_url, server_ip, server_port);
-
-		rc = hp_iocp_write(iocpctx, index, data, strlen(data), 0, 0);
-		assert(rc == 0);
-
-		hp_log(stdout, "%s: %s\n", __FUNCTION__, dumpstr(data, sdslen(data), sdslen(data)));
-
-		for (rc = 0; !fctx->s_quit;) {
-			MSG msgobj = { 0 }, *msg = &msgobj;
-			if (PeekMessage((LPMSG)msg, (HWND)0, (UINT)0, (UINT)0, PM_REMOVE)) {
-				rc = hp_iocp_handle_msg(iocpctx, msg->message, msg->wParam, msg->lParam);
-			}
-		}
-		hp_iocp_uninit(iocpctx);
-		sdsfree(data);
-
-		sdsfree(fctx->fname);
-	}
+//	get_http_file();
 	/////////////////////////////////////////////////////////////////////////////////////
 
-	sdsfree(url);
 
 	return 0;
 }

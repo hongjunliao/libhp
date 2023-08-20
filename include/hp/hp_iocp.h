@@ -12,31 +12,27 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-//#include "Win32_Interop.h"
-#include "hp_sock_t.h"  /* hp_sock_t */
-
+#include  "hp_stdlib.h"  //hp_free_t
 #ifdef _MSC_VER
 
 #include <stdint.h>      /* size_t */
-#include "libhp.h"
+
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 1024  //before winsock2.h
+#endif //#ifndef FD_SETSIZE
+#include <winsock2.h>
  /////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* WM_USER + N, [first,last] */
-#define HP_IOCP_WM_FIRST(c)        ((c)->wmuser + 1)
-#define HP_IOCP_WM_LAST(c)        ((c)->wmuser + 3)
-
 /////////////////////////////////////////////////////////////////////////////////////
 
-#define HP_IOCP_TMAX  16         /* IOCP thread max */
-
+#define HP_IOCP_TMAX  64         /* IOCP thread max */
 
 typedef struct hp_iocp hp_iocp;
 typedef struct hp_iocp_item hp_iocp_item;
-typedef	void  (* hp_iocp_free_t)(void * ptr);
 
 struct hp_iocp {
 	HANDLE        hiocp;                 /* handle of IOCP */
@@ -46,14 +42,27 @@ struct hp_iocp {
 	HANDLE        threads[HP_IOCP_TMAX + 1]; /* IOCP threads */
 	int           n_threads;              /* number of IOCP threads  */
 	hp_iocp_item *items;				  /*  */
-	int           flags;
 	UINT          wmuser;                /* WM_USER + N */
 	int           stime_out;             /* timeout in ms for select threads */
+	int           ioid;					 //for items::id
+	int           maxfd;				//for maxfd
+	int			  ptid;					// select/poll thread id
 	void *        user;					 /* user data, ignored by hp_iocp */
+#ifndef NDEBUG
+	int 		  n_on_accept;
+	int           n_on_data;
+	int 		  n_on_pollout;
+	int 		  n_on_i;
+	int 		  n_on_o;
+	int 		  n_dmsg0;
+	int 		  n_dmsg1;
+#endif //#ifndef NDEBUG
 };
 
 /*
  * init
+ * @param maxfd:     maxfd
+ * @param hwnd:      then HWND to receive messages
  * @param nthreads:  number of IOCP threads, if 0, then use SYSTEM_INFO
  * @param rb_max:    for read, see @rb_max
  * @param rb_size:   for read, read (@param rb_max * @param rb_size) bytes at max
@@ -62,73 +71,56 @@ struct hp_iocp {
  * @param user:      user data, ignored by hp_iocp
  * @return:          0 on OK
  * */
-int hp_iocp_init(hp_iocp * iocpctx, int nthreads, int wmuser, int stime_out, void * user);
-void hp_iocp_uninit(hp_iocp * iocpctx);
+int hp_iocp_init(hp_iocp * iocp, int maxfd, HWND hwnd, int nthreads, int wmuser, int stime_out, void * user);
+void hp_iocp_uninit(hp_iocp * iocp);
 
 /*
  * start working threads
  * NOTE: either @param tid or @param hwnd must be valid
- * @param tid:       user thread ID
- * @param hwnd:      then HWND to receive messages
- * @return:          0 on OK
+ * @mode:    0 for forever, 1 for once
+ * @return:  0 on OK
  * */
-int hp_iocp_run(hp_iocp * iocpctx, int tid, HWND hwnd);
+int hp_iocp_run(hp_iocp * iocp, int mode);
 
-#define HP_IOCP_CLR_IOBYTES (1 <<0)  // clear I/O bytes if disconnect?
 /*
  * add an I/O context
- * @iocpctx            which hp_iocp to add to
- * @param rb_max, rb_size: for read blocks, count and size
- * @param sock:		   the socket which I/O will go to
- * @param on_connect:  callback if @param sock invalid
+ * @iocp            which hp_iocp to add to
+ * @param nibuf:    for read buf size
+ * @param fd:		   the socket which I/O will go to
+ * @param on_accept:  callback if accept
  * @param on_data:     callback when data coming
  *                       return <0 for close
  * @param on_error:    callback when error
- *                       return >0 for reconnect
  * @param flags:       user data
- * @return:            an index for this new I/O context, >= 0 on OK, <0 on error
- * NOTES:
- * call order: hp_iocp_init=>hp_iocp_run=>hp_iocp_add=>hp_iocp_write
+ * @return:            an id for this new I/O context, >= 0 on OK, <0 on error
  * */
-int hp_iocp_add(hp_iocp * iocpctx
-	, int rb_max, int rb_size
-	, hp_sock_t sock
-	, hp_sock_t(* on_connect)(hp_iocp * iocpctx, int index)
-	, int (* on_data)(hp_iocp * iocpctx, int index, char * buf, size_t * len)
-	, int (* on_error)(hp_iocp * iocpctx, int index, int on_error, char const * errstr)
-	, void * arg
-	);
-int hp_iocp_size(hp_iocp * iocpctx);
-void * hp_iocp_arg(hp_iocp * iocpctx, int index);
+int hp_iocp_add(hp_iocp * iocp
+	, int nibuf , SOCKET fd
+	, int (* on_accept)(hp_iocp * iocp, void * arg)
+	, int (* on_data)(hp_iocp * iocp, void * arg, char * buf, size_t * len)
+	, int (* on_error)(hp_iocp * iocp, void * arg, int on_error, char const * errstr)
+	, int (* on_loop)(void * arg)
+	, void * arg);
+int hp_iocp_rm(hp_iocp * iocp, int id);
+void * hp_iocp_find(hp_iocp * iocp, void * key, int (* on_cmp)(const void *key, const void *ptr));
+int hp_iocp_size(hp_iocp * iocp);
 /*
  * write something async
- * @param index:      return value from @hp_iocp_add
+ * @param id:      	  return value from @hp_iocp_add
  * @param data:       data to write
  * @param ndata:      bytes of @param data
  * @param free:       callback to free @param data when written
  * @param ptr:        param to call @param free, if 0, then @param data
  * @param user_data:  user data for this write call
  * @return:           0 on OK
+ * NOTE: @param data/ptr is freed even if failed
  * */
-int hp_iocp_write(hp_iocp * iocpctx, int index, void * data, size_t ndata
-	, hp_iocp_free_t freecb, void * ptr);
-int hp_iocp_try_write(hp_iocp * iocpctx, int index);
-
-/*
- * because this IOCP wrapper use Windows message queue to sync
- * user thread must call this function in message process routine
- * @see https://docs.microsoft.com/zh-cn/windows/desktop/winmsg/using-messages-and-message-queues
- * 
- * @param message:    the message context, message ID, see hp_iocp_init
- * @param wParam:     the message context
- * @param lParam:     the message context
- * 
- * @return:           0 on OK
- * */
-int hp_iocp_handle_msg(hp_iocp * iocpctx, UINT message, WPARAM wParam, LPARAM lParam);
+int hp_iocp_write(hp_iocp * iocp, int id, void * data, size_t ndata
+	, hp_free_t freecb, void * ptr);
+//int hp_iocp_try_write(hp_iocp * iocp, int index);
 
 #ifndef NDEBUG
-LIBHP_EXT int test_hp_iocp_main(int argc, char ** argv);
+int test_hp_iocp_main(int argc, char ** argv);
 #endif //NDEBUG
 
 #ifdef __cplusplus

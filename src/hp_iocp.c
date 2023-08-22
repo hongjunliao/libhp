@@ -58,27 +58,80 @@
 #define SOLISTEN 0x1024
 /////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct hp_iocp_obuf hp_iocp_obuf;
+typedef struct hp_iocp_ol hp_iocp_ol;
 typedef struct hp_iocp_item hp_iocp_item;
 
-/* for write */
-struct hp_iocp_obuf {
-	void *         ptr;         /* ptr to free */
-	hp_free_t      free;        /* for free ptr */
+static int hp_iocp_msg_post(int tid, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+/////////////////////////////////////////////////////////////////////////////////////
+/* WSAOVERLAPPED */
 
-	WSABUF         buf;         /* the buf, will change while writing */
-
-	void *         BUF;         /* init buf */
-	size_t         LEN;         /* init buf length */
+struct hp_iocp_ol {
+	WSAOVERLAPPED  wsaol;
+	int       id;   /* ID for this item */
+	void *    ptr;  /* ptr to free */
+	hp_free_t free; /* for free ptr */
+	WSABUF    buf;  /* the buf, will change while writing */
+	int *     lastr;//bytes last read
 };
 
+static hp_iocp_ol * hp_iocp_ol_newi(int id, int n, int * lastr)
+{
+	assert(lastr);
+	// Use zero length read with ol to get notification
+	// of when data is available
+	// see redis.win\src\Win32_Interop\win32_wsiocp.c\WSIOCP_QueueNextRead
+	static char zreadchar[1];
+//	WSABUF buf = {.len = *n, .buf = sdsnewlen(0, *n)};
+
+	hp_iocp_ol * ol = calloc(1, sizeof(hp_iocp_ol) + n);
+	ol->id = id;
+	ol->buf.len = n;
+	ol->buf.buf = (char *)(ol + 1);
+	ol->lastr = lastr;
+
+	return ol;
+}
+
+static hp_iocp_ol * hp_iocp_ol_newo(int id, void * data, size_t ndata
+		, hp_free_t freecb, void * ptr)
+{
+	hp_iocp_ol * ol = calloc(1, sizeof(hp_iocp_ol));
+
+	ol->id = id;
+	ol->ptr = ptr;
+	if (!ol->ptr)
+		ol->ptr = data;
+
+	ol->free = freecb;
+	ol->buf.buf = data;
+	ol->buf.len = ndata;
+
+	return ol;
+}
+
+static void hp_iocp_ol_del(hp_iocp_ol * ol)
+{
+	assert(ol);
+	if (ol->free)
+		ol->free(ol->ptr);
+	free(ol);
+}
+
+#define ol_newi hp_iocp_ol_newi
+#define ol_newo hp_iocp_ol_newo
+#define ol_buf(ol)  (&(ol)->buf)
+#define ol_read(ol) (!(ol)->ptr)
+#define ol_del  hp_iocp_ol_del
+
+/////////////////////////////////////////////////////////////////////////////////////
 /* the I/O context */
+
 struct hp_iocp_item {
 	int			  id;			/* ID for this item */
 	SOCKET        fd;           /* the socket */
 
 	/* for write */
-	hp_iocp_obuf ** obuf; /* bufs to write */
+	hp_iocp_ol ** obuf; /* bufs to write */
 	/* for read */
 	sds           ibuf;
 
@@ -128,17 +181,31 @@ static int hp_iocp_item_find_by_id2(const void * k, const void * e)
  */
 #define hp_iocp_item_find(iocp, id) (hp_iocp_item *)bsearch\
 	((id), ((iocp)->items), vecsize((iocp)->items), sizeof(hp_iocp_item), hp_iocp_item_find_by_id2)
-/////////////////////////////////////////////////////////////////////////////////////
-/*
- * overlapped in WSARecv/WSASend
- * */
-struct hp_iocp_overlapped {
-	int			    id;         /* ID for hp_iocp_item */
-	char            io;         /* whether read or write for this I/O? 0 for read, else write */
-	WSABUF *        bufs;       /* the buffers */
-	size_t          n_bufs;     /* length of bufs */
-	void *          arg;        /* user data */
-};
+
+#define hp_iocp_item_is_removed(item) \
+	((item)->on_accept == hp_iocp_def_on_accept || (item)->on_data == hp_iocp_def_on_data)
+
+static int hp_iocp_item_on_error(hp_iocp * iocp, hp_iocp_item * item)
+{
+	assert((iocp && item));
+	int rc = 0;
+	vecfree(item->obuf);
+	sdsfree((item)->ibuf);
+
+	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, 0);
+
+	if(item->on_error)
+		item->on_error(iocp, item->arg, item->err, item->errstr);
+
+	int i = item - iocp->items, n = vecsize(iocp->items);
+
+	if (i + 1 < vecsize(iocp->items)) {
+		memmove(iocp->items + (i), iocp->items + (i)+1, sizeof(hp_iocp_item) * (n - (i + 1)));
+		rc = 1;
+	}
+	--vecsize(iocp->items);
+	return rc;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*
@@ -151,7 +218,7 @@ static int hp_iocp_msg_post(int tid, HWND hwnd, UINT message, WPARAM wParam, LPA
 	for (;;) {
 		if (hwnd) rc = PostMessage(hwnd, message, wParam, lParam);
 		else      rc = PostThreadMessage((DWORD)tid, message, wParam, lParam);
-		
+
 		if(rc) { break; }
 	}
 	return rc;
@@ -184,114 +251,22 @@ static int hp_iocp_do_socket(hp_iocp * iocp, hp_iocp_item * item)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
-
-/*
- * for hp_iocp_item
- */
-
-#define hp_iocp_item_is_removed(item) \
-	((item)->on_accept == hp_iocp_def_on_accept || (item)->on_data == hp_iocp_def_on_data)
-
-static int hp_iocp_item_on_error(hp_iocp * iocp, hp_iocp_item * item)
-{
-	assert((iocp && item));
-	int rc = 0;
-	vecfree(item->obuf);
-	sdsfree((item)->ibuf);
-
-	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, 0);
-
-	if(item->on_error)
-		item->on_error(iocp, item->arg, item->err, item->errstr);
-
-	int i = item - iocp->items, n = vecsize(iocp->items);
-
-	if (i + 1 < vecsize(iocp->items)) {
-		memmove(iocp->items + (i), iocp->items + (i)+1, sizeof(hp_iocp_item) * (n - (i + 1)));
-		rc = 1;
-	}
-	--vecsize(iocp->items);
-	return rc;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-/*
- * for hp_iocp_overlapped
- */
-static struct hp_iocp_overlapped * hp_iocp_overlapped_get(WSAOVERLAPPED * overlapped)
-{
-	if (!overlapped) return 0;
-	struct hp_iocp_overlapped * iocpol = 0;
-	memcpy(&iocpol, (char *)overlapped - sizeof(struct hp_iocp_overlapped *), sizeof(struct hp_iocp_overlapped *));
-	return iocpol;
-}
-
-static WSAOVERLAPPED * hp_iocp_overlapped_alloc(int id, SOCKET fd, char io, WSABUF * bufs, size_t n_bufs, void * arg)
-{
-	if (!(bufs && n_bufs > 0))
-		return 0;
-	struct hp_iocp_overlapped * iocpol = (struct hp_iocp_overlapped *)calloc(1, sizeof(struct hp_iocp_overlapped));
-	iocpol->id = id;
-	iocpol->io = io;
-	iocpol->n_bufs = n_bufs;
-	iocpol->bufs = (WSABUF *)calloc(n_bufs, sizeof(WSABUF));
-	iocpol->arg = arg;
-	memcpy(iocpol->bufs, bufs, sizeof(WSABUF) * n_bufs);
-
-	void * addr = calloc(1, sizeof(struct hp_iocp_overlapped *) + sizeof(WSAOVERLAPPED));
-	memcpy(addr, &iocpol, sizeof(struct hp_iocp_overlapped *));
-
-	WSAOVERLAPPED * overlapped = (WSAOVERLAPPED *)((char *)addr + sizeof(struct hp_iocp_overlapped *));
-
-	return overlapped;
-}
-static void hp_iocp_overlapped_free(WSAOVERLAPPED * overlapped)
-{
-	struct hp_iocp_overlapped * iocpol = hp_iocp_overlapped_get(overlapped);
-	if (!iocpol) return;
-
-	void * addr = (char *)overlapped - sizeof(struct hp_iocp_overlapped *);
-	free(addr);
-	free(iocpol->bufs);
-	free(iocpol);
-}
-
-/* for users use */
-#define wsaoverlapped_alloc(id, fd, io, bufs, n_bufs, arg) (hp_iocp_overlapped_alloc((id), (fd), (io), (bufs), (n_bufs), arg))
-#define wsaoverlapped_free(overlapped) ((hp_iocp_overlapped_free(overlapped)))
-#define wsaoverlapped_id(overlapped) ((hp_iocp_overlapped_get(overlapped))->id)
-#define wsaoverlapped_io(overlapped) ((hp_iocp_overlapped_get(overlapped))->io)
-#define wsaoverlapped_bufs(overlapped) ((hp_iocp_overlapped_get(overlapped))->bufs)
-#define wsaoverlapped_n_bufs(overlapped) ((hp_iocp_overlapped_get(overlapped))->n_bufs)
-#define wsaoverlapped_arg(overlapped) ((hp_iocp_overlapped_get(overlapped))->arg)
-
-/////////////////////////////////////////////////////////////////////////////////////
-/* for WSARecv */
-static char zreadchar[1];
-
 /*
  * the actual I/O functions
  * */
-static int hp_iocp_do_read(hp_iocp * iocp, int id, SOCKET fd, int * err)
+static int hp_iocp_do_read(hp_iocp * iocp, int id, SOCKET fd, int n, int * lastr, int * err)
 {
-	assert((iocp && err));
+	assert((iocp && lastr && err));
 	int rc = 0;
 
-	// Use zero length read with overlapped to get notification
-	// of when data is available
-	// see redis.win\src\Win32_Interop\win32_wsiocp.c\WSIOCP_QueueNextRead
-	WSABUF bufs[1];
-	bufs[0].buf = zreadchar;
-	bufs[0].len = 0;
-
-	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(id, fd, 0, bufs, 1, 0);
+	hp_iocp_ol * ol = ol_newi(id, n, lastr);
 	DWORD flags = 0;
-	rc = WSARecv(fd, (LPWSABUF)wsaoverlapped_bufs(overlapped), (DWORD)(wsaoverlapped_n_bufs(overlapped))
-		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
+	rc = WSARecv(fd, (LPWSABUF)ol_buf(ol), (DWORD)1
+		, 0, (LPDWORD)&flags, (LPWSAOVERLAPPED)ol, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
 	*err = WSAGetLastError();
 
 	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != *err)) {
-		wsaoverlapped_free(overlapped);
+		ol_del(ol);
 		rc = -1;
 	}
 	else {
@@ -302,6 +277,7 @@ static int hp_iocp_do_read(hp_iocp * iocp, int id, SOCKET fd, int * err)
 	return rc;
 }
 
+//TODO: gatter I/O, (e.g. writev/readv)
 static int hp_iocp_do_write(hp_iocp * iocp, hp_iocp_item *  item)
 {
 	assert ((iocp && item && item->obuf));
@@ -309,24 +285,18 @@ static int hp_iocp_do_write(hp_iocp * iocp, hp_iocp_item *  item)
 
 	if(vecempty(item->obuf)) { return 0; }
 
-	hp_iocp_obuf * obuf = item->obuf[0];
+	hp_iocp_ol * ol = item->obuf[0];
 	vecrm(item->obuf, item->obuf);
 
-	WSABUF bufs[1];
-	bufs[0].buf = obuf->buf.buf;
-	bufs[0].len = obuf->buf.len;
-	WSAOVERLAPPED * overlapped = wsaoverlapped_alloc(item->id, item->fd, 1, bufs, 1, obuf);
 	DWORD flags = 0;
-	rc = WSASend(item->fd, (LPWSABUF)wsaoverlapped_bufs(overlapped)
-		, (DWORD)wsaoverlapped_n_bufs(overlapped)
-		, (LPDWORD)0, flags, (LPWSAOVERLAPPED)overlapped, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
+	rc = WSASend(item->fd, (LPWSABUF)ol_buf(ol)
+		, (DWORD)1
+		, (LPDWORD)0, flags, (LPWSAOVERLAPPED)ol, (LPWSAOVERLAPPED_COMPLETION_ROUTINE)0);
 	DWORD err = WSAGetLastError();
 
 	if ((rc == SOCKET_ERROR) && (WSA_IO_PENDING != err)) {
 
-		wsaoverlapped_free(overlapped);
-		if (obuf->free) { obuf->free(obuf->ptr); }
-		free(obuf);
+		ol_del(ol);
 
 		item->err = err;
 		hp_err(err, item->errstr);
@@ -362,13 +332,14 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 
 	if(message == HP_IOCP_WM_FD(iocp)){
 		int id = wParam, flags = lParam;;
+
 		hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
 		if(!item) {
 			++iocp->n_dmsg0;
 			return 0;
 		}
 
-		if(flags & (POLLERR | POLLHUP)) rc = flags;
+		if(flags & (POLLERR | POLLHUP)) { item->err = flags;}
 		else{
 			if (flags & POLLIN) {
 				assert(item->on_accept);
@@ -384,90 +355,69 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 			hp_iocp_item_on_error(iocp, item);
 	}
 	else if (message == HP_IOCP_WM_IO(iocp)) {
-		WSAOVERLAPPED * overlapped = (WSAOVERLAPPED *)wParam;
-		assert(overlapped);
+		hp_iocp_ol * ol = (hp_iocp_ol *)wParam;
+		assert(ol);
 
-		int id = wsaoverlapped_id(overlapped);
-		hp_iocp_item * item = hp_iocp_item_find(iocp, &id);
-
+		hp_iocp_item * item = hp_iocp_item_find(iocp, &ol->id);
 		if(item){
-			WSABUF * wsabuf = wsaoverlapped_bufs(overlapped);
-			assert(wsabuf);
-			size_t nbuf = (size_t)overlapped->InternalHigh;
-			/*
-			* TODO:
-			* hp_iocp_overlapped support gatter I/O, (e.g. writev/readv)
-			* but for simplicity, current implementation(hp_iocp_read/hp_iocp_do_write) only read/write one buffer per time
-			* */
-			assert(wsaoverlapped_n_bufs(overlapped) == 1);
+			size_t nbuf = (size_t)ol->wsaol.InternalHigh;
+			if (ol_read(ol) && nbuf > 0) { /* read done */
+				item->ibytes += nbuf;
+				InterlockedExchange(ol->lastr, nbuf);
 
-			if (wsaoverlapped_io(overlapped) == 0) { /* read done */
-				assert(wsabuf && wsabuf->buf && wsabuf->len == 0 && nbuf == 0);
+				if(sdslen(item->ibuf) > 0) {
 
-				nbuf = (int)read_a(item->fd, &item->err, item->ibuf + sdslen(item->ibuf), sdsavail(item->ibuf), 0);
-				if (EAGAIN == item->err) {
-					item->err = 0;
-
-					if (nbuf > 0) {
+					for(; sdsavail(item->ibuf) < nbuf;){ //确保有足够空间容纳新来的数据
+						size_t len = sdslen(item->ibuf);
+						rc = item->on_data(iocp, item->arg, item->ibuf, &len);
+						sdsIncrLen(item->ibuf, -(int)(sdslen(item->ibuf) - len));
+						if(rc < 0) break;
+					}
+					if(rc >= 0){
+						memcpy(item->ibuf + sdslen(item->ibuf), ol->buf.buf, nbuf);
 						sdsIncrLen(item->ibuf, nbuf);
-						item->ibytes += nbuf;
 
-						size_t ibufL, ibufl;
-						ibufL = ibufl = sdslen(item->ibuf);
-						rc = item->on_data(iocp, item->arg, item->ibuf, &ibufl);
-						sdsIncrLen(item->ibuf, ibufl - ibufL);
-						if(rc < 0 && hp_iocp_do_read(iocp, item->id, item->fd, &item->err) != 0)
-							hp_iocp_item_on_error(iocp, item);
+						size_t len = sdslen(item->ibuf);
+						rc = item->on_data(iocp, item->arg, item->ibuf, &len);
+						sdsIncrLen(item->ibuf, -(int)(sdslen(item->ibuf) - len));
+					}
+				} else {
+					rc = item->on_data(iocp, item->arg, ol->buf.buf, &nbuf);
+					if(rc >= 0 && nbuf > 0){
+						memcpy(item->ibuf, ol->buf.buf, nbuf);
+						sdsIncrLen(item->ibuf, nbuf);
 					}
 				}
-				else { /* read error, EOF? */
-					item->err = lParam;
-					hp_err(item->err, item->errstr);
+				if(rc < 0) 
 					hp_iocp_item_on_error(iocp, item);
-				}
-
-				if(nbuf == 0)
-					++iocp->n_on_i;
 			}
-			else { /* write done */
+			else if (!ol_read(ol) && nbuf > 0) { /* write done */
 				++iocp->n_on_o;
-				assert(nbuf <= wsabuf->len);    /* finished bytes should NOT bigger than committed */
-				hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
-				assert(obuf);
-
-				if (nbuf > 0 && nbuf != wsabuf->len) {
+				assert(nbuf <= ol->buf.len);    /* finished bytes should NOT bigger than committed */
+				if (nbuf > 0 && nbuf != ol->buf.len) {
 					item->obytes += nbuf;
 					/* write some, update for recommit */
+					ol->buf.buf += nbuf;
+					ol->buf.len -= nbuf;
+					vecpush(item->obuf, ol);
 
-					obuf->buf.buf = (char *)wsabuf->buf + nbuf;
-					obuf->buf.len = (wsabuf->len - nbuf);
-					vecpush(item->obuf, obuf);
 					hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, POLLIN | POLLOUT);
 				}
-				else { /* write done or error, EOF? */
-					if (obuf->free) { obuf->free(obuf->ptr); }
-					free(obuf);
-
-					if (nbuf == 0)
-						hp_iocp_item_on_error(iocp, item);
-				}
 			}
-		}
-		else {
-			++iocp->n_dmsg1;
-			hp_iocp_obuf * obuf = wsaoverlapped_arg(overlapped);
-			if (obuf) {
-				if (obuf->free)
-					obuf->free(obuf->ptr);
-				free(obuf);
+			else if ((ol_read(ol) && nbuf == 0) || (!ol_read(ol) && nbuf == 0)){ /* read/write error, EOF? */
+				item->err = lParam;
+				hp_err(item->err, item->errstr);
+				hp_iocp_item_on_error(iocp, item);
+				++iocp->n_on_i;
 			}
+			else assert(0);
 		}
+		else  ++iocp->n_dmsg1;
 
-		wsaoverlapped_free(overlapped);
+		ol_del(ol);
 	}
-	else{
-		assert(0);
-	}
+	else assert(0);
+
 	return 0;
 }
 
@@ -477,6 +427,7 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 typedef struct hp_iocp_polld {
 	int    id;
 	SOCKET fd;
+	int lastr, lastR;
 #ifndef LIBHP_WITH_WSAPOLL
 	int    flags;
 #endif
@@ -512,6 +463,7 @@ static int hp_iocp_polld_find_by_id2(const void * k, const void * e)
 static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 {
 #ifndef NDEBUG
+	int n_msgadd = 0, n_msgrm = 0;
 	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
 	hp_iocp * iocp = (hp_iocp *)arg;
@@ -547,11 +499,14 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 				pds[nfds].id = id;
 				pds[nfds].fd = fd;
 				pds[nfds].flags = POLLIN;
+				pds[nfds].lastr =  pds[nfds].lastR = HP_IOCP_PENDING_BUF;
 				++nfds;
+
+//				hp_log(stdout, "%s: HP_IOCP_WM_ADD=%d, left=%d\n", __FUNCTION__, ++n_msgadd, nfds);
 			}
 			else if (msg->message == HP_IOCP_WM_RM(iocp)) {
 				hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
-				if(!pd) continue;
+				assert(pd);
 
 				pd->flags =  msg->lParam;
 				if(pd->flags == 0){
@@ -560,6 +515,7 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 						hp_iocp_poll_rm_at(pds, nfds, i);
 					}
 					--nfds;
+//					hp_log(stdout, "%s: HP_IOCP_WM_RM=%d, left=%d\n", __FUNCTION__, ++n_msgrm, nfds);
 				}
 			} else assert(0);
 		}
@@ -600,29 +556,26 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 			if(FD_ISSET(pds[i].fd, wfds)) { flags |= POLLOUT; pds[i].flags &= ~POLLOUT; }
 			if(FD_ISSET(pds[i].fd, exceptfds)) flags = POLLERR;
 
-			//POLLERR | POLLHUP | POLLNVAL
-			if(flags & (POLLERR | POLLHUP)) {
-				//fd closed(by user?) or exception
-				if(i + 1 < nfds){
-					hp_iocp_poll_rm_at(pds, nfds, i);
-					//i+1 becomes i
-					--i;
-				}
-				--nfds;
-			}
-			else if(FD_ISSET(pds[i].fd, rfds) && !(pds[i].flags & SOLISTEN)) {
+			if(flags != POLLERR && FD_ISSET(pds[i].fd, rfds) && !(pds[i].flags & SOLISTEN)) {
 				int err = 0;
-				rc = hp_iocp_do_read(iocp, pds[i].id, pds[i].fd, &err);
+
+				int lastr = InterlockedExchangeAdd(&pds[i].lastr, 0);
+				pds[i].lastR = (lastr == pds[i].lastR? pds[i].lastR * 2 : lastr + 1);
+
+//				hp_log(stdout, "%s: lastR=%dMiB\n", __FUNCTION__, pds[i].lastR / 1024 / 1024);
+				rc = hp_iocp_do_read(iocp, pds[i].id, pds[i].fd, pds[i].lastR, &pds[i].lastr, &err);
 				if(rc != 0) flags = POLLERR;
 			}
 			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, flags);
 		}
-		Sleep(iocp->stime_out * ( 1 + nfds / iocp->maxfd));
+//		float msec = iocp->stime_out * (1.0 - nfds / (float)iocp->maxfd);
+		Sleep(iocp->stime_out);
 	}
 
 	free(pds);
 #ifndef NDEBUG
-	hp_log(stdout, "%s: exit thread function\n", __FUNCTION__);
+	hp_log(stdout, "%s: exit thread function, nfds=%d, HP_IOCP_WM_ADD=%d, HP_IOCP_WM_RM=%d\n",
+			__FUNCTION__, nfds, n_msgadd, n_msgrm);
 #endif /* NDEBUG */
 	return 0;
 }
@@ -714,7 +667,6 @@ static unsigned WINAPI hp_iocp_poll_threadfn(void * arg)
 				--nfds;
 			}
 		}
-		Sleep(iocp->stime_out);
 	}
 
 	free(fds);
@@ -745,7 +697,7 @@ static unsigned WINAPI hp_iocp_threadfn(void * arg)
 
 	for (;;) {
 		rc = GetQueuedCompletionStatus(iocp->hiocp, &iobytes, (LPDWORD)&key, (LPOVERLAPPED * )&overlapped,
-										(DWORD)iocp->stime_out);
+										INFINITE);
 		err = WSAGetLastError();
 
 		if (rc || overlapped) { /* OK or quit */
@@ -831,7 +783,7 @@ int hp_iocp_init(hp_iocp * iocp, int maxfd, HWND hwnd, int nthreads, int wmuser,
 	iocp->hwnd = hwnd;
 	iocp->wmuser = wmuser;
 	iocp->n_threads = nthreads;
-	iocp->stime_out = max(stime_out, 200);
+	iocp->stime_out = stime_out;
 	iocp->maxfd = maxfd;
 	iocp->user = user;
 	vecinit(iocp->items, maxfd);
@@ -1074,6 +1026,8 @@ int hp_iocp_write(hp_iocp * iocp, int id, void * data, size_t ndata
 {
 	int rc = 0;
 	hp_iocp_item * item;
+	hp_iocp_ol * ol;
+
 	if(!(iocp && data && ndata > 0)){
 		rc = -1;
 		goto ret;
@@ -1085,25 +1039,9 @@ int hp_iocp_write(hp_iocp * iocp, int id, void * data, size_t ndata
 	}
 	assert(item->obuf);
 
-	hp_iocp_obuf * obuf = calloc(1, sizeof(hp_iocp_obuf));
-	obuf->ptr = ptr;
-	if (!obuf->ptr)
-		obuf->ptr = data;
+	ol = ol_newo(id, data, ndata, freecb, ptr);
+	vecpush(item->obuf, ol);
 
-	if (freecb == (void *)-1) {
-		obuf->ptr = obuf->BUF = obuf->buf.buf = malloc(ndata);
-		obuf->LEN = obuf->buf.len = ndata;
-		memcpy(obuf->BUF, data, ndata);
-		obuf->free = free;
-	}
-	else {
-		obuf->free = freecb;
-
-		obuf->BUF = obuf->buf.buf = data;
-		obuf->LEN = obuf->buf.len = ndata;
-	}
-
-	vecpush(item->obuf, obuf);
 	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), item->id, POLLIN | POLLOUT);
 ret:
 	if (rc != 0 && freecb) { freecb(ptr ? ptr : data); }
@@ -1128,89 +1066,27 @@ ret:
 #define cfgi(key) atoi(hp_config_test(key))
 
 /////////////////////////////////////////////////////////////////////////////////////
-
 static int simple_tests()
 {
 	int rc;
-	hp_sock_t fd = 3;
 	{
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, 0, 0, 0);
-		assert(!ol);
+		sds s = sdsnewlen(0, 10);
+		assert(sdslen(s) == 10);
+		sdsIncrLen(s, -10);
+		assert(sdslen(s) == 0);
+		sdsfree(s);
 	}
 	{
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, 0, 1, 0);
-		assert(!ol);
+		int n = 0;
+		hp_iocp_ol * ol = ol_newi(0, 10, &n);
+		assert(ol_read(ol) && ol->buf.buf && ol->buf.len == 10);
+		ol_del(ol);
 	}
 	{
-		WSABUF buf[1];
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, 0, 0);
-		assert(!ol);
+		hp_iocp_ol * ol = ol_newo(0/*id*/, sdsnew("hello"), strlen("hello"), (hp_free_t)sdsfree, 0/*ptr*/);
+		assert(!ol_read(ol) && ol->buf.buf && ol->buf.len == strlen("hello"));
+		ol_del(ol);
 	}
-	{
-		WSABUF buf[1] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, sizeof(buf) / sizeof(buf[0]), 0);
-		assert(ol);
-		assert(wsaoverlapped_id(ol) == 1);
-		assert(wsaoverlapped_io(ol) == 0);
-		assert(wsaoverlapped_n_bufs(ol) == 1);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
-
-		wsaoverlapped_free(ol);
-		free(buf[0].buf);
-	}
-	/* tests for hp_iocp_overlapped::arg */
-	{
-		WSABUF buf[1] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 0, buf, sizeof(buf) / sizeof(buf[0]), buf);
-		assert(ol);
-		assert(wsaoverlapped_io(ol) == 0);
-		assert(wsaoverlapped_n_bufs(ol) == 1);
-		assert(wsaoverlapped_arg(ol) == buf);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
-
-		wsaoverlapped_free(ol);
-		free(buf[0].buf);
-	}
-	{
-		WSABUF buf[1024] = { 0 };
-		buf[0].len = 10;
-		buf[0].buf = malloc(10);
-		buf[1023].len = 10;
-		buf[1023].buf = malloc(1024 * 1024 * 10);
-
-		WSAOVERLAPPED * ol = wsaoverlapped_alloc(1, fd, 1, buf, sizeof(buf) / sizeof(buf[0]), 0);
-		assert(ol);
-		assert(wsaoverlapped_io(ol) == 1);
-		assert(wsaoverlapped_n_bufs(ol) == 1024);
-
-		WSABUF * bufs = wsaoverlapped_bufs(ol);
-		assert(memcmp(bufs, buf, sizeof(buf)) == 0);
-		assert(bufs[0].buf == buf[0].buf);
-		assert(bufs[1023].buf == buf[1023].buf);
-
-		assert(memcmp(buf[0].buf, bufs[0].buf, 10) == 0);
-		assert(memcmp(buf[1023].buf, bufs[1023].buf, 1024 * 1024 * 10) == 0);
-
-		wsaoverlapped_free(ol);
-
-		free(buf[0].buf);
-		free(buf[1023].buf);
-	}
-
 	{
 		hp_iocp iocpobj = { 0 }, *iocp = &iocpobj;
 		int id;
@@ -1245,10 +1121,21 @@ typedef struct client {
 	int id;
 	hp_sock_t fd;
 	sds in;
+	sds out;
+	int wi;
 	server * s;
 	char addr[64];
 	int test;
 } client;
+
+//write the last char only
+#define writelchr(iocp, id, out, i) do { \
+		assert(hp_iocp_write(iocp, id, (out) + i, 1, 0/*free*/, 0) == 0); \
+		--(i);                                                            \
+	} while(0)
+
+static int test4_total = 100 * 1024 * 1024;
+
 
 static int s_on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
 {
@@ -1269,15 +1156,59 @@ int s_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
 	assert(c->s);
 
 	int rc;
-	c->in = sdscatlen(c->in, buf, *len);
-	*len = 0;
 
-	if(strncmp(c->in, "hello", strlen("hello")) == 0){
+	if(c->test == 1){
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "hello", strlen("hello")) == 0){
+			rc = hp_iocp_write(iocp, c->id, sdsnew("world"), strlen("world"), (hp_free_t)(sdsfree), 0);
+			assert(rc == 0);
+			c->test = 0;
+		}
+	}
+	if(c->test == 2){
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "hello", strlen("hello")) == 0){
+			rc = hp_iocp_write(iocp, c->id, sdsnew("world"), strlen("world"), (hp_free_t)(sdsfree), 0);
+			assert(rc == 0);
+			shutdown(c->fd, SD_RECEIVE); //stop receiving
+			c->test = 0;
+		}
 
-		rc = hp_iocp_write(iocp, c->id, sdsnew("world"), strlen("world"), (hp_free_t)(sdsfree), 0);
-		assert(rc == 0);
+	}
+	if(c->test == 3){
+		if(c->wi >= 0){
+//			hp_log(stdout, "%s: I/O='%s','%c'\n", __FUNCTION__, dumpstr(buf, *len, *len), c->out[c->wi]);
+			writelchr(iocp, c->id, c->out, c->wi);
+		}
 
-		c->test = 0;
+		if(*len < strlen("hello")){
+			return 0; //长度不不够,暂不处理
+		}
+
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "hello", strlen("hello")) == 0){
+			c->test = 0;
+		}
+	}
+	if(c->test == 4){
+		static size_t tlen = 0;
+		tlen += *len;
+		*len = 0;
+
+		static time_t t = 0;
+		if(difftime(time(0), t) > 0){
+			int p = (int)(tlen * 100 / (float)test4_total);
+			t = time(0);
+			hp_log(stdout, "%s: %d, received: %02d%%/%dMiB\n", __FUNCTION__, c->id, p, tlen / 1024 / 1024);
+		}
+		if(tlen == test4_total) {
+			c->test = 0;
+			shutdown(c->fd, SD_BOTH);
+			return -1;
+		}
 	}
 
 	return 0;
@@ -1308,6 +1239,10 @@ static int s_on_accept(hp_iocp * iocp, void * arg)
 		req->s = s;
 		req->in = sdsempty();
 		req->test = s->test;
+		if(req->test == 3){
+			req->out = sdsnew("dlrow");
+			req->wi = sdslen(req->out) - 1;
+		}
 
 		req->id = hp_iocp_add(iocp, 0/*nibuf*/, confd, 0/*on_accept*/, s_on_data , s_on_error, 0/*on_loop*/, req);
 		assert(req->id >= 0);
@@ -1325,18 +1260,46 @@ int c_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
 	assert(iocp && arg && buf && len);
 	client * c = (client *)arg;
 	assert(!c->s);
+	int rc;
 
-	c->in = sdscatlen(c->in, buf, *len);
-	*len = 0;
 
-	if(strncmp(buf, "world", strlen("world")) == 0){
-		hp_log(stdout, "%s: client %d test done!\n", __FUNCTION__, c->id);
-		// client done
-		shutdown(c->fd, SD_BOTH);
-		c->test = 0;
-		return -1;
+	if(c->test == 1){
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "world", strlen("world")) == 0){
+			hp_log(stdout, "%s: client %d test done!\n", __FUNCTION__, c->id);
+			// client done
+			shutdown(c->fd, SD_BOTH);
+			c->test = 0;
+			return -1;
+		}
 	}
-
+	if(c->test == 2) {
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "world", strlen("world")) == 0){
+			//try write sth again, but peer side shutdown(write)
+			shutdown(c->fd, SD_SEND);
+			rc = hp_iocp_write(iocp, c->id, sdsnew("hello2"), strlen("hello2"), (hp_free_t)(sdsfree), 0);
+			assert(rc == 0);
+		}
+	}
+	if(c->test == 3) {
+		if(c->wi >= 0){
+//			hp_log(stdout, "%s: I/O='%s','%c'\n", __FUNCTION__, dumpstr(buf, *len, *len), c->out[c->wi]);
+			writelchr(iocp, c->id, c->out, c->wi);
+		}
+		if(*len < strlen("world")){
+			return 0; //长度不不够,暂不处理
+		}
+		c->in = sdscatlen(c->in, buf, *len);
+		*len = 0;
+		if(strncmp(c->in, "world", strlen("world")) == 0){
+			shutdown(c->fd, SD_BOTH);
+			c->test = 0;
+			return -1;
+		}
+	}
 	return 0;
 }
 
@@ -1346,6 +1309,9 @@ static int c_on_error(hp_iocp * iocp, void * arg, int err, char const * errstr)
 	client * c = (client *)arg;
 	assert(!c->s);
 	closesocket(c->fd);
+
+	if(c->test == 2)
+		c->test = 0; //done
 
 	hp_log(stdout, "%s: %d disconnected err=%d/'%s'\n", __FUNCTION__, c->id, err, errstr);
 
@@ -1474,6 +1440,7 @@ static int add_remove_test(int n)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
+
 static int client_server_echo_test(int test, int n)
 {
 	int rc, i;
@@ -1491,7 +1458,7 @@ static int client_server_echo_test(int test, int n)
 	s->listen_fd = listen_fd;
 
 	rc = hp_iocp_init(iocp, 2 * n + 1/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/,
-			200/*timeout*/, s/*arg*/);
+			100/*timeout*/, s/*arg*/);
 	assert(rc == 0);
 
 	/* add listen socket */
@@ -1513,12 +1480,24 @@ static int client_server_echo_test(int test, int n)
 		c[i].id = hp_iocp_add(iocp, 0/*nibuf*/ , confd/*fd*/ , 0/*on_accept*/, c_on_data, c_on_error, 0/*on_loop*/, c + i/*arg*/);
 		assert(c[i].id >= 0);
 
-		if(test == 1){
+		if(test == 1 || test == 2){
 			rc = hp_iocp_write(iocp, c[i].id, sdsnew("hello"), strlen("hello"), (hp_free_t)(sdsfree), 0);
 			assert(rc == 0);
 		}
+		if(test == 3){
+			c[i].out = sdsnew("olleh");
+			c[i].wi = sdslen(c[i].out) - 1;
+			writelchr(iocp, c[i].id, c[i].out, c[i].wi);
+		}
+		if(test == 4){
+			char * p = malloc(test4_total);
+			assert(p);
+			rc = hp_iocp_write(iocp, c[i].id, p, test4_total, free, 0);
+			assert(rc == 0);
+		}
 	}
-	hp_log(stdout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("tcp.port"));
+	hp_log(stdout, "%s: listening on TCP port=%d, test=%d, n=%d, waiting for connection ...\n",
+			__FUNCTION__, cfgi("tcp.port"), test, n);
 	/* run event loop, 1 for listenio  */
 	int s_tdone = 0;
 	for (;; ) {
@@ -1538,6 +1517,7 @@ static int client_server_echo_test(int test, int n)
 	/*clear*/
 	for(i = 0; c[i].in; ++i){
 		sdsfree(c[i].in);
+		if(c[i].out) sdsfree(c[i].out);
 	}
 	hp_close(listen_fd);
 	free(c);
@@ -1781,47 +1761,70 @@ static int get_http_file()
 int test_hp_iocp_main(int argc, char ** argv)
 {
 	int rc;
+//	{
+//		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
+//				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
+//			POLLIN, POLLOUT, POLLERR, POLLHUP
+//			, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
+//			, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
+//			, FD_SETSIZE);
+//	}
+//	{
+//		int flags = SOLISTEN | POLLIN | POLLOUT | POLLERR;
+//		assert((flags & SOLISTEN) && (flags & POLLIN) && (flags & POLLOUT) && (flags & POLLERR));
+//		flags &= ~POLLIN;
+//		assert(!(flags & POLLIN));
+//		flags &= ~SOLISTEN;
+//		assert(!(flags & SOLISTEN));
+//	}
+//	/* simple test */
+//	simple_tests();
+//	//add,remove test
+//	{
+//		rc = add_remove_test(1); assert(rc == 0);
+//		rc = add_remove_test(2); assert(rc == 0);
+//		rc = add_remove_test(3); assert(rc == 0);
+//		rc = add_remove_test(500); assert(rc == 0);
+//	}
+//	// search test
+//	{
+//		search_test(1);
+//		search_test(2);
+//		search_test(3);
+//		search_test(500);
+//	}	/*
+//	 * simple echo server, client sent "hello", server reply with "world"
+//	 *  */
+//	{
+//		rc = client_server_echo_test(1, 1); assert(rc == 0);
+//		rc = client_server_echo_test(1, 2); assert(rc == 0);
+//		rc = client_server_echo_test(1, 3); assert(rc == 0);
+//		rc = client_server_echo_test(1, 500); assert(rc == 0);
+//	}
+//	/* write error: server shutdown(write), client should detect it
+//	 * 关闭socket读部分,对端产生写错误
+//	 */
+//	{
+//		rc = client_server_echo_test(2, 1); assert(rc == 0);
+//		rc = client_server_echo_test(2, 2); assert(rc == 0);
+//		rc = client_server_echo_test(2, 3); assert(rc == 0);
+//		rc = client_server_echo_test(2, 500); assert(rc == 0);
+//	}
+//	//收到的数据未完全"消费"或解析,拼接接下来读到的数据
+//	{
+//		rc = client_server_echo_test(3, 1); assert(rc == 0);
+//		rc = client_server_echo_test(3, 2); assert(rc == 0);
+//		rc = client_server_echo_test(3, 3); assert(rc == 0);
+//		rc = client_server_echo_test(3, 10); assert(rc == 0);
+//		rc = client_server_echo_test(3, 500); assert(rc == 0);
+//	}
+	//仅部分写完成,再次提交
 	{
-		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
-				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
-			POLLIN, POLLOUT, POLLERR, POLLHUP
-			, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
-			, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
-			, FD_SETSIZE);
+		rc = client_server_echo_test(4, 1); assert(rc == 0);
+		rc = client_server_echo_test(4, 2); assert(rc == 0);
+		rc = client_server_echo_test(4, 3); assert(rc == 0);
+		rc = client_server_echo_test(4, 500); assert(rc == 0);
 	}
-	{
-		int flags = SOLISTEN | POLLIN | POLLOUT | POLLERR;
-		assert((flags & SOLISTEN) && (flags & POLLIN) && (flags & POLLOUT) && (flags & POLLERR));
-		flags &= ~POLLIN;
-		assert(!(flags & POLLIN));
-		flags &= ~SOLISTEN;
-		assert(!(flags & SOLISTEN));
-	}
-	/* simple test */
-	simple_tests();
-	//add,remove test
-	{
-		rc = add_remove_test(1); assert(rc == 0);
-		rc = add_remove_test(2); assert(rc == 0);
-		rc = add_remove_test(3); assert(rc == 0);
-		rc = add_remove_test(500); assert(rc == 0);
-	}
-	// search test
-	{
-		search_test(1);
-		search_test(2);
-		search_test(3);
-		search_test(500);
-	}	/*
-	 * simple echo server, client sent "hello", server reply with "world"
-	 *  */
-	{
-		rc = client_server_echo_test(1, 1); assert(rc == 0);
-		rc = client_server_echo_test(1, 2); assert(rc == 0);
-		rc = client_server_echo_test(1, 3); assert(rc == 0);
-		rc = client_server_echo_test(1, 1000); assert(rc == 0);
-	}
-
 	//
 	/////////////////////////////////////////////////////////////////////////////////////
 	// test: HTTP client get HTTP file

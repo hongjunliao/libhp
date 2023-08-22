@@ -460,7 +460,7 @@ sds hp_timestr(time_t t, char const * fmt)
 	sds s = sdsempty();
 	s = sdsMakeRoomFor(s, 128);
 
-	int off1 = strftime(s, sdsavail(s), fmt, localtime(&t));
+	int off1 = strftime(s, sdsavail(s), fmt, gmtime(&t));
 	sdsIncrLen(s, off1);
 
 	return s;
@@ -468,6 +468,7 @@ sds hp_timestr(time_t t, char const * fmt)
 
 //////////////////////////////////////////////////////////////
 #ifndef NDEBUG
+#include "hp/hp_assert.h" //hp_assert
 int test_hp_str_main(int argc, char ** argv)
 {
 	int i;
@@ -492,16 +493,18 @@ int test_hp_str_main(int argc, char ** argv)
 #endif // !_MSC_VER
 				 hp_timestr(1688225233, "hello")
 			};
-		char const * v[] = { "1970-01-01 08:00:00", "2023-07-01 23:27:13",
-				 	 	 	 "2023-07-01", "23:27:13",
-							 "day=01/hour=23",
+		char const * v[] = {
+							"1970-01-01 00:00:00",
+							"2023-07-01 15:27:13",
+				 	 	 	"2023-07-01", "15:27:13",
+							"day=01/hour=15",
 #ifndef _MSC_VER
-							 "%E",
+							"%E",
 #endif // !_MSC_VER
 							"hello"
 					};
 		for(i = 0; i < sizeof(s) / sizeof(s[0]); ++i) {
-			assert(strncmp(s[i], v[i], strlen(v[i])) == 0);
+			hp_assert(strncmp(s[i], v[i], strlen(v[i])) == 0, "%s<=>%s", s[i], v[i]);
 			sdsfree(s[i]);
 		}
 	}

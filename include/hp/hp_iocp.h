@@ -29,7 +29,8 @@ extern "C" {
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-#define HP_IOCP_TMAX  64         /* IOCP thread max */
+#define HP_IOCP_TMAX         64    /* IOCP thread max */
+#define HP_IOCP_PENDING_BUF  1024  /* initial buffer size pending read */
 
 typedef struct hp_iocp hp_iocp;
 typedef struct hp_iocp_item hp_iocp_item;

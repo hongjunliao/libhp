@@ -82,6 +82,8 @@
 #cmakedefine HAVE_SYS_UIO_H
 #cmakedefine HAVE_SYS_INOTIFY_H
 #cmakedefine HAVE_SEARCH_H
+#cmakedefine HAVE_SEARCH_H
 
+#cmakedefine LIBHP_WITH_WSAPOLL
 
 #endif /* HP_CONFIG_H */

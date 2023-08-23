@@ -55,6 +55,7 @@
 #define HP_IOCP_RBUF  (1024 * 4)
 #define hp_iocp_is_quit(iocp) (iocp->ioid == -1)
 /////////////////////////////////////////////////////////////////////////////////////
+// do NOT conflict with POLLIN,...
 #define SOLISTEN 0x1024
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -243,9 +244,8 @@ static int hp_iocp_do_socket(hp_iocp * iocp, hp_iocp_item * item)
 	}
 
 	//FIXME: combine to ONE message?
-	hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_ADD(iocp), (WPARAM)item->id, (LPARAM)item->fd);
-	if(item->on_accept)
-		hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_RM(iocp), (WPARAM)item->id, POLLIN | SOLISTEN);
+	if(!item->on_accept)
+		hp_iocp_msg_post(iocp->ptid, (HWND)0, HP_IOCP_WM_ADD(iocp), (WPARAM)item->id, (LPARAM)item->fd);
 
 	return 0;
 }
@@ -341,11 +341,6 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 
 		if(flags & (POLLERR | POLLHUP)) { item->err = flags;}
 		else{
-			if (flags & POLLIN) {
-				assert(item->on_accept);
-				item->on_accept(iocp, item->arg);
-				++iocp->n_on_accept;
-			}
 			if ((flags & POLLOUT)){
 				rc = hp_iocp_do_write(iocp, item);
 				++iocp->n_on_pollout;
@@ -410,13 +405,13 @@ static int hp_iocp_handle_msg(hp_iocp * iocp, UINT message, WPARAM wParam, LPARA
 				hp_iocp_item_on_error(iocp, item);
 				++iocp->n_on_i;
 			}
-			else assert(0);
+			else {assert(0);}
 		}
 		else  ++iocp->n_dmsg1;
 
 		ol_del(ol);
 	}
-	else assert(0);
+	else {assert(0);}
 
 	return 0;
 }
@@ -428,9 +423,9 @@ typedef struct hp_iocp_polld {
 	int    id;
 	SOCKET fd;
 	int lastr, lastR;
-#ifndef LIBHP_WITH_WSAPOLL
+//#ifndef LIBHP_WITH_WSAPOLL
 	int    flags;
-#endif
+//#endif ////#ifndef LIBHP_WITH_WSAPOLL
 } hp_iocp_polld;
 
 #define hp_iocp_poll_rm_at(pds, nfds, i) do {                               \
@@ -489,12 +484,10 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 			if(hp_iocp_is_quit(iocp)) { break; }
 
 			int id = msg->wParam;
+			hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
 			if (msg->message == HP_IOCP_WM_ADD(iocp)) {
-				SOCKET fd = msg->lParam;
-
-				hp_iocp_polld * pd = hp_lfind(&fd, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_fd);
 				assert(!pd);
-
+				SOCKET fd = msg->lParam;
 
 				pds[nfds].id = id;
 				pds[nfds].fd = fd;
@@ -505,7 +498,6 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 //				hp_log(stdout, "%s: HP_IOCP_WM_ADD=%d, left=%d\n", __FUNCTION__, ++n_msgadd, nfds);
 			}
 			else if (msg->message == HP_IOCP_WM_RM(iocp)) {
-				hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
 				assert(pd);
 
 				pd->flags =  msg->lParam;
@@ -517,7 +509,7 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 					--nfds;
 //					hp_log(stdout, "%s: HP_IOCP_WM_RM=%d, left=%d\n", __FUNCTION__, ++n_msgrm, nfds);
 				}
-			} else assert(0);
+			} else {assert(0);}
 		}
 		if(hp_iocp_is_quit(iocp)) { break; }
 		if(nfds == 0) { Sleep(iocp->stime_out); continue; }
@@ -552,11 +544,10 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 				|| FD_ISSET(pds[i].fd, exceptfds))) continue;
 
 			int flags = 0;
-			if(FD_ISSET(pds[i].fd, rfds) && (pds[i].flags & SOLISTEN)) flags |= POLLIN;
 			if(FD_ISSET(pds[i].fd, wfds)) { flags |= POLLOUT; pds[i].flags &= ~POLLOUT; }
 			if(FD_ISSET(pds[i].fd, exceptfds)) flags = POLLERR;
 
-			if(flags != POLLERR && FD_ISSET(pds[i].fd, rfds) && !(pds[i].flags & SOLISTEN)) {
+			if(flags != POLLERR && FD_ISSET(pds[i].fd, rfds)) {
 				int err = 0;
 
 				int lastr = InterlockedExchangeAdd(&pds[i].lastr, 0);
@@ -586,13 +577,13 @@ static unsigned WINAPI hp_iocp_select_threadfn(void * arg)
 static unsigned WINAPI hp_iocp_poll_threadfn(void * arg)
 {
 #ifndef NDEBUG
+	int n_msgadd = 0, n_msgrm = 0;
 	hp_log(stdout, "%s: enter thread function, id=%d\n", __FUNCTION__, GetCurrentThreadId());
 #endif /* NDEBUG */
 	hp_iocp * iocp = (hp_iocp *)arg;
 	assert(iocp);
 
 	int rc = 0, i, nfds = 0;
-
 	WSAPOLLFD * fds = calloc(iocp->maxfd, sizeof(WSAPOLLFD));
 	hp_iocp_polld * pds = calloc(iocp->maxfd, sizeof(hp_iocp_polld));
 
@@ -605,33 +596,35 @@ static unsigned WINAPI hp_iocp_poll_threadfn(void * arg)
 			if(hp_iocp_is_quit(iocp)) { break; }
 
 			int id = msg->wParam;
+			hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
 			if (msg->message == HP_IOCP_WM_ADD(iocp)) {
+				assert(!pd);
 				SOCKET fd = msg->lParam;
 
 				pds[nfds].id = id;
 				pds[nfds].fd = fd;
+				pds[nfds].lastr =  pds[nfds].lastR = HP_IOCP_PENDING_BUF;
 
 				fds[nfds].fd = fd;
 				fds[nfds].events = POLLIN;
 
 				++nfds;
+//				hp_log(stdout, "%s: HP_IOCP_WM_ADD=%d, left=%d\n", __FUNCTION__, ++n_msgadd, nfds);
 			}
-			else{
-				hp_iocp_polld * pd = bsearch(&id, pds, nfds, sizeof(hp_iocp_polld), hp_iocp_polld_find_by_id2);
-				if(!pd) continue;
+			else if (msg->message == HP_IOCP_WM_RM(iocp)) {
+				assert(pd);
+
 				i = pd - pds;
-
-				int flags =  msg->lParam;
-				fds[i].events = flags;
-
+				fds[i].events =  msg->lParam;
 				if(fds[i].events == 0){
 					if(i + 1 < nfds){
 						memmove(fds + (i), fds + (i) + 1, sizeof(WSAPOLLFD) * (nfds - (i + 1)));
 						hp_iocp_poll_rm_at(pds, nfds, i);
 					}
 					--nfds;
+//					hp_log(stdout, "%s: HP_IOCP_WM_RM=%d, left=%d\n", __FUNCTION__, ++n_msgrm, nfds);
 				}
-			}
+			} else {assert(0);}
 		}
 		if(hp_iocp_is_quit(iocp)) { break; }
 		if(nfds == 0) { Sleep(iocp->stime_out); continue; }
@@ -653,26 +646,28 @@ static unsigned WINAPI hp_iocp_poll_threadfn(void * arg)
 
 		for(i = 0; i < nfds; ++i){
 			if(fds[i].revents == 0) continue;
-			
-			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, fds[i].revents);
-			//POLLERR | POLLHUP | POLLNVAL
-			if(fds[i].revents & (POLLERR | POLLHUP)) {
-				//fd closed(by user?) or exception
-				if(i + 1 < nfds){
-					memmove(fds + (i), fds + (i) + 1, sizeof(WSAPOLLFD) * (nfds - (i + 1)));
-					hp_iocp_poll_rm_at(pds, nfds, i);
-					//i+1 becomes i
-					--i;
-				}
-				--nfds;
+
+			if(fds[i].revents & POLLOUT) { fds[i].events &= ~POLLOUT; }
+			if(fds[i].revents & POLLIN) {
+				int err = 0;
+				int lastr = InterlockedExchangeAdd(&pds[i].lastr, 0);
+				pds[i].lastR = (lastr == pds[i].lastR? pds[i].lastR * 2 : lastr + 1);
+//				hp_log(stdout, "%s: lastR=%dMiB\n", __FUNCTION__, pds[i].lastR / 1024 / 1024);
+
+				rc = hp_iocp_do_read(iocp, pds[i].id, pds[i].fd, pds[i].lastR, &pds[i].lastr, &err);
+				if(rc != 0) fds[i].revents = POLLERR;
 			}
+			hp_iocp_msg_post(iocp->ctid, iocp->hwnd, HP_IOCP_WM_FD(iocp), pds[i].id, fds[i].revents);
 		}
+//		float msec = iocp->stime_out * (1.0 - nfds / (float)iocp->maxfd);
+		Sleep(iocp->stime_out);
 	}
 
 	free(fds);
 	free(pds);
 #ifndef NDEBUG
-	hp_log(stdout, "%s: exit thread function\n", __FUNCTION__);
+	hp_log(stdout, "%s: exit thread function, nfds=%d, HP_IOCP_WM_ADD=%d, HP_IOCP_WM_RM=%d\n",
+			__FUNCTION__, nfds, n_msgadd, n_msgrm);
 #endif /* NDEBUG */
 	return 0;
 }
@@ -742,6 +737,11 @@ int hp_iocp_run(hp_iocp * iocp, int mode)
 
 		for (i = 0; i < vecsize(iocp->items); ++i) {
 			hp_iocp_item * item = iocp->items + i;
+
+			if(item->on_accept){
+				item->on_accept(iocp, item->arg);
+			}
+
 			if (item->on_loop && item->on_loop(item->arg) < 0){
 				if(hp_iocp_item_on_error(iocp, item))
 					--i;
@@ -1199,10 +1199,12 @@ int s_on_data(hp_iocp * iocp, void * arg, char * buf, size_t * len)
 		*len = 0;
 
 		static time_t t = 0;
-		if(difftime(time(0), t) > 0){
+		if(difftime(time(0), t) > 0 || tlen == test4_total){
 			int p = (int)(tlen * 100 / (float)test4_total);
 			t = time(0);
-			hp_log(stdout, "%s: %d, received: %02d%%/%dMiB\n", __FUNCTION__, c->id, p, tlen / 1024 / 1024);
+			hp_log(stdout, "%s: %d, received: %02d%%/%dMiB%s\n", __FUNCTION__
+					, c->id, p, tlen / 1024 / 1024
+					, tlen == test4_total? ", done!" : "...");
 		}
 		if(tlen == test4_total) {
 			c->test = 0;
@@ -1458,7 +1460,7 @@ static int client_server_echo_test(int test, int n)
 	s->listen_fd = listen_fd;
 
 	rc = hp_iocp_init(iocp, 2 * n + 1/*maxfd*/, 0/*hwnd*/, 2/*nthreads*/, 0/*WM_USER*/,
-			100/*timeout*/, s/*arg*/);
+			200/*timeout*/, s/*arg*/);
 	assert(rc == 0);
 
 	/* add listen socket */
@@ -1510,6 +1512,7 @@ static int client_server_echo_test(int test, int n)
 			if(!fc)
 				s_tdone = 1;
 		}
+		Sleep(200);
 	}
 
 	hp_iocp_uninit(iocp);
@@ -1758,72 +1761,78 @@ static int get_http_file()
 }
 /////////////////////////////////////////////////////////////////////////////////////
 
+static int n_maxtest =
+#ifdef LIBHP_WITH_WSAPOLL
+	1000;
+#else
+	500;
+#endif //#ifdef LIBHP_WITH_WSAPOLL
+
 int test_hp_iocp_main(int argc, char ** argv)
 {
 	int rc;
-//	{
-//		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
-//				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
-//			POLLIN, POLLOUT, POLLERR, POLLHUP
-//			, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
-//			, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
-//			, FD_SETSIZE);
-//	}
-//	{
-//		int flags = SOLISTEN | POLLIN | POLLOUT | POLLERR;
-//		assert((flags & SOLISTEN) && (flags & POLLIN) && (flags & POLLOUT) && (flags & POLLERR));
-//		flags &= ~POLLIN;
-//		assert(!(flags & POLLIN));
-//		flags &= ~SOLISTEN;
-//		assert(!(flags & SOLISTEN));
-//	}
-//	/* simple test */
-//	simple_tests();
-//	//add,remove test
-//	{
-//		rc = add_remove_test(1); assert(rc == 0);
-//		rc = add_remove_test(2); assert(rc == 0);
-//		rc = add_remove_test(3); assert(rc == 0);
-//		rc = add_remove_test(500); assert(rc == 0);
-//	}
-//	// search test
-//	{
-//		search_test(1);
-//		search_test(2);
-//		search_test(3);
-//		search_test(500);
-//	}	/*
-//	 * simple echo server, client sent "hello", server reply with "world"
-//	 *  */
-//	{
-//		rc = client_server_echo_test(1, 1); assert(rc == 0);
-//		rc = client_server_echo_test(1, 2); assert(rc == 0);
-//		rc = client_server_echo_test(1, 3); assert(rc == 0);
-//		rc = client_server_echo_test(1, 500); assert(rc == 0);
-//	}
-//	/* write error: server shutdown(write), client should detect it
-//	 * 关闭socket读部分,对端产生写错误
-//	 */
-//	{
-//		rc = client_server_echo_test(2, 1); assert(rc == 0);
-//		rc = client_server_echo_test(2, 2); assert(rc == 0);
-//		rc = client_server_echo_test(2, 3); assert(rc == 0);
-//		rc = client_server_echo_test(2, 500); assert(rc == 0);
-//	}
-//	//收到的数据未完全"消费"或解析,拼接接下来读到的数据
-//	{
-//		rc = client_server_echo_test(3, 1); assert(rc == 0);
-//		rc = client_server_echo_test(3, 2); assert(rc == 0);
-//		rc = client_server_echo_test(3, 3); assert(rc == 0);
-//		rc = client_server_echo_test(3, 10); assert(rc == 0);
-//		rc = client_server_echo_test(3, 500); assert(rc == 0);
-//	}
+	{
+		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
+				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,
+			POLLIN, POLLOUT, POLLERR, POLLHUP
+			, POLLNVAL, (POLLOUT | POLLHUP),INT_MAX, sizeof(time_t), sizeof(int)
+			, sizeof(WPARAM), sizeof(LPARAM), SSIZE_MAX
+			, FD_SETSIZE);
+	}
+	{
+		int flags = SOLISTEN | POLLIN | POLLOUT | POLLERR;
+		assert((flags & SOLISTEN) && (flags & POLLIN) && (flags & POLLOUT) && (flags & POLLERR));
+		flags &= ~POLLIN;
+		assert(!(flags & POLLIN));
+		flags &= ~SOLISTEN;
+		assert(!(flags & SOLISTEN));
+	}
+	/* simple test */
+	simple_tests();
+	//add,remove test
+	{
+		rc = add_remove_test(1); assert(rc == 0);
+		rc = add_remove_test(2); assert(rc == 0);
+		rc = add_remove_test(3); assert(rc == 0);
+		rc = add_remove_test(n_maxtest); assert(rc == 0);
+	}
+	// search test
+	{
+		search_test(1);
+		search_test(2);
+		search_test(3);
+		search_test(n_maxtest);
+	}	/*
+	 * simple echo server, client sent "hello", server reply with "world"
+	 *  */
+	{
+		rc = client_server_echo_test(1, 1); assert(rc == 0);
+		rc = client_server_echo_test(1, 2); assert(rc == 0);
+		rc = client_server_echo_test(1, 3); assert(rc == 0);
+		rc = client_server_echo_test(1, n_maxtest); assert(rc == 0);
+	}
+	/* write error: server shutdown(write), client should detect it
+	 * 关闭socket读部分,对端产生写错误
+	 */
+	{
+		rc = client_server_echo_test(2, 1); assert(rc == 0);
+		rc = client_server_echo_test(2, 2); assert(rc == 0);
+		rc = client_server_echo_test(2, 3); assert(rc == 0);
+		rc = client_server_echo_test(2, n_maxtest); assert(rc == 0);
+	}
+	//收到的数据未完全"消费"或解析,拼接接下来读到的数据
+	{
+		rc = client_server_echo_test(3, 1); assert(rc == 0);
+		rc = client_server_echo_test(3, 2); assert(rc == 0);
+		rc = client_server_echo_test(3, 3); assert(rc == 0);
+		rc = client_server_echo_test(3, n_maxtest); assert(rc == 0);
+	}
 	//仅部分写完成,再次提交
 	{
 		rc = client_server_echo_test(4, 1); assert(rc == 0);
 		rc = client_server_echo_test(4, 2); assert(rc == 0);
 		rc = client_server_echo_test(4, 3); assert(rc == 0);
-		rc = client_server_echo_test(4, 500); assert(rc == 0);
+		rc = client_server_echo_test(4, n_maxtest); assert(rc == 0);
 	}
 	//
 	/////////////////////////////////////////////////////////////////////////////////////

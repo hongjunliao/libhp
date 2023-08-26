@@ -53,14 +53,17 @@ endmacro()
 #	)
 
 # don't overwrite the 3rd party's own CMakeLists.txt file
-function(hp_cmake_copy_cmakefile cmakes dep)
+function(hp_cmake_copy_cmakefile cmakes depdir)
+	string(REPLACE "/" ";" s_list ${depdir})
+	list(GET s_list -1 dep)
+#	hp_log("hp_cmake_find_deps: depdir=${depdir}, ${CMAKE_CURRENT_SOURCE_DIR}/${cmakes}/${dep}.cmake => ${CMAKE_CURRENT_SOURCE_DIR}/deps/${depdir}/CMakeLists.txt")
 	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${cmakes}/${dep}.cmake" AND
-			NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}/CMakeLists.txt")
+			NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/${depdir}/CMakeLists.txt")
 	
 		hp_log("hp_cmake_find_deps: copying ${CMAKE_CURRENT_SOURCE_DIR}/${cmakes}/${dep}.cmake ...")
 	
 		configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/${cmakes}/${dep}.cmake
-			${CMAKE_CURRENT_SOURCE_DIR}/deps/${dep}/CMakeLists.txt
+			${CMAKE_CURRENT_SOURCE_DIR}/deps/${depdir}/CMakeLists.txt
 				COPYONLY)
 	endif()
 	

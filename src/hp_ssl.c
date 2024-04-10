@@ -107,7 +107,7 @@ int hp_ssl_rsa128(char const * pubkey, char const * msg, char ** outbuf)
 
 #ifndef NDEBUG
 	if(strcmp(pubkey, oauth2RSAPublicKey) == 0){
-		FILE *out = fopen("/tmp/hp_ssl_rsa128.en", "w");
+		FILE *out = fopen("hp_ssl_rsa128.en", "w");
 		if(fwrite(encrypt, sizeof(*encrypt),  RSA_size(keypair), out) <= 0)
 			fprintf(stderr, "%s/%d: Encrypted message written to file failed, errno=%d, error='%s'\n"
 					, __FUNCTION__, __LINE__, errno, strerror(errno));
@@ -199,6 +199,7 @@ sds hp_ssl_sha256(const unsigned char *d, size_t n)
 /////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 #include "hp/hp_assert.h"	//hp_assert
+#include "hp/string_util.h" //strncasecmp
 int test_hp_ssl_main(int argc, char ** argv)
 {
 	int rc;

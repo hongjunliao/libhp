@@ -23,12 +23,12 @@ int random();
 #endif /* _MSC_VER */
 
 /////////////////////////////////////////////////////////////////////////////////////
-#ifndef max
-#define max(a,b)            (((a) > (b)) ? (a) : (b))
+#ifndef hp_max
+#define hp_max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
-#ifndef min
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#ifndef hp_min
+#define hp_min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
 
 /////////////////////////////////////////////////////////////////////////////////////

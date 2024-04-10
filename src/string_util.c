@@ -13,7 +13,7 @@
 #include <ctype.h>         /* toupper */
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <sys/stat.h>	/*fstat*/
-#include "hp/hp_stdlib.h" //max
+#include "hp/hp_stdlib.h" //hp_max
 #include "hp/hp_log.h"
 
 #ifdef _MSC_VER
@@ -435,7 +435,7 @@ int hp_vercmp(char const * ver, char const * cmp)
 	sds * s_ver = sdssplitlen(ver, strlen(ver), ".", 1, &c_ver);
 	sds * s_cmp = sdssplitlen(cmp, strlen(cmp), ".", 1, &c_cmp);
 
-	for(i = 0; i < max(c_ver, c_cmp); ++i){
+	for(i = 0; i < hp_max(c_ver, c_cmp); ++i){
 		int i_ver = atoi(i < c_ver? s_ver[i] : "0");
 		int i_cmp = atoi(i < c_cmp? s_cmp[i] : "0");
 

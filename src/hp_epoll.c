@@ -25,7 +25,7 @@
 #include <assert.h>     /* define NDEBUG to disable assertion */
 #include <sys/epoll.h>  /* epoll_event */
 #include "hp/hp_search.h" /* hp_lfind */
-#include "hp/hp_libc.h" /* hp_tuple2_t */
+#include "hp/hp_tuple.h" /* hp_tuple2_t */
 /////////////////////////////////////////////////////////////////////////////////////
 
 struct hp_epolld {

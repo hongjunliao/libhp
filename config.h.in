@@ -84,6 +84,7 @@
 #cmakedefine HAVE_SEARCH_H
 #cmakedefine HAVE_SEARCH_H
 
+/* define to use WSAPoll() instead of select */
 #cmakedefine LIBHP_WITH_WSAPOLL
 
 #endif /* HP_CONFIG_H */

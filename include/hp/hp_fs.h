@@ -12,6 +12,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#ifdef LIBHP_DEPRECADTED
 #include "uv.h"
 
 #ifdef __cplusplus
@@ -45,4 +46,5 @@ int test_hp_fs_main(int argc, char ** argv);
 }
 #endif
 
+#endif //LIBHP_DEPRECADTED
 #endif /* LIBHP_FS_H__ */

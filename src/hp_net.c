@@ -165,7 +165,7 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 	if (msg.msg_controllen < sizeof(struct cmsghdr) ||
 		(msg.msg_flags & MSG_CTRUNC) || origindst == NULL)
 		return(n);
-
+#ifndef __CYGWIN__ 
 	for (cmptr = CMSG_FIRSTHDR(&msg); cmptr != NULL;
 		cmptr = CMSG_NXTHDR(&msg, cmptr)) {
 
@@ -183,6 +183,7 @@ hp_net_recvmsg(int fd, void *ptr, size_t nbytes, int *flagsp,
 			continue;
 		}
 	}
+#endif 
 	return(n);
 }
 #endif
@@ -303,20 +304,20 @@ int hp_net_udp_bind(char const * ip, int port)
 		close(fd);
 		return -1;
 	}
-
+#ifndef __CYGWIN__ 
 	yes = 1;
 	if (setsockopt(fd, SOL_IP, IP_TRANSPARENT, &yes, sizeof(yes)) == -1) {
 		fprintf(stderr, "%s: setsockopt IP_TRANSPARENT: %s", __FUNCTION__, strerror(errno));
 		close(fd);
 		return -1;
 	}
-
 	yes = 1;
 	if (setsockopt(fd, SOL_IP, IP_RECVORIGDSTADDR, &yes, sizeof(yes)) == -1) {
 		fprintf(stderr, "%s: setsockopt IP_RECVORIGDSTADDR: %s", __FUNCTION__, strerror(errno));
 		close(fd);
 		return -1;
 	}
+#endif
 
 	unsigned long sockopt = 1;
 	if (ioctl(fd, FIONBIO, &sockopt) < 0) {

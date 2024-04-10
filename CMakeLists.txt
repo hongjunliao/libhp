@@ -66,20 +66,23 @@ if(WIN32)
 	# sds
 	set(sds_lib "deps/hiredis/sds.c")
 	set(uv_lib uv_a)
+	#ssl
+	set(ssl_lib "libssl64MT libcrypto64MT")
 else()
 	set(sds_lib "deps/sds/*.c")
 	set(uv_lib uv)
 	set(path_mqtt_lib "paho-mqtt3a")
+	set(ssl_lib "ssl crypto")
 endif()
 
-set(g_withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
+set(g_withs 1 ZLIB MYSQL BDB CURL MQTT CJSON 
 	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP HTTP 1 1 1 
 	)
 set(g_hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h
 		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
 		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 	)
-set(g_incs openssl/include deps/zlib/include/ deps/ deps/db/include/ deps/ deps/paho.mqtt.c/include/ deps/
+set(g_incs deps/openssl/include deps/zlib/include/ deps/ deps/db/include/ deps/ deps/paho.mqtt.c/include/ deps/
 		deps/ deps/ deps/uv/include/ deps/dlfcn-win32/include/ deps/zlog/include/ deps/http-parser/ deps/ deps/ deps/ 
 		deps/ deps/ deps/ deps/ "${PROJECT_BINARY_DIR}/ include/"
 	)
@@ -88,7 +91,7 @@ set(g_deps openssl zlib mysqlclient bdb curl paho.mqtt.c cjson
 		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
 		gbk-utf8 libyuarel c-vector inih .src
 	)
-set(g_libs "ssl crypto" z mysqlclient db curl ${path_mqtt_lib} cjson 
+set(g_libs  ${ssl_lib} z mysqlclient db curl ${path_mqtt_lib} cjson 
 			c uuid ${uv_lib} dl zlog http_parser hiredis 
 			"deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c"
 			${sds_lib}
@@ -125,6 +128,9 @@ target_compile_options(libhp PUBLIC
     -DcJSON_FREE_PRINT
 )
 
+if(WIN32)
+	target_link_directories(libhp PUBLIC deps/openssl/lib/VC/static/)
+endif()
 ###########################################################################################
 add_executable(test-libhp test/test.cpp )
 target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/ deps/ )

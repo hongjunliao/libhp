@@ -15,7 +15,6 @@ add_subdirectory(deps/libhp)
 ```code
 
 /* in your code */
-#define LIBHP_WITH_HTTP
 #include "hp/hp_log.h"
 #include "hp/hp_http.h"
 ...

@@ -16,7 +16,7 @@
 
 #ifdef HAVE_UNISTD_H
 
-#include "hp/libhp.h"	//hp_free_t
+#include "hp/hp_stdlib.h"	//hp_free_t
 #include "hp_iostat.h"  /* hp_iostat */
 #include <stddef.h>
 #ifdef HAVE_SYS_UIO_H

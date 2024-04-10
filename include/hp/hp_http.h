@@ -10,6 +10,10 @@
 #ifndef LIBHP_HTTP_H__
 #define LIBHP_HTTP_H__
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
 //#include "Win32_Interop.h"
 #include "sdsinc.h"    	/* sds */
 #include "hp_sock_t.h"   /* hp_sock_t */

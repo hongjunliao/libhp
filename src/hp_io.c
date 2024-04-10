@@ -14,7 +14,7 @@
 #ifdef HAVE_UNISTD_H
 #include "hp/hp_io.h"
 #include "hp/hp_log.h"     /* hp_log */
-#include "hp/hp_libc.h"    /* hp_min */
+#include "hp/hp_stdlib.h"  /* hp_min */
 #include <unistd.h>     /* read, sysconf, ... */
 #include <stdio.h>
 #include <stddef.h>		//size_t

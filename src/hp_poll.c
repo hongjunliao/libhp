@@ -35,7 +35,7 @@
 #include <errno.h>      /* errno */
 #include <assert.h>		//assert
 #include "hp/hp_tuple.h" /* hp_tuple2_t */
-#include "hp/hp_stdlib.h" /* min */
+#include "hp/hp_stdlib.h" /* hp_min */
 
 /////////////////////////////////////////////////////////////////////////////////////
 typedef struct hp_polld hp_polld;
@@ -121,7 +121,7 @@ int hp_poll_run(hp_poll * po, int mode)
 		for(;;){
 			hp_polld * pd = 0;
 			pollfd * pfd = 0;
-			pd = get_next_to_run(po, min(nfds, po->nfds), checkifnotpolled, &pfd);
+			pd = get_next_to_run(po, hp_min(nfds, po->nfds), checkifnotpolled, &pfd);
 			if(!pd){ break; }
 
 			assert(pfd);
@@ -310,8 +310,6 @@ void * hp_poll_find(hp_poll * po, void * key, hp_cmp_fn_t cb)
 #ifndef NDEBUG
 #include "hp/hp_net.h"//hp_tcp_listen
 #include "hp/hp_log.h"
-#include <uv.h>		//uv_ip4_name
-#include <stdio.h>		//uv_ip4_name
 #include "hp/hp_config.h"
 #include "hp/hp_io.h"	//hp_rd
 #include "hp/hp_err.h"	//hp_err

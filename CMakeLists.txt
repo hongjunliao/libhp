@@ -24,7 +24,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ###########################################################################################
 include(CheckIncludeFile)
-check_include_file(poll.h HAVE_UNISTD_H)
+check_include_file(unistd.h HAVE_UNISTD_H)
 check_include_file(poll.h HAVE_POLL_H)
 check_include_file(sys/epoll.h HAVE_SYS_EPOLL_H)
 check_include_file(sys/uio.h HAVE_SYS_UIO_H)

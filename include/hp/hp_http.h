@@ -2,7 +2,7 @@
  * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2018/4/8
  *
- * the HTTP server module, for HTTP client, please use hp_curlm or hp_uv_curlm
+ * the HTTP server module, for HTTP client, please use hp_curl
  *
  * 2023/7/7:reconstructed using hp_io_t for cross platform usage
  * */

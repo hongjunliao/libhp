@@ -8,7 +8,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef LIBHP_WITH_TIMERFD
+#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
 
 #include "hp/hp_timerfd.h"  /* hp_timerfd */
 #include "hp/hp_log.h"     /* hp_log */
@@ -377,4 +377,4 @@ int test_hp_timerfd_main(int argc, char ** argv)
 }
 
 #endif /* NDEBUG */
-#endif /* LIBHP_WITH_TIMERFD */
+#endif //#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)

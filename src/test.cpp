@@ -131,8 +131,7 @@ int libhp_all_tests_main(int argc, char ** argv)
 #endif
 
 #ifdef LIBHP_WITH_CURL
-//	run_test(test_hp_uv_curl_main);
-//	run_test(test_hp_curl_main);
+	run_test(test_hp_curl_main);
 #endif
 
 #ifdef LIBHP_WITH_TIMERFD

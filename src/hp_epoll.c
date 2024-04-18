@@ -107,7 +107,7 @@ int hp_epoll_init(hp_epoll * epo, int max_ev_len, int timeout
 		return -2;
 	}
 	epo->fd = epollfd;
-
+	epo->timeout = timeout;
 	epo->ev = malloc(sizeof(epoll_event) * max_ev_len);
 	epo->ed = malloc(sizeof(hp_epolld *) * max_ev_len);
 	epo->max_ev_len = max_ev_len;

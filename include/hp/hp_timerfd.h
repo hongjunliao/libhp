@@ -10,7 +10,7 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
-#ifdef LIBHP_WITH_TIMERFD
+#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
 
 #include "hp_epoll.h"    		  /* hp_epoll */
 #include <time.h>                /* itimerspec */
@@ -54,6 +54,6 @@ int test_hp_timerfd_main(int argc, char ** argv);
 #ifdef __cplusplus
 }
 #endif
-#endif /* LIBHP_WITH_TIMERFD */
+#endif //#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
 
 #endif /* LIBHP_TIMERFD_H__ */

@@ -30,6 +30,7 @@ check_include_file(sys/epoll.h HAVE_SYS_EPOLL_H)
 check_include_file(sys/uio.h HAVE_SYS_UIO_H)
 check_include_file(sys/inotify.h HAVE_SYS_INOTIFY_H)
 check_include_file(search.h HAVE_SEARCH_H)
+check_include_file(sys/timerfd.h HAVE_SYS_TIMERFD_H)
 
 ###########################################################################################
 
@@ -75,8 +76,12 @@ else()
 	set(ssl_lib "ssl crypto")
 endif()
 
+if(LIBHP_WITH_CURL)
+	set(libyuarel_lib "deps/libyuarel/*.c")
+endif()
+
 set(g_withs 1 ZLIB MYSQL BDB CURL MQTT CJSON 
-	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP HTTP 1 1 1 
+	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP CURL 1 1 1 
 	)
 set(g_hdrs openssl/ssl.h  zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h
 		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
@@ -105,7 +110,7 @@ set(g_libs  ${ssl_lib} z mysqlclient db curl ${path_mqtt_lib} cjson
 
 hp_cmake_find_deps(SRCS LIBHP_WITH_ deps cmakes g_withs g_hdrs g_incs g_deps g_libs)
 #build as library
-add_library(libhp ${SRCS})
+add_library(libhp STATIC ${SRCS})
 
 foreach(dep IN LISTS g_deps  )
 	if(NOT ${dep}_INCLUDE_DIRS)

@@ -59,9 +59,6 @@
  * using http-parser */
 #cmakedefine  LIBHP_WITH_HTTP
 
-/* define to use timer fd (current Linux only?), hp_timerfd_XXX */
-#cmakedefine  LIBHP_WITH_TIMERFD
-
 /* define to use Berkeley DB, hp_bdb_XXX */
 #cmakedefine  LIBHP_WITH_BDB
 
@@ -82,7 +79,7 @@
 #cmakedefine HAVE_SYS_UIO_H
 #cmakedefine HAVE_SYS_INOTIFY_H
 #cmakedefine HAVE_SEARCH_H
-#cmakedefine HAVE_SEARCH_H
+#cmakedefine HAVE_SYS_TIMERFD_H
 
 /* define to use WSAPoll() instead of select */
 #cmakedefine LIBHP_WITH_WSAPOLL

@@ -466,12 +466,25 @@ sds hp_timestr(time_t t, char const * fmt)
 	return s;
 }
 
+int hp_isblank(const char *line)
+{
+	if(!line) return 1;
+	// 检查行中是否只包含空白字符
+	while (*line != '\0') {
+		if (!isspace(*line)) {
+			return 0; // 如果有非空白字符，则不是空行
+		}
+		line++;
+	}
+	return 1; // 如果全是空白字符，则是空行
+}
 //////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 #include "hp/hp_assert.h" //hp_assert
 int test_hp_str_main(int argc, char ** argv)
 {
 	int i;
+	{ assert(hp_isblank("")); assert(hp_isblank("\n")); assert(hp_isblank(" "));assert(hp_isblank(" \n"));}
 	//hp_assert
 	{
 		//uncomment to run this test

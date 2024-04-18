@@ -130,6 +130,7 @@ int hp_vercmp(char const * ver, char const * cmp);
  */
 sds hp_timestr(time_t t, char const * fmt);
 
+int hp_isblank(const char *line);
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifdef _MSC_VER
 #define strcasecmp _stricmp

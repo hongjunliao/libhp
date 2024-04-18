@@ -13,40 +13,72 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifndef _MSC_VER
 #ifdef LIBHP_WITH_CURL
 
-#include "hp_epoll.h"    /* hp_epoll */
-#include "hp_timerfd.h"  /* hp_timerfd */
 #include <curl/curl.h>   /* libcurl */
 #include "sdsinc.h"     /* sds */
+
+#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
+#include "hp_epoll.h"    /* hp_epoll */
+#include "hp_timerfd.h"  /* hp_timerfd */
+typedef hp_epoll hp_curl_loop_t;
+#else  //use libuv
+#include <stdint.h>      /* size_t */
+#include "uv.h"         /* libuv */
+typedef uv_loop_t hp_curl_loop_t;
+#endif
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct hp_curlm hp_curlm;
-typedef struct hp_curlitem hp_curlitem;
+typedef struct hp_curl hp_curl;
 
-struct hp_curlm {
-	CURLM *          curl_handle;        /* the libcurl multi handle */
-	hp_epoll *       efds;
-	hp_timerfd       timer;
-	int              n;                 /* number of easy */
-
-	int              max_n;
-};
-/*
- * @param on_done: callback when finished
+/* callback
+ *	 bytes:   bytes received
+ *   content_length:   total bytes of body if has "Content-Length"
+ *   resp:    @see hp_uv_curladd
+ *   arg:     @see hp_uv_curladd
  */
-int hp_curlm_add(hp_curlm * curlm, const char * url
-		, struct curl_slist * hdrs, const char * body
-		, int (* on_done)(hp_curlm * curlm, char const * url, sds str, void * arg)
-		, void * arg);
+typedef int (* hp_curl_proress_cb_t)(int bytes, int content_length, sds resp, void * arg);
+typedef int (* hp_curl_done_cb_t)(hp_curl * hcurl, CURL *easy_handle, char const * url, sds str, void * arg);
 
-int hp_curlm_init(hp_curlm * curlm, hp_epoll * efds, int max_n);
-void hp_curlm_uninit(hp_curlm * curlm);
+struct hp_curl {
+	CURLM *          curl_handle;        /* the libcurl multi handle */
+#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
+	hp_epoll *       loop;
+	hp_timerfd       timer;
+#else
+	uv_loop_t * loop;
+	uv_timer_t  timer;
+#endif
+};
+
+int hp_curlinit(hp_curl * hcurl, hp_curl_loop_t * loop);
+
+/*
+ * see https://curl.haxx.se/libcurl/c/curl_mime_init.html
+ *
+ * do a HTTP/1 POST/GET request async
+ * @param url:			 URL, HTTP/1 only
+ * @param hdrs, form:    HTTP headers(and form if POST)
+ * @param resp:          response, NULL for ignore, empty then to buffer, else to file
+ * @param on_proress:    callback for user, progress
+ * @param on_done:       callback for user, when done
+ * @arg:                 user data
+ *
+ * @return:				0 on OK
+ * */
+int hp_curladd(hp_curl * hcurl, CURL * handle, const char * url
+		, struct curl_slist * hdrs
+		, void * form
+		, char const * resp
+		, hp_curl_proress_cb_t on_proress
+		, hp_curl_done_cb_t on_done
+		, void * arg, int flags);
+
+void hp_curluninit(hp_curl * hcurl);
 /*
  * use libcurl in easy mode
  * @return:  body received, NOTE free after used
@@ -66,6 +98,7 @@ int test_hp_curl_main(int argc, char ** argv);
 }
 #endif
 
+/////////////////////////////////////////////////////////////////////////////////////
+
 #endif /* LIBHP_WITH_CURL */
-#endif /* _MSC_VER */
 #endif /* LIBHP_CURL_H */

@@ -2,7 +2,8 @@
  * This file is PART of libhp project
  * @author hongjun.liao <docici@126.com>, @date 2019/6/9
  *
- * dict with sds as key and void * as value
+ * 2024/4/21 updated:
+ * simple c++ wrapper for redis/dict
  * */
 
 #ifndef LIBHP_DICT_H__
@@ -12,36 +13,36 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef LIBHP_DEPRECADTED
+#ifndef LIBHP_WITH_REDISDICT
 
 #include "sdsinc.h"        /* sds */
+extern "C" {
 #include "redis/src/dict.h" /* dict */
+}
 #include <stdlib.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 /////////////////////////////////////////////////////////////////////////////////////////
-int hp_dict_init(dict **d, void (* f)(void * ptr));
-int hp_dict_set(dict * d, char const * k, void * v);
-void * hp_dict_find(dict * d, char const * k);
-void * hp_dict_findif(dict * d, char const * k, void * def);
-int hp_dict_percent(dict * ht, int (* fn)(void * ptr), int * left, int * total);
-int hp_dict_del(dict * ht, const char *key);
-/* uninit */
-#define hp_dict_uninit(d) \
-do { \
-	dictRelease(d); \
-}while(0)
+//sds=>int
+class hp_dict_si {
+	static dictType sidt;
+	dict * dict_;
+public:
+	hp_dict_si();
+	~hp_dict_si();
+public:
+	int& operator[](char const * k);
+};
 
+//sds=>sds
+class hp_dict_ss {
+	static dictType ssdt;
+	dict * dict_;
+};
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 int test_hp_dict_main(int argc, char ** argv);
 #endif /* NDEBUG */
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* LIBHP_DICT_H__ */
-#endif //LIBHP_DEPRECADTED
+#endif //LIBHP_WITH_REDISDICT

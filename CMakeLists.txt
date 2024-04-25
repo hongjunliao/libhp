@@ -76,10 +76,6 @@ else()
 	set(ssl_lib "ssl crypto")
 endif()
 
-if(LIBHP_WITH_CURL)
-	set(libyuarel_lib "deps/libyuarel/*.c")
-endif()
-
 set(g_withs 1 ZLIB MYSQL BDB CURL MQTT CJSON 
 	OPTPARSE 1 1 DLFCN ZLOG HTTP 1 1 1 HTTP CURL 1 1 1 
 	)
@@ -100,7 +96,7 @@ set(g_libs  ${ssl_lib} z mysqlclient db curl ${path_mqtt_lib} cjson
 			c uuid ${uv_lib} dl zlog http_parser hiredis 
 			"deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c"
 			${sds_lib}
-			deps/gbk-utf8/utf8.c 
+			"deps/gbk-utf8/utf8.c deps/libyuarel/*.c"
 			deps/libyuarel/*.c
 			"deps/c-vector/*.c deps/c-vector/*.cc"
 			deps/inih/*.c

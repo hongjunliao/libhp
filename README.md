@@ -140,3 +140,12 @@ deps/目录为项目依赖的第三库,感谢原作者们!
 
  * cJSON: https://gitee.com/docici/cJSON
  * c-vector:https://gitee.com/jun/c-vector
+ 
+# #LIBHP_WITH_WIN32_INTERROP
+/* mainly for hiredis, define if you want to use
+ * https://github.com/microsoftarchive/redis.git
+ * else use https://github.com/redis/hiredis.git
+ * 2023/7/31
+ * LIBHP_WITH_WIN32_INTERROP is removed for simplicity
+ */
+ 

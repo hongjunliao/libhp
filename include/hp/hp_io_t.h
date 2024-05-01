@@ -119,7 +119,7 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd, hp_iohdl iohdl);
 int hp_io_rm(hp_io_ctx * ioctx, int id);
 int hp_io_write(hp_io_t * io, void * buf, size_t len, hp_free_t free, void * ptr);
 hp_io_t * hp_io_find(hp_io_ctx * ioctx, void * key, int (* on_cmp)(const void *key, const void *ptr));
-int hp_io_run(hp_io_ctx * ioctx, int interval, int mode);
+int hp_io_run(hp_io_ctx * ioctx, int mode);
 int hp_io_uninit(hp_io_ctx * ioctx);
 
 int hp_io_size(hp_io_ctx * ioctx);

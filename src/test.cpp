@@ -139,10 +139,8 @@ int libhp_all_tests_main(int argc, char ** argv)
 #endif
 
 #ifdef LIBHP_WITH_REDIS
-#ifdef LIBHP_WITH_WIN32_INTERROP
 	int hiredis_exmaple_ae_main(int argc, char **argv);
 	rc = hiredis_exmaple_ae_main(argc, argv); assert(rc == 0);
-#endif
 
 #ifdef LIBHP_WITH_MYSQL
 	run_test(test_hp_mysql_main);

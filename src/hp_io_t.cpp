@@ -293,7 +293,7 @@ int hp_io_write(hp_io_t * io, void * buf, size_t len, hp_free_t free, void * ptr
 	return rc;
 }
 
-int hp_io_run(hp_io_ctx * ioctx, int interval, int mode)
+int hp_io_run(hp_io_ctx * ioctx, int mode)
 {
 	int rc = 0;
 #if defined(HAVE_SYS_EPOLL_H)
@@ -1124,7 +1124,7 @@ static int client_server_echo_test(int test, int n)
 	/* run event loop, 1 for listenio  */
 	int s_tdone = 0;
 	for (;; ) {
-		hp_io_run(ioctx, 200, 1);
+		hp_io_run(ioctx, 1);
 
 		if(s_tdone && hp_io_size(ioctx) <= 1) break;
 		if(s_tdone == 0){
@@ -1461,7 +1461,7 @@ int test_hp_io_t_main(int argc, char ** argv)
 		/* run event loop */
 		int quit = 3;
 		for (; quit > 0;) {
-			hp_io_run(ioctx, 200, 0);
+			hp_io_run(ioctx, 1);
 
 			if(hp_io_size(ioctx) == 1)
 				--quit;

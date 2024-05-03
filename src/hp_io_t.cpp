@@ -452,12 +452,14 @@ hp_io_t * hp_io_find(hp_io_ctx * ioctx, void * key, int (* on_cmp)(const void *k
 #include "hp/hp_net.h" /* hp_tcp_connect */
 #include "redis/src/adlist.h"  /* list */
 #include "hp/sdsinc.h" /* sds */
-#include "hp/hp_config.h"
+#include "hp/hp_config.h" //hp_ini
 #include "hp/hp_cjson.h"
 #include "hp/string_util.h"
 #include "hp/hp_assert.h"
-#define cfg hp_config_test
-#define cfgi(key) atoi(hp_config_test(key))
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 /////////////////////////////////////////////////////////////////////////////////////
 
 #if !defined(_MSC_VER)  && defined(LIBHP_WITH_CJSON) && defined(LIBHP_WITH_HTTP)
@@ -492,7 +494,7 @@ static inline char const * status_code_cstr(int code)
 	"Content-Type: application/%s\r\n"                           \
 	"Content-Length: %d\r\n\r\n"                                 \
 	, parse.u.url, cfg("ip")                   \
-	, cfgi("tcp.port")                             \
+	, cfgi("test_hp_io_t_main.port")                             \
 	, (parse.content_type)      \
 	, (int)(content_length)); } while(0)
 
@@ -505,7 +507,7 @@ static inline char const * status_code_cstr(int code)
 	, parse.u.status_code                                        \
 	, status_code_cstr(parse.u.status_code)                      \
 	, cfg("ip")                                \
-	, cfgi("tcp.port")                             \
+	, cfgi("test_hp_io_t_main.port")                             \
 	, (parse.content_type)      \
 	, (int)(content_length)); } while(0)
 
@@ -556,7 +558,7 @@ static inline char const * status_code_cstr(int code)
 	if(rc == 0) { /*need more data?*/}                            \
 	else if(parse.u.url[0] && \
 			strcmp(ip, cfg("ip")) == 0 &&       \
-			cfgi("tcp.port") == port) {             \
+			cfgi("test_hp_io_t_main.port") == port) {             \
 		rc = 1;                                                   \
 		if(strncasecmp(parse.content_type, "json", 4) == 0 &&     \
 				jsonstr[0] && content_length >= 2) {              \
@@ -1061,7 +1063,7 @@ static int client_server_echo_test(int test, int n)
 	client * c = (client *)calloc(70000, sizeof(client));
 	assert(c);
 
-	hp_sock_t listen_fd = hp_tcp_listen(cfgi("tcp.port"));
+	hp_sock_t listen_fd = hp_tcp_listen(cfgi("test_hp_io_t_main.port"));
 	assert(hp_sock_is_valid(listen_fd));
 
 #ifndef _MSC_VER
@@ -1110,7 +1112,7 @@ static int client_server_echo_test(int test, int n)
 		c[i].in = sdsempty();
 		c[i].test = test;
 
-		hp_sock_t fd = hp_tcp_connect("127.0.0.1", cfgi("tcp.port"));
+		hp_sock_t fd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(fd));
 		rc = hp_io_add(ioctx, &c[i].io, fd, hdlc);
 		assert(rc == 0);
@@ -1120,7 +1122,7 @@ static int client_server_echo_test(int test, int n)
 			assert(rc == 0);
 		}
 	}
-	hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("tcp.port"));
+	hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
 	/* run event loop, 1 for listenio  */
 	int s_tdone = 0;
 	for (;; ) {
@@ -1188,7 +1190,7 @@ static void add_remove_test(int n)
 	assert(hp_io_size(ioctx) == 0);
 
 	for(i = 0; i < n; ++i){
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("tcp.port"));
+		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(confd));
 		io[i].fd = confd;
 
@@ -1202,7 +1204,7 @@ static void add_remove_test(int n)
 		assert(hp_io_size(ioctx) == i + 1);
 	}
 	{
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("tcp.port"));
+		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(confd));
 		rc = hp_io_add(ioctx, io + i, n + 1, hdl);
 		assert(rc < 0);
@@ -1324,6 +1326,7 @@ static void search_test(int n)
 int test_hp_io_t_main(int argc, char ** argv)
 {
 	int rc, i;
+	assert(hp_config_test);
 	//add,remove test
 	{
 		add_remove_test(1);
@@ -1393,12 +1396,12 @@ int test_hp_io_t_main(int argc, char ** argv)
 #if !defined(_MSC_VER) && defined(LIBHP_WITH_CJSON) && defined(LIBHP_WITH_HTTP)
 	{
 		{
-			sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "index.html");
+			sds file = sdscatprintf(sdsempty(), "%s/%s", cfg("web_root"), "index.html");
 			hp_assert_path(file, REG);
 			sdsfree(file);
 		}
 		{
-			sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "404.html");
+			sds file = sdscatprintf(sdsempty(), "%s/%s", cfg("web_root"), "404.html");
 			hp_assert_path(file, REG);
 			sdsfree(file);
 		}
@@ -1419,9 +1422,9 @@ int test_hp_io_t_main(int argc, char ** argv)
 		rc = client_init(c); assert(rc == 0);
 		rc = server_init(s); assert(rc == 0);
 
-		hp_sock_t listen_fd = hp_tcp_listen(cfgi("tcp.port")); assert(listen_fd > 0);
-		hp_sock_t confd = hp_tcp_connect(cfg("ip"),
-					cfgi("tcp.port")); assert(confd > 0);
+		hp_sock_t listen_fd = hp_tcp_listen(cfgi("test_hp_io_t_main.port")); assert(listen_fd > 0);
+		hp_sock_t confd = hp_tcp_connect(cfg("test_hp_io_t_main.ip"),
+					cfgi("test_hp_io_t_main.port")); assert(confd > 0);
 
 		hp_iohdl hdl = {
 				.on_new = test_http_server_on_new,
@@ -1457,7 +1460,7 @@ int test_hp_io_t_main(int argc, char ** argv)
 		assert(rc == 0);
 		hp_log(std::cout, "%s: HTPP request sent:\n%s", __FUNCTION__, out);
 
-		hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("tcp.port"));
+		hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
 		/* run event loop */
 		int quit = 3;
 		for (; quit > 0;) {

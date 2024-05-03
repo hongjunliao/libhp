@@ -310,12 +310,9 @@ void * hp_poll_find(hp_poll * po, void * key, hp_cmp_fn_t cb)
 #ifndef NDEBUG
 #include "hp/hp_net.h"//hp_tcp_listen
 #include "hp/hp_log.h"
-#include "hp/hp_config.h"
 #include "hp/hp_io.h"	//hp_rd
 #include "hp/hp_err.h"	//hp_err
 #include "hp/hp_assert.h"	//hp_assert
-#define cfg hp_config_test
-#define cfgi(key) atoi(hp_config_test(key))
 
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -609,7 +606,7 @@ static void client_server_echo_test(int nclient)
 	int i, rc = 0;
 	client * c = (client *)calloc(70000, sizeof(client));
 	assert(c);
-	int port = cfgi("tcp.port");
+	int port = 7006;
 	hp_poll ghp_poobj = { 0 }, * po = &ghp_poobj;
 	// +1 for listen_fd
 	hp_poll_init(po, 2 * nclient + 1, 200, 0, 0);

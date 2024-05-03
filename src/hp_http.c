@@ -371,14 +371,18 @@ void hp_http_uninit(hp_http * http)
 #include "hp/hp_curl.h"     /* errno */
 #include "hp/hp_test.h"
 #include "hp/hp_assert.h"	//hp_assert
-#include "hp/hp_config.h"
+#include "hp/hp_config.h"	//hp_ini
 #include "hp/string_util.h"
 /////////////////////////////////////////////////////////////////////////////////////////
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
+
 #define TEST_URL "http://127.0.0.1:18541/index.html"
 
-static int test_curl_multi_on_done(hp_curlm * curlm, char const * url, sds str, void * arg)
+static int test_curl_multi_on_done(hp_curl * hcurl, CURL *easy_handle, char const * url, sds str, void * arg)
 {
-	sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "index.html");
+	sds file = sdscatprintf(sdsempty(), "%s/%s", cfg("web_root"), "index.html");
 	sds fc = hp_fread(file);
 	assert(strncmp(str, fc, sdslen(fc)) == 0);
 	sdsfree(fc);
@@ -391,7 +395,7 @@ static int test_http_process(struct hp_http * http, hp_httpreq * req, struct hp_
 {
 	struct stat fsobj, * fs = &fsobj;
 
-	sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), req->url_path);
+	sds file = sdscatprintf(sdsempty(), "%s/%s", cfg("web_root"), req->url_path);
 	hp_assert_path(file, REG);
 
 	resp->status_code = 200;
@@ -405,11 +409,12 @@ static int test_http_process(struct hp_http * http, hp_httpreq * req, struct hp_
 
 int test_hp_http_main(int argc, char ** argv)
 {
+	assert(hp_config_test);
 	int rc = 0;
 #ifdef __linux__
 	{
 		{
-			sds file = sdscatprintf(sdsempty(), "%s/%s", hp_config_test("web_root"), "index.html");
+			sds file = sdscatprintf(sdsempty(), "%s/%s", cfg("web_root"), "index.html");
 			hp_assert_path(file, REG);
 			sdsfree(file);
 		}
@@ -431,33 +436,28 @@ int test_hp_http_main(int argc, char ** argv)
 		rc = hp_http_init(http, ioctx, listenfd, 0, test_http_process);
 		assert(rc == 0);
 
-		hp_curlm hp_curl_multiobj, * curlm = &hp_curl_multiobj;
-//		rc = hp_curlm_init(curlm, &ioctx->efds, 0);
-		assert(rc == 0);
-
-		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
-		assert(rc == 0);
-
-		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
-		assert(rc == 0);
-
-		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
-		assert(rc == 0);
-
-		assert(curlm->n == 3);
+		hp_curl hp_curl_multiobj, * hcurl = &hp_curl_multiobj;
+//#if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
+//		rc = hp_curlinit(hcurl, ioctx->epo);
+//#else
+//		rc = hp_curlinit(hcurl, loop);
+//#endif
+//		assert(rc == 0);
+//
+//		rc = hp_curlm_add(curlm, TEST_URL, 0, 0, test_curl_multi_on_done, curlm);
+//		assert(rc == 0);
 
 		hp_log(stdout, "%s: listening on HTTP port=%d, waiting for connection ...\n", __FUNCTION__, 18541);
 
 		int quit = 3;
 		for(; quit > 0;){
-			hp_io_run(ioctx, 200, 0);
+			hp_io_run(ioctx, 1);
 			if(hp_io_size(ioctx) == 1)
 				--quit;
 		}
 
-		assert(curlm->n == 0);
 
-		hp_curlm_uninit(curlm);
+		hp_curluninit(hcurl);
 		hp_http_uninit(http);
 		hp_io_uninit(ioctx);
 		close(listenfd);

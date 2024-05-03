@@ -10,7 +10,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #include "sdsinc.h"	//sdscatfmt
-#include "hp_log.h"
+#include <stdio.h>
 #include <assert.h>
 #include <sys/stat.h>
 
@@ -28,14 +28,14 @@ extern "C"{
 
 #define hp_assert(expre, fmt, ...) do { \
 		if(!(expre) && fmt) { sds hp_assert_s = sdscatfmt(sdsempty(), fmt, __VA_ARGS__); \
-			hp_log(stderr, "%s: assert failed: %s\n", __FUNCTION__, hp_assert_s); sdsfree(hp_assert_s); assert(expre); } \
+			fprintf(stderr, "%s: assert failed: %s\n", __FUNCTION__, hp_assert_s); sdsfree(hp_assert_s); assert(expre); } \
 		else assert(expre); } while(0)
 
 #else
 
 #define hp_assert(expre, fmt, args...) do { \
 		if(!(expre) && fmt) { sds hp_assert_s = sdscatfmt(sdsempty(), fmt, ##args); \
-			hp_log(stderr, "%s: assert failed: %s\n", __FUNCTION__, hp_assert_s); sdsfree(hp_assert_s); assert(expre); } \
+			fprintf(stderr, "%s: assert failed: %s\n", __FUNCTION__, hp_assert_s); sdsfree(hp_assert_s); assert(expre); } \
 		else assert(expre); } while(0)
 
 #endif //

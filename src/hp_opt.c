@@ -63,7 +63,7 @@ int hp_opt_argv(char * cmdline, char * argv[])
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "hp/hp_libc.h"
+#include "hp/hp_stdlib.h"
 
 int test_optparse_main(int argc, char ** argv)
 {

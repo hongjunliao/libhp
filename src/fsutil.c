@@ -14,7 +14,6 @@
 #include <dirent.h>      /* DIR */
 #endif /* _MSC_VER */
 
-#include "Win32_Interop.h"
 #include "hp/sdsinc.h"
 #include <unistd.h>
 #include <sys/stat.h>    /* mkdir */

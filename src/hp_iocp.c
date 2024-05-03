@@ -1059,11 +1059,13 @@ ret:
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "gbk-utf8/utf8.h"
-#include "hp/hp_config.h"	//hp_config_test
+#include "hp/hp_config.h"	//hp_ini
 #include "hp/hp_log.h"	//hp_log
 #include "hp/hp_stdlib.h"	//hp_free_t
-#define cfg hp_config_test
-#define cfgi(key) atoi(hp_config_test(key))
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 
 /////////////////////////////////////////////////////////////////////////////////////
 static int simple_tests()
@@ -1771,6 +1773,7 @@ static int n_maxtest =
 int test_hp_iocp_main(int argc, char ** argv)
 {
 	int rc;
+	assert(hp_config_test);
 	{
 		hp_log(stdout, "%s: POLLIN=%d,POLLOUT=%d,POLLERR=%d,POLLHUP=%d,POLLNVAL=%d"
 				",(POLLOUT | POLLHUP)=%d,INT_MAX=%d, %d/%d, %d/%d,SSIZE_MAX=%I64d,FD_SETSIZE=%d\n", __FUNCTION__,

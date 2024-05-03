@@ -158,14 +158,17 @@ void hp_expire_uninit(hp_expire * e)
 #ifndef NDEBUG
 #include <unistd.h>
 #include "hp/hp_redis.h"
-#include "hp/hp_config.h"
+#include "hp/hp_config.h" //hp_ini
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 
 static hp_epoll efds_obj, *efds = &efds_obj;
 
 int test_hp_expire_main(int argc, char ** argv)
 {
 	assert(hp_config_test);
-
 	int i, rc;
 
 	{
@@ -196,7 +199,7 @@ int test_hp_expire_main(int argc, char ** argv)
 			++inc;
 
 			redisAsyncContext * c = 0;
-			rc = hp_redis_init(&c, uvloop, hp_config_test("redis"), hp_config_test("redis.password"), 0);
+			rc = hp_redis_init(&c, uvloop, cfg("redis"), cfg("redis.password"), 0);
 			return (rc == 0? c : 0);
 		}
 
@@ -258,7 +261,7 @@ int test_hp_expire_main(int argc, char ** argv)
 			++inc;
 
 			redisAsyncContext * c = 0;
-			rc = hp_redis_init(&c, uvloop, hp_config_test("redis"), hp_config_test("redis.password"), 0);
+			rc = hp_redis_init(&c, uvloop, cfg("redis"), cfg("redis.password"), 0);
 			return (rc == 0? c : 0);
 		}
 

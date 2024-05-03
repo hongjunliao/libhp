@@ -12,6 +12,8 @@
 #include <assert.h>		//assert
 #include <stddef.h> //size_t
 #include <stdlib.h>
+#include <string.h>
+#include <search.h>
 #ifdef _MSC_VER
 #include <Windows.h>
 

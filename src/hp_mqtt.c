@@ -529,8 +529,11 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 #include <stdlib.h>
 #include <assert.h>
 #include "MQTTClient.h"
-#include "hp/hp_config.h"
-extern hp_config_t hp_config_test;
+#include "hp/hp_config.h" //hp_ini
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 
 struct basic_test {
 	char * topics[1];
@@ -602,11 +605,6 @@ static void on_connect(hp_mqtt * cli, int err, char const * errstr, void * arg)
 int test_hp_mqtt_main(int argc, char ** argv)
 {
 	assert(hp_config_test);
-
-	char const * mqtt_addr=hp_config_test("mqtt.addr");
-	char const * mqtt_user=hp_config_test("mqtt.user");;
-	char const * mqtt_pwd=hp_config_test("mqtt.pwd");;
-
 	/* check if connect OK */
 	{
 
@@ -614,7 +612,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		hp_mqtt mqttcliobj, * mqttcli = &mqttcliobj;
 
 		rc = hp_mqtt_init(mqttcli, 0, on_connect, test__t1_hp_mqtt_message_cb, 0, 0
-				, mqtt_addr, mqtt_user, mqtt_pwd
+				, cfg("mqtt.addr"), cfg("mqtt.user"), cfg("mqtt.pwd")
 				, 0, 0, 0);
 		assert(rc == 0);
 
@@ -643,7 +641,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		hp_mqtt mqttcliobj, * mqttcli = &mqttcliobj;
 
 		rc = hp_mqtt_init(mqttcli, 0, 0, test__t1_hp_mqtt_message_cb, 0, 0
-				, mqtt_addr, mqtt_user, mqtt_pwd
+				, cfg("mqtt.addr"), cfg("mqtt.user"), cfg("mqtt.pwd")
 				, 0, 0, 0);
 		assert(rc == 0);
 
@@ -680,7 +678,7 @@ int test_hp_mqtt_main(int argc, char ** argv)
 		hp_mqtt mqttcliobj, * mqttcli = &mqttcliobj;
 
 		rc = hp_mqtt_init(mqttcli, 0, 0, test__t2_hp_mqtt_message_cb, 0, 0
-				, mqtt_addr, mqtt_user, mqtt_pwd
+				, cfg("mqtt.addr"), cfg("mqtt.user"), cfg("mqtt.pwd")
 				, 0, 0, 0);
 		assert(rc == 0);
 

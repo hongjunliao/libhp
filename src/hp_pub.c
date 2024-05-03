@@ -515,7 +515,11 @@ int hp_sub_ping(redisAsyncContext * subc)
 #ifndef _MSC_VER
 #include <uuid/uuid.h>
 #endif /* _MSC_VER */
-#include "hp/hp_config.h"	/* hp_config_t  */
+#include "hp/hp_config.h"	/* hp_ini  */
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 
 static int done = 0, dones[64] = { 0 };
 static int s_conn_flag = 0;
@@ -783,7 +787,6 @@ void is_done_2(redisAsyncContext *c, void *r, void *privdata) {
 int test_hp_pub_main(int argc, char ** argv)
 {
 	assert(hp_config_test);
-	hp_config_t cfg = hp_config_test;
 
 	int i, r;
 	int n_topic = sizeof(topics) / sizeof(topics[0]);

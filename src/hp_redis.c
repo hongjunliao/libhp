@@ -105,7 +105,12 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 /////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
-#include "hp/hp_config.h"
+#include "hp/hp_config.h" //hp_ini
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
+
 static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;
 
 static int done = 0;
@@ -143,7 +148,6 @@ static void test_hp_redis_on_connect_2(const redisAsyncContext *c, int status) {
 int test_hp_redis_main(int argc, char ** argv)
 {
 	assert(hp_config_test);
-	hp_config_t cfg = hp_config_test;
 
 	int r, rc;
 	/* test if connect OK */

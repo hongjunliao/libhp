@@ -335,12 +335,15 @@ ret:
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 #include "hp/hp_cjson.h"
-#include "hp/hp_config.h"
+#include "hp/hp_config.h" //hp_ini
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
 
 int test_hp_mysql_main(int argc, char ** argv)
 {
-	int i, j, rc;
 	assert(hp_config_test);
+	int i, j, rc;
 
 	MYSQL mysqlopbj, * mysql = &mysqlopbj;
 
@@ -350,9 +353,9 @@ int test_hp_mysql_main(int argc, char ** argv)
 	assert(mysql);
 
 	fprintf(stdout, "%s: connecting to MySQL, --mysql='%s', password='%s' ...\n",
-			__FUNCTION__, hp_config_test("mysql"), (strlen(hp_config_test("mysql.password")) > 0? "***" : ""));
+			__FUNCTION__, cfg("mysql"), (strlen(cfg("mysql.password")) > 0? "***" : ""));
 
-	rc = hp_mysql_connect_addr(&mysql, hp_config_test("mysql"), hp_config_test("mysql.password"), "set names utf8");
+	rc = hp_mysql_connect_addr(&mysql, cfg("mysql"), cfg("mysql.password"), "set names utf8");
 	if(!(rc == 0 && mysql)){
 		fprintf(stdout, "%s: connect to MySQL failed, skip this test\n", __FUNCTION__);
 		return 0;

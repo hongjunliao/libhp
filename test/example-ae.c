@@ -1,7 +1,3 @@
-#ifdef _WIN32
-#include "redis/src\Win32_Interop\win32fixes.h"
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +6,11 @@
 #include <hiredis/hiredis.h>
 #include <hiredis/async.h>
 #include <hiredis/adapters/ae.h>
-#include "hp/hp_config.h"
+#include "hp/hp_config.h"	//hp_ini
+
+extern hp_ini * hp_config_test;
+#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfgi(k) atoi(cfg(k))
 
 /* Put event loop in the global scope, so it can be explicitly stopped */
 static aeEventLoop *loop;
@@ -71,7 +71,7 @@ int hiredis_exmaple_ae_main(int argc, char **argv)
 	char host[64] = "";
 	int port = 0;
 
-	int n = sscanf(hp_config_test("redis"), "%[^:]:%d", host, &port);
+	int n = sscanf(cfg("redis"), "%[^:]:%d", host, &port);
 	if (n != 2)
 		return -2;
 	redisAsyncContext *c = redisAsyncConnect(host, port);

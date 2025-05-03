@@ -62,6 +62,7 @@ static int hp_io_t_on_data(hp_io_t * io, char * buf, size_t * len)
 				return io->iohdl.on_dispatch(io, iohdr, body);
 			}
 		}
+		else break;	//need more data
 	}
 	return 0;
 }
@@ -383,6 +384,7 @@ int hp_io_add(hp_io_ctx * ioctx, hp_io_t * io, hp_sock_t fd, hp_iohdl iohdl)
 	}
 	else if(io->iohdl.on_parse){
 #if defined(HAVE_SYS_UIO_H)
+		//TODO:hp_rd_init(1024 * 8)?
 		rc = hp_rd_init(&io->rd, 1024 * 8, hp_io_t_internal_on_data, hp_io_t_internal_on_rerror);
 		rc = rc == 0? hp_wr_init(&io->wr, 8, hp_io_t_internal_on_werror) : rc;
 #endif //#if defined(HAVE_SYS_UIO_H)

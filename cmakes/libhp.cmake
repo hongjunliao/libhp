@@ -13,7 +13,17 @@ macro(hp_log)
 #    hp_log("[${CURRENT_TIMESTAMP}]/${_callee}: ${ARGV}")
 endmacro()
 ###########################################################################################
-# libhp依赖查找
+# 简单有效的依赖查找系统
+#	g_withs: 为数字,该库为必须的;为宏,开启该宏对应的功能
+#	g_hdrs:  为有效的头文件,去系统库头文件目录去查找;为.nullfilesub.h，这是一个cmake管理的源码形式的依赖库
+#			 	 为.nullfilesrc.h，这是一个普通源码形式的依赖，比如项目本身的源代码（本身的源代码也可以组织成多个库的形式，成为项目的“依赖”），
+#				 或第三方库的源代码(比如只含有少量源代码文件的第三方库)
+#	g_incs:  当g_hdrs不是有效的头文件时，指定搜索路径
+#	g_deps:	 指定依赖的具体目录
+
+# NOTE:如果include某个库的头文件时没有子目录，如果该库比较”大型“， 我们就手动添加一层子目录， 以避免编译工程时include冲突, 比如:
+# #include <db.h>  //没有形如db/db.h子目录,我们手动添加一层，并复制对应文件：
+# set(g_incs deps/db/include/）  
 
 # 为数字的表示不受${withprefix}XXX选项开关的控制
 #set(g_withs SSL ZLIB MYSQL BDB CURL MQTT CJSON 
@@ -27,9 +37,6 @@ endmacro()
 #		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
 #		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 #	)
-# NOTE:如果include某个库的头文件时没有子目录，如果该库比较”大型“， 我们就手动添加一层子目录， 以避免编译工程时include冲突, 比如:
-# #include <db.h>  //没有形如db/db.h子目录,我们手动添加一层，并复制对应文件：
-# set(g_incs deps/db/include/）  
 
 #set(g_incs deps/uv/include/  deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/
 #		deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ deps/uv/include/ 

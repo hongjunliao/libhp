@@ -4,3 +4,6 @@ build/
 .cproject
 .settings/
 .gitignore
+*.un~
+*.project
+patch/

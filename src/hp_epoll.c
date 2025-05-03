@@ -63,7 +63,7 @@ int hp_epoll_run(hp_epoll * epo, int mode)
 			}
 		}
 
-		n = epoll_wait(epo->fd, epo->ev, epo->ev_len, epo->timeout);
+		n = epoll_wait(epo->fd, epo->ev, epo->ev_len + 1, epo->timeout);
 		if(n < 0){
 			if(errno == EINTR || errno == EAGAIN)
 				continue;

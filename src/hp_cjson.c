@@ -30,6 +30,15 @@
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+char const * cjson_print(cJSON * json, int fmt)
+{
+	static char const * ret = 0;
+	if(ret)
+		free(ret);
+	ret = (!fmt? cJSON_PrintUnformatted(json) : cJSON_Print(json));
+	return ret;
+}
+
 sds cjson_in(cJSON * array)
 {
 	if(!array)
@@ -37,7 +46,7 @@ sds cjson_in(cJSON * array)
 
 	if(cJSON_IsArray(array)){
 		if(cJSON_GetArraySize(array) > 0)
-			return sdsmapchars(sdsnew(cJSON_PrintUnformatted(array)), "[]", "()", 2);
+			return sdsmapchars(sdsnew(cjson_print(array, 1)), "[]", "()", 2);
 		return sdsnew("('')");
 	}
 
@@ -263,7 +272,7 @@ char const * cjson_cstr(cJSON const * cjson)
 {
 	static char * s = 0;
 	if(s) free(s);
-	s = cJSON_PrintUnformatted(cjson);
+	s = cjson_print(cjson, 1);
 	return s;
 }
 
@@ -316,7 +325,7 @@ char const * cjson_sval(cJSON const * cjson, char const * key, char * def)
 	sdsfree(k);
 	return (json? (!(cJSON_IsObject(json) || cJSON_IsArray(json))?
 				(json->valuestring? json->valuestring : def)
-				: cJSON_PrintUnformatted(json))
+				: cjson_print(json, 1))
 			: def);
 }
 
@@ -697,8 +706,8 @@ int test_hp_cjson_main(int argc, char ** argv)
 		cJSON * ids = cjson_col(json, "objs/id");
 		assert(ids);
 
-		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cJSON_PrintUnformatted(ids));
-		assert(strcmp(cJSON_PrintUnformatted(ids), "[\"2384\",\"2385\"]") == 0);
+		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cjson_print(ids, 1));
+		assert(strcmp(cjson_print(ids, 1), "[\"2384\",\"2385\"]") == 0);
 
 		cJSON_Delete(ids);
 		cJSON_Delete(json);
@@ -708,8 +717,8 @@ int test_hp_cjson_main(int argc, char ** argv)
 		assert(json);
 		cJSON * ids = cjson_col(json, "params/objs/id");
 		assert(ids);
-		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cJSON_PrintUnformatted(ids));
-		assert(strcmp(cJSON_PrintUnformatted(ids), "[\"2384\",\"2385\"]") == 0);
+		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cjson_print(ids, 1));
+		assert(strcmp(cjson_print(ids, 1), "[\"2384\",\"2385\"]") == 0);
 
 		cJSON_Delete(ids);
 		cJSON_Delete(json);
@@ -719,8 +728,8 @@ int test_hp_cjson_main(int argc, char ** argv)
 		assert(json);
 		cJSON * ids = cjson_col(json, "params/objs/id|name");
 		assert(ids);
-		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cJSON_PrintUnformatted(ids));
-		assert(strcmp(cJSON_PrintUnformatted(ids), "[\"2384\",\"2385\"]") == 0);
+		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cjson_print(ids, 1));
+		assert(strcmp(cjson_print(ids, 1), "[\"2384\",\"2385\"]") == 0);
 
 		cJSON_Delete(ids);
 		cJSON_Delete(json);
@@ -730,8 +739,8 @@ int test_hp_cjson_main(int argc, char ** argv)
 		assert(json);
 		cJSON * ids = cjson_col(json, "params/objs/name|id");
 		assert(ids);
-		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cJSON_PrintUnformatted(ids));
-		assert(strcmp(cJSON_PrintUnformatted(ids), "[\"jack\",\"tom\"]") == 0);
+		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cjson_print(ids, 1));
+		assert(strcmp(cjson_print(ids, 1), "[\"jack\",\"tom\"]") == 0);
 
 		cJSON_Delete(ids);
 		cJSON_Delete(json);
@@ -741,8 +750,8 @@ int test_hp_cjson_main(int argc, char ** argv)
 		assert(json);
 		cJSON * ids = cjson_col(json, "params/objs/name|id");
 		assert(ids);
-		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cJSON_PrintUnformatted(ids));
-		assert(strcmp(cJSON_PrintUnformatted(ids), "[\"2384\",\"2385\"]") == 0);
+		fprintf(stdout, "%s: json='%s'\n", __FUNCTION__, cjson_print(ids, 1));
+		assert(strcmp(cjson_print(ids, 1), "[\"2384\",\"2385\"]") == 0);
 
 		cJSON_Delete(ids);
 		cJSON_Delete(json);

@@ -88,6 +88,13 @@ cJSON * cjson_parselen(char const * str, int len);
 
 sds cjson_in(cJSON * array);
 sds cjson_cmdline(char const * cmd, cJSON * args);
+
+/* 
+ * @param fmt: 0 for cJSON_PrintUnformatted, 1 for  cJSON_Print
+ * @param json: cJSON object to print
+ * @return: char const *, do NOT try to delete the returned char *! it's auto deleted
+ */
+char const * cjson_print(cJSON * json, int fmt);
 /////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NDEBUG
 int test_hp_cjson_main(int argc, char ** argv);

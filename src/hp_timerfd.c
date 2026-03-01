@@ -5,7 +5,7 @@
  * timer using timerfd
  * */
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)

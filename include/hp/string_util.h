@@ -6,7 +6,7 @@
 #define HP_STRING_UTIL_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #include <stdio.h>

@@ -6,7 +6,7 @@
 #define HP_ASSERT_H_
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #include "sdsinc.h"	//sdscatfmt

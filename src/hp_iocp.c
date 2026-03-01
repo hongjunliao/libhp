@@ -6,7 +6,7 @@
 * */
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 
@@ -1059,7 +1059,7 @@ ret:
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "gbk-utf8/utf8.h"
-#include "hp/hp_config.h"	//hp_ini
+#include "hp/hp_ini.h"	//hp_ini
 #include "hp/hp_log.h"	//hp_log
 #include "hp/hp_stdlib.h"	//hp_free_t
 

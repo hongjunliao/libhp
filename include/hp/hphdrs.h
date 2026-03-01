@@ -9,14 +9,13 @@
 #define LIBHP_HP_HDRS_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #include "hp_bdb.h"  /*  */
 #include "hp_cache.h"  /*  */
 #include "hp_cjson.h"  /*  */
-#include "hp_config.h"  /*  */
-#include "hp_curl.h"  /*  */
+#include "hp_ini.h"  /*  */
 #include "hp_dict.h"  /*  */
 #include "hp_dl.h"  /*  */
 #include "hp_epoll.h"  /*  */
@@ -47,7 +46,6 @@
 #include "sdsinc.h"  /*  */
 #include "str_dump.h"  /*  */
 #include "string_util.h"  /*  */
-#include "hp_uv_curl.h"  /*  */
 #include "hp_ssl.h"  /*  */
 #include "hp_io_t.h"  /*  */
 #include "hp_fs.h"  /*  */

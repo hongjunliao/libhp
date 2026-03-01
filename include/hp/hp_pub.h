@@ -18,7 +18,7 @@
 #define LIBHP_PUB_H__
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_REDIS

@@ -129,6 +129,10 @@ target_compile_options(libhp PUBLIC
     -DcJSON_FREE_PRINT
 )
 
+target_include_directories(libhp
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+)
 if(WIN32)
 	target_link_directories(libhp PUBLIC deps/openssl/lib/VC/static/)
 endif()
@@ -138,5 +142,9 @@ target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/ 
 target_link_libraries(test-libhp libhp ) 
 
 ###########################################################################################
-configure_file("config.h.in" "config.h")
+configure_file(
+    hp_config.h.in
+    "${CMAKE_CURRENT_BINARY_DIR}/hp_config.h"   # 明确写出完整路径
+    @ONLY   # 可选，但建议加上
+)
 

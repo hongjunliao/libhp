@@ -8,10 +8,10 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "hp/hp_config.h" //hp_ini
+#include "hp/hp_ini.h" //hp_ini
 #include "inih/ini.h"		//ini_parse
 #include "hp/sdsinc.h" //sds
 #include "hp/hp_log.h"

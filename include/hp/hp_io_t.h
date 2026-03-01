@@ -9,7 +9,7 @@
 #define LIBHP_IO_T_H__
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifdef __cplusplus

@@ -13,7 +13,7 @@
 #define LIBHP_SIG_H__
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 #if !defined(_WIN32) && !defined(_MSC_VER)
 

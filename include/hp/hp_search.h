@@ -10,7 +10,7 @@
 #define LIBHP_SEARCH_H__
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifdef HAVE_SEARCH_H

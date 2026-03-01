@@ -7,7 +7,7 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_io_t.h"
@@ -454,7 +454,7 @@ hp_io_t * hp_io_find(hp_io_ctx * ioctx, void * key, int (* on_cmp)(const void *k
 #include "hp/hp_net.h" /* hp_tcp_connect */
 #include "redis/src/adlist.h"  /* list */
 #include "hp/sdsinc.h" /* sds */
-#include "hp/hp_config.h" //hp_ini
+#include "hp/hp_ini.h" //hp_ini
 #include "hp/hp_cjson.h"
 #include "hp/string_util.h"
 #include "hp/hp_assert.h"

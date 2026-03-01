@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 /////////////////////////////////////////////////////////////////////////////////////

@@ -6,7 +6,7 @@
  *
  * */
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MQTT
@@ -529,7 +529,7 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 #include <stdlib.h>
 #include <assert.h>
 #include "MQTTClient.h"
-#include "hp/hp_config.h" //hp_ini
+#include "hp/hp_ini.h" //hp_ini
 
 extern hp_ini * hp_config_test;
 #define cfg(k) hp_config_ini(hp_config_test, (k))

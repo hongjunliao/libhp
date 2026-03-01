@@ -9,7 +9,7 @@
 #define LIBHP_IOCP_H
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #include  "hp_stdlib.h"  //hp_free_t

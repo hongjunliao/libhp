@@ -10,7 +10,7 @@
  * http://www.ioncannon.net/programming/34/howto-base64-encode-with-cc-and-openssl/
  */
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#include "hp_config.h"
 #endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_SSL

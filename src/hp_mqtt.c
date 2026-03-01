@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include "c-vector/cvector.h"
 #include "hp/paho_opts.h"
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 
 #if defined(WIN32)
 #include <windows.h>

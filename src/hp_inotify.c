@@ -311,8 +311,8 @@ void hp_inotify_uninit(hp_inotify * dl)
 #include <signal.h>
 #include <pthread.h>
 #include "hp/hp_io.h"	/*  */
-#include "hp/string_util.h"/* hp_fread  */
-#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_str.h"/* hp_fread  */
+#include "hp/hp_str.h"   /* dumpstr */
 
 #define Ino HP_INOTIFY_TOOL
 

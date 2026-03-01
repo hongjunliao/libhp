@@ -19,7 +19,7 @@
 #include "hp/hp_msg.h"
 #include "hp/hp_z.h"
 #include "hp/hp_log.h"
-#include "hp/str_dump.h"
+#include "hp/hp_str.h"
 
 #include <stdio.h>
 #include <stdlib.h>

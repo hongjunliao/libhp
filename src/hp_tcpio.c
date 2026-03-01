@@ -34,8 +34,8 @@
 #include "hp/hp_log.h"     /* hp_log */
 #include "hp/hp_libc.h"    /* hp_min */
 #include "hp/hp_net.h"     /*  */
-#include "hp/str_dump.h"   /* dumpstr */
-#include "hp/string_util.h"/* sdslen_null */
+#include "hp/hp_str.h"   /* dumpstr */
+#include "hp/hp_str.h"/* sdslen_null */
 #include "hp/klist.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_tcpio.h"

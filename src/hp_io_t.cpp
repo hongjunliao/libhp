@@ -20,8 +20,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "hp/hp_log.h"
-#include "hp/str_dump.h" 	/*dumpstr*/
-#include "hp/string_util.h" /*strncasecmp*/
+#include "hp/hp_str.h" 	/*dumpstr*/
+#include "hp/hp_str.h" /*strncasecmp*/
 
 #ifndef _MSC_VER
 #include <sys/fcntl.h>  /* fcntl */
@@ -456,7 +456,7 @@ hp_io_t * hp_io_find(hp_io_ctx * ioctx, void * key, int (* on_cmp)(const void *k
 #include "hp/sdsinc.h" /* sds */
 #include "hp/hp_ini.h" //hp_ini
 #include "hp/hp_cjson.h"
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 #include "hp/hp_assert.h"
 
 extern hp_ini * hp_config_test;

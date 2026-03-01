@@ -24,7 +24,7 @@
 #include "c-vector/cvector.h"
 #include "hp/hp_log.h"
 #include "hp/hp_tuple.h"
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 #include "hp/klist.h"        /* list_head */
 #include "hp/hp_stdlib.h" //hp_max
 

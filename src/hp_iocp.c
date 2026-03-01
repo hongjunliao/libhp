@@ -1056,8 +1056,8 @@ ret:
 #include "http-parser/http_parser.h"
 #include "hp/hp_net.h" //hp_tcp_connect
 #include "hp/hp_assert.h" //hp_assert
-#include "hp/str_dump.h"   /* dumpstr */
-#include "hp/string_util.h"
+#include "hp/hp_str.h"   /* dumpstr */
+#include "hp/hp_str.h"
 #include "gbk-utf8/utf8.h"
 #include "hp/hp_ini.h"	//hp_ini
 #include "hp/hp_log.h"	//hp_log

@@ -132,6 +132,19 @@ sds hp_timestr(time_t t, char const * fmt);
 
 int hp_isblank(const char *line);
 /////////////////////////////////////////////////////////////////////////////////////////
+// dump
+
+/* like printf except print \n as '\n', \0 as '\0' */
+void fdump_str(FILE * f, char const * buf, size_t len, char const * beg, char const * end);
+char * sdump_str(char * out, char const * buf, size_t len, char const * beg, char const * end);
+/* format: <beg>chr<end> */
+void fdump_chr(FILE * f, char chr, char const * beg, char const * end);
+int sdump_chr(char * buf, char chr, char const * beg, char const * end);
+
+/* usually for debug */
+char const * dumpstr(char const * buf, size_t len, size_t dumplen);
+char const * dumpstr_r(char * out, char const * buf, size_t len, size_t dumplen);
+/////////////////////////////////////////////////////////////////////////////////////////
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp

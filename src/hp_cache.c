@@ -18,7 +18,7 @@
 #endif /* _MSC_VER */
 
 #include "hp/hp_log.h"     /* hp_log */
-#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_str.h"   /* dumpstr */
 #include "hp/hp_epoll.h"    /*  */
 #include "hp/hp_cache.h"   /*  */
 #include <sys/stat.h>	/*fstat*/

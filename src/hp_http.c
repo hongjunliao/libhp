@@ -26,7 +26,7 @@
 #include <assert.h>     /* assert */
 #include "hp/hp_log.h"
 #include "http_parser.h"
-#include "hp/str_dump.h"
+#include "hp/hp_str.h"
 #include "hp/hp_url.h" //hp_urldecode
 #include "hp/hp_net.h"
 /////////////////////////////////////////////////////////////////////////////////////
@@ -372,7 +372,7 @@ void hp_http_uninit(hp_http * http)
 #include "hp/hp_test.h"
 #include "hp/hp_assert.h"	//hp_assert
 #include "hp/hp_ini.h"	//hp_ini
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 extern hp_ini * hp_config_test;
 #define cfg(k) hp_config_ini(hp_config_test, (k))

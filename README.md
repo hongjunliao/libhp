@@ -135,11 +135,7 @@ deps/目录为项目依赖的第三库,感谢原作者们!
 * sds: https://github.com/antirez/sds.git
 * libyuarel: https://github.com/jacketizer/libyuarel.git
 * zlog: https://github.com/HardySimpson/zlog.git
-
-注意! cJSON,c-vector使用的是修改版本:
-
- * cJSON: https://gitee.com/docici/cJSON
- * c-vector:https://gitee.com/jun/c-vector
+* c-vector:https://gitee.com/jun/c-vector
  
 # #LIBHP_WITH_WIN32_INTERROP
 /* mainly for hiredis, define if you want to use

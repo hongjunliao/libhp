@@ -558,7 +558,7 @@ static void search_test(int n)
 	assert(hp_poll_size(po) == 0);
 
 	for(i = 0; i < n; ++i){
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", 1);
 		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
 		fd[i] = confd;
 
@@ -581,7 +581,7 @@ static void search_test(int n)
 		assert(rc == 0);
 	}
 	{
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", 1);
 		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
 
 		rc = hp_poll_add(po, confd, POLLIN | POLLOUT, test_hp_poll_client_on_io, 0, 0);
@@ -617,7 +617,7 @@ static void client_server_echo_test(int nclient)
 	/* add connect socket */
 	for(i = 0; i < nclient; ++i){
 
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", port); assert(hp_sock_is_valid(confd));
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", port); assert(hp_sock_is_valid(confd));
 		rc = client_init(c + i, po, confd, client_on_data, client_on_read_error, client_on_write_error);
 		assert(rc == 0);
 

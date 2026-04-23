@@ -36,7 +36,9 @@ struct hp_ini {
 /*!
  * @param k: #load,#set,#unset,#unload,#show
  */
-char const * hp_config_ini(hp_ini * ini, char const * k);
+char const * hp_ini_exec(hp_ini * ini, char const * k);
+char const * hp_ini_execv(hp_ini * ini, char const * fmt, ...);
+
 
 #ifndef NDEBUG
 int test_hp_config_main(int argc, char ** argv);

@@ -65,8 +65,6 @@ int netutil_same_subnet3(int mask, uint32_t ip1, char const * ip2);
 int netutil_in_same_subnet(int mask, char const * ips, uint32_t ip);
 #endif /*_MSC_VER*/
 
-int hp_net_connect_addr(char const * addr);
-hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr);
 
 int hp_net_udp_bind(char const * ip, int port);
 
@@ -79,7 +77,10 @@ char * hp_net_get_ipport2(struct sockaddr_in * addr, char * ip, int iplen, int *
 /////////////////////////////////////////////////////////////////////////////////////
 
 hp_sock_t hp_tcp_listen(int port);
-hp_sock_t hp_tcp_connect(char const * ip, int port);
+hp_sock_t hp_tcp_connect(char const * addr);
+hp_sock_t hp_tcp_connect_addr( struct sockaddr_in  servaddr);
+hp_sock_t hp_tcp_connect2(char const * ip, int port);
+
 int hp_tcp_nodelay(hp_sock_t fd);
 int hp_tcp_set_alive(hp_sock_t fd, int interval);
 size_t read_a(hp_sock_t fd, int * err, char * buf, size_t len, size_t bytes);

@@ -67,7 +67,18 @@ static int hp_config_ini_def_parser(void* user, const char* section, const char*
 	return 1;
 }
 
-char const * hp_config_ini(hp_ini * ini, char const * k)
+char const * hp_ini_execv(hp_ini * ini, char const * fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	sds buf = sdscatvprintf(buf, fmt, ap);
+	va_end(ap);
+	char const * ret = hp_ini_exec(ini, buf);
+	sdsfree(buf);
+
+	return ret;
+}
+char const * hp_ini_exec(hp_ini * ini, char const * k)
 {
 	if(!(ini && k)) return 0;
 	if(!ini->parser) ini->parser = hp_config_ini_def_parser;
@@ -129,7 +140,7 @@ char const * hp_config_ini(hp_ini * ini, char const * k)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 static hp_ini definiobj = {.parser = 0}, * defini = &definiobj;
-#define cfg(k) hp_config_ini(defini, (k))
+#define cfg(k) hp_ini_exec(defini, (k))
 #define cfgi(k) atoi(cfg(k))
 
 /////////////////////////////////////////////////////////////////////////////////////////

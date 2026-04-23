@@ -460,7 +460,7 @@ hp_io_t * hp_io_find(hp_io_ctx * ioctx, void * key, int (* on_cmp)(const void *k
 #include "hp/hp_assert.h"
 
 extern hp_ini * hp_config_test;
-#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfg(k) hp_ini_exec(hp_config_test, (k))
 #define cfgi(k) atoi(cfg(k))
 /////////////////////////////////////////////////////////////////////////////////////
 
@@ -646,7 +646,7 @@ static hp_io_t * test_http_server_on_new(hp_io_t * cio, hp_sock_t fd)
 	req->io.addr = cio->addr;
 
 	char buf[64] = "";
-	hp_log(std::cout, "%s: new HTTP connection from '%s:%d', IO total=%d\n",
+	hp_log(stdout, "%s: new HTTP connection from '%s:%d', IO total=%d\n",
 			__FUNCTION__, hp_addr4name(&cio->addr, ":", buf, sizeof(buf)), 0,
 			hp_io_size(cio->ioctx));
 	return (hp_io_t *)req;
@@ -746,7 +746,7 @@ static void test_http_server_on_delete(hp_io_t * io, int err, char const * errst
 	assert(io && io->ioctx);
 
 	char buf[64] = "";
-	hp_log(std::cout, "%s: delete HTTP connection '%s:%d', IO total=%d\n", __FUNCTION__
+	hp_log(stdout, "%s: delete HTTP connection '%s:%d', IO total=%d\n", __FUNCTION__
 			, hp_addr4name(&io->addr, ":", buf, sizeof(buf)), 0, hp_io_size(io->ioctx));
 
 	request_uninit(req);
@@ -795,7 +795,7 @@ static int test_http_cli_on_dispatch(hp_io_t * io, void * hdr, void * body)
 		JSONRPC(out, REQ, parse,
 				"{\"jsonrpc\": \"2.0\",\"method\": \"substract\",\"params\": [%d,%d],\"id\": %d}"
 				, 42, 23, ++c->rpc_id);
-		hp_log(std::cout, "%s: >> '%s'\n", __FUNCTION__, out);
+		hp_log(stdout, "%s: >> '%s'\n", __FUNCTION__, out);
 		rc = hp_io_write(&c->io, out, sdslen(out), (hp_free_t)sdsfree, 0);
 
 		c->flags = 1;
@@ -803,7 +803,7 @@ static int test_http_cli_on_dispatch(hp_io_t * io, void * hdr, void * body)
 	else if(c->flags == 1){
 
 		assert(c->json);
-		hp_log(std::cout, "%s: << '%s'\n", __FUNCTION__, cjson_cstr(c->json));
+		hp_log(stdout, "%s: << '%s'\n", __FUNCTION__, cjson_cstr(c->json));
 
 		//send another json-rpc request
 		sds out;
@@ -811,7 +811,7 @@ static int test_http_cli_on_dispatch(hp_io_t * io, void * hdr, void * body)
 		JSONRPC(out, REQ, parse,
 				"{\"jsonrpc\": \"2.0\",\"method\": \"this_jsonapi_not_exist\",\"params\": [%d,%d],\"id\": %d}"
 				, 42, 23, ++c->rpc_id);
-		hp_log(std::cout, "%s: >> '%s'\n", __FUNCTION__, out);
+		hp_log(stdout, "%s: >> '%s'\n", __FUNCTION__, out);
 		rc = hp_io_write(&c->io, out, sdslen(out), (hp_free_t)sdsfree, 0);
 
 		cJSON_Delete(c->json);
@@ -819,7 +819,7 @@ static int test_http_cli_on_dispatch(hp_io_t * io, void * hdr, void * body)
 	}
 	else if(c->flags == 2){
 		assert(c->json);
-		hp_log(std::cout, "%s: << '%s'\n", __FUNCTION__, cjson_cstr(c->json));
+		hp_log(stdout, "%s: << '%s'\n", __FUNCTION__, cjson_cstr(c->json));
 
 		sds out;
 		http_parse parse = { .content_type = "html", .u = "/this_file_not_exist.html" };
@@ -875,7 +875,7 @@ hp_io_t * s_on_new(hp_io_t * cio, hp_sock_t fd)
 	niohdl.on_new = 0;
 	rc = hp_io_add(cio->ioctx, (hp_io_t *)req, fd, niohdl); assert(rc == 0);
 
-	hp_log(std::cout, "%s: new TCP connection from '%s', IO total=%d\n", __FUNCTION__
+	hp_log(stdout, "%s: new TCP connection from '%s', IO total=%d\n", __FUNCTION__
 			, hp_addr4name(&req->io.addr, ":", req->addr, sizeof(req->addr)), hp_io_size(cio->ioctx));
 
 	if(req->test == 3){
@@ -935,7 +935,7 @@ static int s_on_dispatch(hp_io_t * io, void * hdr, void * body)
 	else if(req->test == 3){
 		if(strncmp(req->in, "world", strlen("world")) == 0) {
 
-			hp_log(std::cout, "%s: server %d test done!\n", __FUNCTION__, io->id);
+			hp_log(stdout, "%s: server %d test done!\n", __FUNCTION__, io->id);
 			req->test = 0;
 			hp_shutdown(io->fd, 2);
 		}
@@ -972,7 +972,7 @@ static void s_on_delete(hp_io_t * io, int err, char const * errstr)
 	assert(req->s);
 	server * s = req->s;
 
-	hp_log(std::cout, "%s: delete TCP connection '%s', %d/'%s', IO total=%d\n", __FUNCTION__
+	hp_log(stdout, "%s: delete TCP connection '%s', %d/'%s', IO total=%d\n", __FUNCTION__
 			, req->addr, err, errstr, hp_io_size(io->ioctx));
 
 	free(req);
@@ -1015,7 +1015,7 @@ static int c_on_dispatch(hp_io_t * io, void * hdr, void * body)
 
 	if(c->test == 1){
 		if(strncmp(c->in, "world", strlen("world")) == 0) {
-			hp_log(std::cout, "%s: client %d test done!\n", __FUNCTION__, io->id);
+			hp_log(stdout, "%s: client %d test done!\n", __FUNCTION__, io->id);
 			// client done
 			c->test = 0;
 			hp_shutdown(io->fd, 2);
@@ -1039,7 +1039,7 @@ static void c_on_delete(hp_io_t * io, int err, char const * errstr)
 	assert(!c->s);
 	hp_close(io->fd);
 
-	hp_log(std::cout, "%s: %d disconnected err=%d/'%s'\n", __FUNCTION__, io->id, err, errstr);
+	hp_log(stdout, "%s: %d disconnected err=%d/'%s'\n", __FUNCTION__, io->id, err, errstr);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -1114,7 +1114,7 @@ static int client_server_echo_test(int test, int n)
 		c[i].in = sdsempty();
 		c[i].test = test;
 
-		hp_sock_t fd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
+		hp_sock_t fd = hp_tcp_connect2("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(fd));
 		rc = hp_io_add(ioctx, &c[i].io, fd, hdlc);
 		assert(rc == 0);
@@ -1124,7 +1124,7 @@ static int client_server_echo_test(int test, int n)
 			assert(rc == 0);
 		}
 	}
-	hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
+	hp_log(stdout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
 	/* run event loop, 1 for listenio  */
 	int s_tdone = 0;
 	for (;; ) {
@@ -1192,7 +1192,7 @@ static void add_remove_test(int n)
 	assert(hp_io_size(ioctx) == 0);
 
 	for(i = 0; i < n; ++i){
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(confd));
 		io[i].fd = confd;
 
@@ -1206,7 +1206,7 @@ static void add_remove_test(int n)
 		assert(hp_io_size(ioctx) == i + 1);
 	}
 	{
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", cfgi("test_hp_io_t_main.port"));
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", cfgi("test_hp_io_t_main.port"));
 		assert(hp_sock_is_valid(confd));
 		rc = hp_io_add(ioctx, io + i, n + 1, hdl);
 		assert(rc < 0);
@@ -1274,7 +1274,7 @@ static void search_test(int n)
 	assert(hp_io_size(ioctx) == 0);
 
 	for(i = 0; i < n; ++i){
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", 1);
 		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
 		io[i].fd = confd;
 
@@ -1299,7 +1299,7 @@ static void search_test(int n)
 	}
 
 	{
-		hp_sock_t confd = hp_tcp_connect("127.0.0.1", 1);
+		hp_sock_t confd = hp_tcp_connect2("127.0.0.1", 1);
 		hp_assert(hp_sock_is_valid(confd), "i=%i", i);
 
 		rc = hp_io_add(ioctx, io + i, confd, hdl);
@@ -1425,7 +1425,7 @@ int test_hp_io_t_main(int argc, char ** argv)
 		rc = server_init(s); assert(rc == 0);
 
 		hp_sock_t listen_fd = hp_tcp_listen(cfgi("test_hp_io_t_main.port")); assert(listen_fd > 0);
-		hp_sock_t confd = hp_tcp_connect(cfg("test_hp_io_t_main.ip"),
+		hp_sock_t confd = hp_tcp_connect2(cfg("test_hp_io_t_main.ip"),
 					cfgi("test_hp_io_t_main.port")); assert(confd > 0);
 
 		hp_iohdl hdl = {
@@ -1460,9 +1460,9 @@ int test_hp_io_t_main(int argc, char ** argv)
 		HTTP_REQ(out, parse, 0);
 		rc = hp_io_write(&c->io, out, sdslen(out), (hp_free_t)sdsfree, 0);
 		assert(rc == 0);
-		hp_log(std::cout, "%s: HTPP request sent:\n%s", __FUNCTION__, out);
+		hp_log(stdout, "%s: HTPP request sent:\n%s", __FUNCTION__, out);
 
-		hp_log(std::cout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
+		hp_log(stdout, "%s: listening on TCP port=%d, waiting for connection ...\n", __FUNCTION__, cfgi("test_hp_io_t_main.port"));
 		/* run event loop */
 		int quit = 3;
 		for (; quit > 0;) {

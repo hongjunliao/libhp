@@ -425,7 +425,7 @@ int hp_tcp_nodelay(hp_sock_t fd)
 	return -1;
 }
 
-hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
+hp_sock_t hp_tcp_connect_addr( struct sockaddr_in  servaddr)
 {
 #ifndef _MSC_VER
 	int fd = -1;
@@ -471,7 +471,7 @@ hp_sock_t hp_net_connect_addr2( struct sockaddr_in  servaddr)
  * @return: return the connected fd on success
  * (including errno == EINPROGRESS), -1 on error,
  *  */
-hp_sock_t hp_tcp_connect(char const * ip, int port)
+hp_sock_t hp_tcp_connect2(char const * ip, int port)
 {
 #ifndef _MSC_VER
 	struct sockaddr_in servaddr = { 0 };
@@ -534,7 +534,7 @@ hp_sock_t hp_tcp_connect(char const * ip, int port)
 #endif /* _MSC_VER */
 	}
 
-int hp_net_connect_addr(char const * addr)
+hp_sock_t hp_tcp_connect(char const * addr)
 {
 	char buf[128] = "";
 	strncpy(buf, addr, sizeof(buf));
@@ -544,7 +544,7 @@ int hp_net_connect_addr(char const * addr)
 		*p = '\0';
 		port = atoi(p + 1);
 	}
-	return hp_tcp_connect(ip, port);
+	return hp_tcp_connect2(ip, port);
 }
 
 int fd_set_recvbuf(int fd, int * oldsz, int newsz)
@@ -998,7 +998,7 @@ int test_hp_net_main(int argc, char ** argv)
 		get_ip_from_host(ipbuf, host, 128);
 		printf("%s: host='%s', ip: %s\n", __FUNCTION__, host, ipbuf);
 		char buf[1024] = "GET / HTTP/1.1\r\n\r\n";
-		int fd = hp_tcp_connect(ipbuf, 80);
+		int fd = hp_tcp_connect2(ipbuf, 80);
 
 		ssize_t nwrite = write(fd, buf, strlen(buf));
 		if (nwrite <= 0) {

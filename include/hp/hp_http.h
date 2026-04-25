@@ -18,7 +18,13 @@
 #include "sdsinc.h"    	/* sds */
 #include "hp_sock_t.h"   /* hp_sock_t */
 #include "hp_io_t.h"   	/* hp_io_ctx */
-#include "redis/src/adlist.h" /* list */
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include "redis/src/adlist.h"	  /* list */
+#ifdef __cplusplus
+}
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

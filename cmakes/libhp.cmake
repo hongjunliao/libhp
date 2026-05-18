@@ -99,7 +99,7 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 		if((${hdr} STREQUAL .nullfilesub.h ) OR (${hdr} STREQUAL .nullfilesrc.h ))
 		
 			if((NOT (${dep} STREQUAL .src)) AND (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}") )
-				hp_log(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
+				message(FATAL_ERROR "Dependency '${dep}' NOT found.(dir not exist ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep})")
 			endif()
 
 			# use add_subdirectory()
@@ -125,12 +125,13 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 			endif()	
 		# search header file needed	
 		else()
+			hp_log("hp_cmake_find_deps: searching header file '${hdr}' ...")
 			find_path(${dep}_INCLUDE_DIRS ${hdr} )
 			set(pathfound 1)
 			# use add_subdirectory() instead if NOT found
 			if(NOT ${dep}_INCLUDE_DIRS) 
 				if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
-					hp_log(FATAL_ERROR "Dependency ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep} NOT found")
+					message(FATAL_ERROR "Dependency '${hdr}' NOT found.(dir not exist ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep})")
 				endif()
 				
 				hp_cmake_copy_cmakefile(${cmakes} ${dep})

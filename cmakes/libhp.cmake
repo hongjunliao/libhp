@@ -93,8 +93,8 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 		endif()
 	
 		# string "ssl crypto" to list "ssl;crypto"
-		string(REPLACE " " ";" lib_ ${lib_})	
-		string(REPLACE " " ";" inc ${inc})	
+		string(REGEX REPLACE "[ \t\n\r]" ";" lib_ ${lib_})
+		string(REPLACE " " ";" inc ${inc})
 	
 		if((${hdr} STREQUAL .nullfilesub.h ) OR (${hdr} STREQUAL .nullfilesrc.h ))
 		

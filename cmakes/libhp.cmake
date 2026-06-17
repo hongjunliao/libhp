@@ -79,6 +79,7 @@ endfunction()
 function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps libs)
 	list(LENGTH ${hdrs} hdrs_len)
 	math( EXPR hdrs_len "${hdrs_len} - 1")
+	find_package(PkgConfig QUIET)
 
 	foreach(index RANGE ${hdrs_len} )
 
@@ -126,8 +127,24 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 		# search header file needed	
 		else()
 			hp_log("hp_cmake_find_deps: searching header file '${hdr}' ...")
-			find_path(${dep}_INCLUDE_DIRS ${hdr} )
-			set(pathfound 1)
+			if(PKG_CONFIG_FOUND)
+				# ${dep}_FOUND 等变量会自动生成，前缀可自定义（这里用 ${dep}）
+				pkg_check_modules(${dep} QUIET ${dep})
+				if(NOT ${dep}_FOUND)
+					pkg_check_modules(${dep} QUIET lib${dep})
+				endif()
+				if(${dep}_FOUND)
+					# 提取 pkg-config 找到的路径和库名
+#					hp_log("hp_cmake_find_deps:${dep}_INCLUDE_DIRS=${${dep}_INCLUDE_DIRS},${dep}_LIBRARIES=${${dep}_LIBRARIES}")
+#					set(${dep}_INCLUDE_DIRS ${${dep}_INCLUDE_DIRS})
+#					set(${dep}_LIBRARIES ${${dep}_LIBRARIES})
+				else()
+					find_path(${dep}_INCLUDE_DIRS ${hdr} )
+				endif ()
+			else()
+				find_path(${dep}_INCLUDE_DIRS ${hdr} )
+			endif()
+
 			# use add_subdirectory() instead if NOT found
 			if(NOT ${dep}_INCLUDE_DIRS) 
 				if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
@@ -137,18 +154,11 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 				hp_cmake_copy_cmakefile(${cmakes} ${dep})
 				add_subdirectory(${depdir}/${dep})
 
-				unset(pathfound)
-				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)	
+				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)
 			endif()
-			
+
 			set(${dep}_LIBRARIES ${lib_} PARENT_SCOPE)
-				
-			if(NOT pathfound) 
-				hp_log("hp_cmake_find_deps: '${hdr}' NOT found, use add_subdirectory(${depdir}/${dep}) instead" )
-			else()
-				hp_log("hp_cmake_find_deps: Found '${hdr}'" )
-			endif()
-				
+
 		endif()
 		
 	endforeach() 

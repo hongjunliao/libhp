@@ -77,27 +77,26 @@ else()
 endif()
 
 set(g_withs ZLIB MYSQL BDB CURL MQTT CJSON 
-	OPTPARSE REDIS REDIS DLFCN ZLOG HTTP 1 1 1 HTTP CURL 1 1 1 
+	OPTPARSE REDIS REDIS DLFCN ZLOG HTTP 1 1 1 HTTP 1 1 1
 	)
 set(g_hdrs zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h
 		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
-		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
+		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 	)
 set(g_incs deps/zlib/include/ deps/ deps/db/include/ deps/ deps/paho.mqtt.c/include/ deps/
 		deps/ deps/ deps/uv/include/ deps/dlfcn-win32/include/ deps/zlog/include/ deps/http-parser/ deps/ deps/ deps/ 
-		deps/ deps/ deps/ deps/ "${PROJECT_BINARY_DIR}/ include/"
+		deps/ deps/ deps/ "${PROJECT_BINARY_DIR}/ include/"
 	)
 	
 set(g_deps zlib mysqlclient bdb curl paho.mqtt.c cjson 
 		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
-		gbk-utf8 libyuarel c-vector inih .src
+		gbk-utf8 c-vector inih .src
 	)
 set(g_libs  z mysqlclient db curl ${path_mqtt_lib} cjson 
 			c uuid ${uv_lib} dl zlog http_parser hiredis 
 			"deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c"
 			${sds_lib}
-			"deps/gbk-utf8/utf8.c deps/libyuarel/*.c"
-			deps/libyuarel/*.c
+			"deps/gbk-utf8/utf8.c"
 			"deps/c-vector/*.c deps/c-vector/*.cc"
 			deps/inih/*.c
 			"src/*.c src/*.cpp"

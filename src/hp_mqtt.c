@@ -5,9 +5,7 @@
  *
  *
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MQTT
 #include "hp/sdsinc.h"
@@ -532,7 +530,7 @@ void hp_mqtt_uninit(hp_mqtt * cli)
 #include "hp/hp_ini.h" //hp_ini
 
 extern hp_ini * hp_config_test;
-#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfg(k) hp_ini_exec(hp_config_test, (k))
 #define cfgi(k) atoi(cfg(k))
 
 struct basic_test {

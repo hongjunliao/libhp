@@ -6,9 +6,7 @@
  * simple c++ wrapper for redis/dict
  * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_dict.h"    /*  */
 #include "hp/sdsinc.h"        /* sds */

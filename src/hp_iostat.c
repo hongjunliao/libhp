@@ -4,9 +4,7 @@
  *
  * statistics for I/O
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
 

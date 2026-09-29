@@ -10,9 +10,7 @@
 #ifndef LIBHP_IO_H__
 #define LIBHP_IO_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef HAVE_UNISTD_H
 

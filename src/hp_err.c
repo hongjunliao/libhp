@@ -5,9 +5,7 @@
 * wrapper for errno/strerror() or WIN32 GetLastError()
 * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_err.h"     /*  */
 

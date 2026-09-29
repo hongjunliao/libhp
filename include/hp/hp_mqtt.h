@@ -6,9 +6,7 @@
 #ifndef LIBHP_MQTT_H
 #define LIBHP_MQTT_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MQTT
 

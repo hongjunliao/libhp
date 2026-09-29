@@ -4,5 +4,4 @@
  *
  * my libc
  * */
-
 #include "hp/hp_stdlib.h"

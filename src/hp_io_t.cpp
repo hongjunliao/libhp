@@ -6,9 +6,7 @@
  * */
 /////////////////////////////////////////////////////////////////////////////////////////
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_io_t.h"
 #include "redis/src/adlist.h" /* list */
@@ -206,9 +204,9 @@ static int hp_io_t_internal_on_accept(pollfd * pfd, void * arg)  {
 	assert(hp_sock_is_valid(fd));
 	int rc;
 
+	io->addrlen = sizeof(io->addr);
 	for(;;){
-		socklen_t len = (int)sizeof(io->addr);
-		hp_sock_t confd = accept(fd, (struct sockaddr *)&io->addr, &len);
+		hp_sock_t confd = accept(fd, (struct sockaddr *)&io->addr, &io->addrlen);
 #ifndef _MSC_VER
 		if(!hp_sock_is_valid(confd)){
 			if (errno == EINTR || errno == EAGAIN) { return 0; }
@@ -266,6 +264,7 @@ int hp_io_init(hp_io_ctx * ioctx, hp_ioopt opt)
 		return -1;
 	int rc = 0;
 	memset(ioctx, 0, sizeof(hp_io_ctx));
+	ioctx->user = opt.user;
 
 #if defined(HAVE_SYS_EPOLL_H)
 	/* init epoll */
@@ -876,7 +875,7 @@ hp_io_t * s_on_new(hp_io_t * cio, hp_sock_t fd)
 	rc = hp_io_add(cio->ioctx, (hp_io_t *)req, fd, niohdl); assert(rc == 0);
 
 	hp_log(stdout, "%s: new TCP connection from '%s', IO total=%d\n", __FUNCTION__
-			, hp_addr4name(&req->io.addr, ":", req->addr, sizeof(req->addr)), hp_io_size(cio->ioctx));
+			, hp_addr4name((struct sockaddr_in*)&req->io.addr, ":", req->addr, sizeof(req->addr)), hp_io_size(cio->ioctx));
 
 	if(req->test == 3){
 		static char world[] = "hello";

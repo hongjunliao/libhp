@@ -3,9 +3,7 @@
  * @author hongjun.liao <docici@126.com>, @date 2020/7/2
  *
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_REDIS
 
@@ -518,7 +516,7 @@ int hp_sub_ping(redisAsyncContext * subc)
 #include "hp/hp_ini.h"	/* hp_ini  */
 
 extern hp_ini * hp_config_test;
-#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfg(k) hp_ini_exec(hp_config_test, (k))
 #define cfgi(k) atoi(cfg(k))
 
 static int done = 0, dones[64] = { 0 };

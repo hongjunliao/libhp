@@ -5,6 +5,7 @@
  * random on Win32
  * */
 /////////////////////////////////////////////////////////////////////////////////////////
+#include "hp_config.h"
 
 #include "hp/hp_stdlib.h"
 #include "hp/hp_tuple.h" //hp_tuple2_t

@@ -3,9 +3,7 @@
  * @author hongjun.liao <docici@126.com>, @date 2020/7/9
  *
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_DEPRECADTED
 #ifdef LIBHP_WITH_TIMERFD

@@ -18,9 +18,7 @@
 #ifndef HP_SDSINC_H
 #define HP_SDSINC_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef __cplusplus
 extern "C" {

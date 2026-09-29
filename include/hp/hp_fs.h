@@ -8,9 +8,7 @@
 #ifndef LIBHP_FS_H__
 #define LIBHP_FS_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_DEPRECADTED
 #include "uv.h"

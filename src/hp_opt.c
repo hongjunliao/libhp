@@ -5,9 +5,7 @@
 * utility for getopt
 * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_OPTPARSE
 

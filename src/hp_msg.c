@@ -5,9 +5,7 @@
  *
  * a simple msg struct, see sds implementation
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 //#include "Win32_Interop.h"
 #ifndef WIN32

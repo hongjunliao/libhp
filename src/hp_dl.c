@@ -6,9 +6,7 @@
  * see `man inotify` for more help about inotify
  * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_DEPRECADTED
 

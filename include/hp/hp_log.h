@@ -10,9 +10,7 @@
 #ifndef LIBHP_LOG_H__
 #define LIBHP_LOG_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 #include <stdio.h>
 #include "sdsinc.h"
 

@@ -10,9 +10,7 @@
 
 #ifdef LIBHP_WITH_CJSON
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include <string.h>
 #include <assert.h>

@@ -6,9 +6,7 @@
  *
  * 2023/7/7:reconstructed using hp_io_t for cross platform usage
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_HTTP
 //#include "Win32_Interop.h"

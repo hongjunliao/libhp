@@ -8,9 +8,7 @@
 #ifndef LIBHP_NET_H__
 #define LIBHP_NET_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifndef _MSC_VER
 #include <netinet/in.h>	/* sockaddr_in */

@@ -5,7 +5,7 @@
  * time on Win32
  * */
 /////////////////////////////////////////////////////////////////////////////////////////
-
+#include "hp_config.h"
 #ifdef _MSC_VER
 #include "hp/hp_time.h"
 #include <windows.h>

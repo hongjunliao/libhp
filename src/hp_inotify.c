@@ -5,9 +5,7 @@
  * inotify tools
  * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 #ifdef __linux__
 #include "hp/hp_inotify.h"
 #include <unistd.h>

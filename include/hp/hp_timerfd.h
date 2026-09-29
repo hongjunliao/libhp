@@ -7,9 +7,7 @@
 #ifndef LIBHP_TIMERFD_H__
 #define LIBHP_TIMERFD_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 #if (defined HAVE_SYS_TIMERFD_H) && (defined HAVE_SYS_EPOLL_H)
 
 #include "hp_epoll.h"    		  /* hp_epoll */

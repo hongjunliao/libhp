@@ -8,9 +8,7 @@
 #ifndef HP_TEST_H__
 #define HP_TEST_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
 

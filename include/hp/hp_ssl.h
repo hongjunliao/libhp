@@ -8,9 +8,7 @@
 #ifndef LIBHP_HP_SSL_H
 #define LIBHP_HP_SSL_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 #include "sdsinc.h"
 
 #ifdef LIBHP_WITH_SSL

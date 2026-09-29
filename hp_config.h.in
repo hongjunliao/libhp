@@ -8,15 +8,6 @@
 #ifndef HP_CONFIG_H
 #define HP_CONFIG_H
 
-/* define to enable GNU extension */
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
-#ifndef HAVE_CONFIG_H
-#define HAVE_CONFIG_H
-#endif
-
 /* define to enable cJSON cjson_XXX */
 #cmakedefine LIBHP_WITH_CJSON
 

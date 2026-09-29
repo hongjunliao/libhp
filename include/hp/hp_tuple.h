@@ -8,9 +8,7 @@
 #ifndef LIBHP_LIBC_H__
 #define LIBHP_LIBC_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef __cplusplus
 extern "C" {

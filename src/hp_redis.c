@@ -4,9 +4,7 @@
  *
  * Redis util
  * */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_REDIS
 
@@ -108,7 +106,7 @@ void hp_redis_uninit(redisAsyncContext *redisc)
 #include "hp/hp_ini.h" //hp_ini
 
 extern hp_ini * hp_config_test;
-#define cfg(k) hp_config_ini(hp_config_test, (k))
+#define cfg(k) hp_ini_exec(hp_config_test, (k))
 #define cfgi(k) atoi(cfg(k))
 
 static hp_redis_ev_t s_evobj, *s_ev = &s_evobj;

@@ -7,9 +7,7 @@
 #ifndef LIBHP_INOTIFY_H__
 #define LIBHP_INOTIFY_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 #ifdef __linux__
 
 #include "hp_epoll.h"    /* hp_epoll */

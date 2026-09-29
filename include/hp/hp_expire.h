@@ -7,9 +7,7 @@
 #ifndef LIBHP_EXPIRE_H__
 #define LIBHP_EXPIRE_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_DEPRECADTED
 #ifdef LIBHP_WITH_TIMERFD

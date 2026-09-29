@@ -9,9 +9,7 @@
 #ifndef HP_URLENCODE_H_
 #define HP_URLENCODE_H_
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_HTTP
 

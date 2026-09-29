@@ -8,9 +8,7 @@
 #ifndef HP_OPT_H__
 #define HP_OPT_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_OPTPARSE
 

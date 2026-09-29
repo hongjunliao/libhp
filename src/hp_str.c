@@ -1,7 +1,5 @@
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_str.h"
 #include <search.h>        /* lfind, ... */

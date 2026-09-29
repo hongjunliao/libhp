@@ -8,9 +8,7 @@
 #ifndef LIBHP_SOCK_T_H
 #define LIBHP_SOCK_T_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
  /////////////////////////////////////////////////////////////////////////////////////
 

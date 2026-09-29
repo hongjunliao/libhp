@@ -10,9 +10,7 @@
 #ifndef LIBHP_EPOLL_H__
 #define LIBHP_EPOLL_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef HAVE_SYS_EPOLL_H
 #include <sys/epoll.h>  /* epoll_event */

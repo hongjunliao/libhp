@@ -5,9 +5,7 @@
  * --test=test_libim_dispatch_imfwd_main,test_libim_fwdcli_main 
  * */
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
 

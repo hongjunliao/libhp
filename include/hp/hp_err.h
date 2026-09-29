@@ -8,9 +8,7 @@
 #ifndef LIBHP_ERR_H__
 #define LIBHP_ERR_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "libhp.h"
 

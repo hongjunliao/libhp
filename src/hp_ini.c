@@ -7,9 +7,7 @@
  * */
 /////////////////////////////////////////////////////////////////////////////////////////
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "hp/hp_ini.h" //hp_ini
 #include "inih/ini.h"		//ini_parse

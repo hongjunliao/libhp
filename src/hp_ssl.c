@@ -9,9 +9,7 @@
  * https://shanetully.com/2012/04/simple-public-key-encryption-with-rsa-and-openssl/
  * http://www.ioncannon.net/programming/34/howto-base64-encode-with-cc-and-openssl/
  */
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_SSL
 

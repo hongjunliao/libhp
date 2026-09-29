@@ -8,9 +8,7 @@
 #ifndef LIBHP_MYSQL_H
 #define LIBHP_MYSQL_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_MYSQL
 

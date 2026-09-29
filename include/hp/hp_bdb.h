@@ -8,9 +8,7 @@
 #ifndef LIBHP_BDB_H___
 #define LIBHP_BDB_H___
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_WITH_BDB
 

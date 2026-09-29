@@ -8,9 +8,7 @@
 #ifndef LIBHP_IO_T_H__
 #define LIBHP_IO_T_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,7 +69,8 @@ struct hp_io_t {
 	hp_io_ctx * ioctx;	/* hp_io_ctx */
 	int         id;		/* ID for this I/O, more safe than fd? */
 	hp_sock_t   fd;	/* fd */
-	struct sockaddr_in addr;
+	struct sockaddr_storage addr;
+	socklen_t				addrlen;
 
 #if defined(HAVE_SYS_UIO_H)
 	hp_rd 	rd; 	/* for in data */
@@ -92,6 +91,7 @@ struct hp_io_ctx {
 #else
 	//select
 #endif //defined(_MSC_VER)
+	void * user;
 } ;
 
 /* options for init hp_io_ctx */
@@ -103,6 +103,7 @@ struct hp_ioopt {
 	HWND hwnd;   /* see hp_iocp for more details */
 	int nthreads;
 #endif /* _MSC_VER */
+	void * user;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////

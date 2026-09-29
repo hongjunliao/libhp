@@ -8,9 +8,7 @@
 #ifndef LIBHP_VAR_H__
 #define LIBHP_VAR_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef LIBHP_DEPRECADTED
 #ifdef LIBHP_WITH_CJSON

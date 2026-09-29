@@ -11,9 +11,7 @@
 #ifndef LIBHP_MSG_H
 #define LIBHP_MSG_H
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifdef __cplusplus
 extern "C" {

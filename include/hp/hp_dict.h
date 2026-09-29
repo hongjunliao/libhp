@@ -9,9 +9,7 @@
 #ifndef LIBHP_DICT_H__
 #define LIBHP_DICT_H__
 
-#ifdef HAVE_CONFIG_H
 #include "hp_config.h"
-#endif /* HAVE_CONFIG_H */
 
 #ifndef LIBHP_WITH_REDISDICT
 

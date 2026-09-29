@@ -34,25 +34,6 @@ check_include_file(sys/timerfd.h HAVE_SYS_TIMERFD_H)
 
 ###########################################################################################
 
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-# hp_io_t test
-set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
-
-if(WIN32)
-	# hp_iocp test
-	set(LIBHP_WITH_HTTP 1 CACHE INTERNAL "LIBHP_WITH_HTTP")	
-endif()
-endif()
-
-# FIXME
-if(WIN32)
-	# hp_io_t test
-	set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
-	# hp_iocp test
-	set(LIBHP_WITH_HTTP 1 CACHE INTERNAL "LIBHP_WITH_HTTP")	
-endif()
-###########################################################################################
-
 # deps from deps/ 
 # pkg_check_modules(openssl REQUIRED openssl)
 
@@ -113,12 +94,11 @@ foreach(dep IN LISTS g_deps  )
 	endif()
 
 	hp_log("libhp: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
-	target_include_directories(libhp PRIVATE ${${dep}_INCLUDE_DIRS} )
+	target_include_directories(libhp PUBLIC ${${dep}_INCLUDE_DIRS} )
 	target_link_libraries(libhp ${${dep}_LIBRARIES} ) 
 endforeach() 
 
 target_compile_options(libhp PUBLIC
-	-DHAVE_CONFIG_H
     -DCMAKE_EXPORT_COMPILE_COMMANDS
     # for redis
     -DDICT_BENCHMARK_MAIN
@@ -128,17 +108,13 @@ target_compile_options(libhp PUBLIC
     -DcJSON_FREE_PRINT
 )
 
-target_include_directories(libhp
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-)
+#target_include_directories(libhp PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}> )
 if(WIN32)
 	target_link_directories(libhp PUBLIC deps/openssl/lib/VC/static/)
 endif()
 ###########################################################################################
 add_executable(test-libhp test/test.cpp )
-target_include_directories(test-libhp PRIVATE "${PROJECT_BINARY_DIR}/" include/ deps/ )
-target_link_libraries(test-libhp libhp ) 
+target_link_libraries(test-libhp libhp )
 
 ###########################################################################################
 configure_file(

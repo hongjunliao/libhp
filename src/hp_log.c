@@ -115,7 +115,40 @@ void _serverAssert(int a, int b, char * c, int d) {  }
 #ifndef NDEBUG
 int test_hp_log_main(int argc, char ** argv)
 {
+	int rc;
 	hp_log(stdout, "%s: hello, hp_log\n", __FUNCTION__);
+
+	hp_log(stdout, "0 s, 0 char *\n");
+	hp_log(stdout, "0 s, 1 char *\n", __FUNCTION__);
+	hp_log(stdout, "1 s, 0 char *: '%s'\n");
+	hp_log(stdout, "1 s, 1 char *: '%s'\n", __FUNCTION__);
+
+	hp_log(stdout, "0 s, 0 string\n");
+	// hp_log(stdout, "0 s, 1 string\n", std::string("hello"));
+	hp_log(stdout, "1 s, 0 string: '%s'\n");
+	// hp_log(stdout, "1 s, 1 string: '%s'\n", std::string("hello"));
+
+
+	// hp_log(stdout, "2 s, 0 string: '%s' '%s'\n");
+	// hp_log(stdout, "2 s, 1 string: '%s' '%s'\n", std::string("hello"));
+	// hp_log(stdout, "0 s, 2 string\n", std::string("hello"), std::string("world"));
+	// hp_log(stdout, "1 s, 2 string: '%s'\n", std::string("hello"), std::string("world"));
+	// hp_log(stdout, "2 s, 2 string: '%s' '%s'\n", std::string("hello"), std::string("world"));
+	//
+	// hp_log(stdout, "2 s, 1 string, 1 int: '%s' '%s'\n", std::string("hello"), (int)5);
+	// hp_log(stdout, "2 d, 1 string, 1 int: '%d' '%d'\n", std::string("hello"), (int)5);
+
+	hp_log(stdout, "");
+	// hp_log(stdout, "%");
+	hp_log(stdout, "%%");
+	// hp_log(stdout, "%%%");
+	hp_log(stdout, "%%%%");
+	hp_log(stdout, "\n");
+
+	// hp_log(stdout, "%%'%s'%%'%s'%%\n", "hello", std::string("world") );
+	// hp_log(stdout, "'%s'%%%'%s'\n", "hello", std::string("world") );
+
+	hp_log(stdout, "%%p=%p\n", &rc);
 	return 0;
 }
 #endif

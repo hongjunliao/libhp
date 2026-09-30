@@ -1056,7 +1056,6 @@ ret:
 #include "hp/hp_assert.h" //hp_assert
 #include "hp/hp_str.h"   /* dumpstr */
 #include "hp/hp_str.h"
-#include "gbk-utf8/utf8.h"
 #include "hp/hp_ini.h"	//hp_ini
 #include "hp/hp_log.h"	//hp_log
 #include "hp/hp_stdlib.h"	//hp_free_t

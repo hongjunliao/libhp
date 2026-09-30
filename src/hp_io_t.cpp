@@ -646,7 +646,7 @@ static hp_io_t * test_http_server_on_new(hp_io_t * cio, hp_sock_t fd)
 
 	char buf[64] = "";
 	hp_log(stdout, "%s: new HTTP connection from '%s:%d', IO total=%d\n",
-			__FUNCTION__, hp_addr4name(&cio->addr, ":", buf, sizeof(buf)), 0,
+			__FUNCTION__, hp_addr4name((struct sockaddr_in *)&cio->addr, ":", buf, sizeof(buf)), 0,
 			hp_io_size(cio->ioctx));
 	return (hp_io_t *)req;
 }
@@ -746,7 +746,7 @@ static void test_http_server_on_delete(hp_io_t * io, int err, char const * errst
 
 	char buf[64] = "";
 	hp_log(stdout, "%s: delete HTTP connection '%s:%d', IO total=%d\n", __FUNCTION__
-			, hp_addr4name(&io->addr, ":", buf, sizeof(buf)), 0, hp_io_size(io->ioctx));
+			, hp_addr4name((struct sockaddr_in *)&io->addr, ":", buf, sizeof(buf)), 0, hp_io_size(io->ioctx));
 
 	request_uninit(req);
 	free(req);

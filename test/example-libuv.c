@@ -1,6 +1,4 @@
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif /* HAVE_CONFIG_H */
+#include "hp_config.h"
 
 #ifdef LIBHP_WITH_REDIS
 

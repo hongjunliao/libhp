@@ -14,13 +14,10 @@ include(cmakes/libhp.cmake) # hp_cmake_find_deps
 project(libhp)
 
 ###########################################################################################
-
-if(NOT CMAKE_BUILD_TYPE)
-set(CMAKE_BUILD_TYPE Release CACHE STRING "Options are: None, Debug, Release, RelWithDebInfo, MinSizeRel." FORCE)
-endif()
-# -DCMAKE_EXPORT_COMPILE_COMMANDS is for lsp/clangd, see
-# https://clangd.llvm.org/installation.html
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+option(LIBHP_WITH_MQTT "Enable MQTT support" OFF)
+option(LIBHP_WITH_HTTP "Enable HTTP client support" OFF)
+option(LIBHP_WITH_CJSON "Enable cJSON support" OFF)
+option(LIBHP_WITH_REDIS "Enable Redis support" OFF)
 
 ###########################################################################################
 include(CheckIncludeFile)
@@ -57,30 +54,36 @@ else()
 	set(ssl_lib "ssl crypto")
 endif()
 
-set(g_withs ZLIB MYSQL BDB CURL MQTT CJSON 
-	OPTPARSE REDIS REDIS DLFCN ZLOG HTTP 1 1 1 HTTP 1 1 1
+set(g_withs
+		ZLIB MYSQL BDB CURL MQTT
+		CJSON OPTPARSE REDIS REDIS
+		ZLOG HTTP 1 1 1
+		HTTP 1 1 1
 	)
-set(g_hdrs zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h cjson/cJSON.h
-		optparse.h uuid/uuid.h uv.h dlfcn.h zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h 
+set(g_hdrs
+		zlib.h  mysql/mysql.h db.h curl/curl.h MQTTAsync.h
+		cjson/cJSON.h optparse.h uuid/uuid.h uv.h
+		zlog.h http_parser.h .nullfilesub.h .nullfilesrc.h .nullfilesrc.h
 		.nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h
 	)
-set(g_incs deps/zlib/include/ deps/ deps/db/include/ deps/ deps/paho.mqtt.c/include/ deps/
-		deps/ deps/ deps/uv/include/ deps/dlfcn-win32/include/ deps/zlog/include/ deps/http-parser/ deps/ deps/ deps/ 
-		deps/ deps/ deps/ "${PROJECT_BINARY_DIR}/ include/"
+set(g_incs
+		deps/zlib/include/ deps/ deps/db/include/ deps/ deps/paho.mqtt.c/include/
+		deps/ deps/ deps/ deps/uv/include/
+		deps/zlog/include/ deps/http-parser/ deps/ deps/ deps/
+		deps deps/ deps/ "${PROJECT_BINARY_DIR}/ include/"
 	)
 	
-set(g_deps zlib mysqlclient bdb curl paho.mqtt.c cjson 
-		optparse uuid uv dlfcn-win32 zlog http-parser hiredis redis sds 
-		gbk-utf8 c-vector inih .src
+set(g_deps
+		zlib mysqlclient bdb curl paho.mqtt.c
+		cjson optparse uuid uv
+		zlog http-parser hiredis redis sds
+		libyuarel c-vector inih .src
 	)
-set(g_libs  z mysqlclient db curl ${path_mqtt_lib} cjson 
-			c uuid ${uv_lib} dl zlog http_parser hiredis 
-			"deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c"
-			${sds_lib}
-			"deps/gbk-utf8/utf8.c"
-			"deps/c-vector/*.c deps/c-vector/*.cc"
-			deps/inih/*.c
-			"src/*.c src/*.cpp"
+set(g_libs
+		z mysqlclient db curl ${path_mqtt_lib}
+		cjson c uuid ${uv_lib}
+		zlog http_parser hiredis "deps/redis/src/adlist.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c deps/redis/src/zmalloc.c" ${sds_lib}
+		"deps/libyuarel/yuarel.c" "deps/c-vector/*.c deps/c-vector/*.cc" deps/inih/*.c "src/*.c src/*.cpp"
 	)
 ###########################################################################################
 
@@ -112,6 +115,7 @@ target_compile_options(libhp PUBLIC
 if(WIN32)
 	target_link_directories(libhp PUBLIC deps/openssl/lib/VC/static/)
 endif()
+
 ###########################################################################################
 add_executable(test-libhp test/test.cpp )
 target_link_libraries(test-libhp libhp )
@@ -123,3 +127,7 @@ configure_file(
     @ONLY   # 可选，但建议加上
 )
 
+message(STATUS "  LIBHP_WITH_MQTT    = ${LIBHP_WITH_MQTT}")
+message(STATUS "  LIBHP_WITH_HTTP    = ${LIBHP_WITH_HTTP}")
+message(STATUS "  LIBHP_WITH_CJSON   = ${LIBHP_WITH_CJSON}")
+message(STATUS "  LIBHP_WITH_REDIS   = ${LIBHP_WITH_REDIS}")

@@ -105,13 +105,15 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 
 			# use add_subdirectory()
 			if((${hdr} STREQUAL .nullfilesub.h ))
-
+				if(${dep}_INCLUDE_DIRS)
+					continue()
+				endif()
 				# copy a default CMakeLists.txt if NOT exist
 				hp_cmake_copy_cmakefile(${cmakes} ${dep})
 				add_subdirectory(${depdir}/${dep})
 				
-				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)	
-				set(${dep}_LIBRARIES ${lib_} PARENT_SCOPE)
+				set(${dep}_INCLUDE_DIRS ${inc} CACHE INTERNAL "")
+				set(${dep}_LIBRARIES ${lib_} CACHE INTERNAL "")
 				
 				hp_log("hp_cmake_find_deps: added with add_subdirectory(${depdir}/${dep})")
 			#use file(GLOB)
@@ -120,7 +122,7 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 				file(GLOB SRCS ${SRCS} ${lib_})	
 				file(GLOB files ${lib_})
 	
-				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)	
+				set(${dep}_INCLUDE_DIRS ${inc} CACHE INTERNAL "")
 				
 				hp_log("hp_cmake_find_deps: added using file(GLOB), GLOB='${lib_}', files='${files}'")
 			endif()	
@@ -148,22 +150,24 @@ function(hp_cmake_find_deps SRCS_ withprefix depdir cmakes withs hdrs incs deps 
 			# use add_subdirectory() instead if NOT found
 			if(NOT ${dep}_INCLUDE_DIRS) 
 				if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep}" )
-					message(FATAL_ERROR "Dependency '${hdr}' NOT found.(dir not exist ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep})")
+					if(${${dep}_INCLUDE_DIRS})
+						message(FATAL_ERROR "Dependency '${hdr}' NOT found.(dir not exist ${CMAKE_CURRENT_SOURCE_DIR}/${depdir}/${dep})")
+					endif()
 				endif()
 				
 				hp_cmake_copy_cmakefile(${cmakes} ${dep})
 				add_subdirectory(${depdir}/${dep})
 
-				set(${dep}_INCLUDE_DIRS ${inc} PARENT_SCOPE)
+				set(${dep}_INCLUDE_DIRS ${inc} CACHE INTERNAL "")
 			endif()
 
-			set(${dep}_LIBRARIES ${lib_} PARENT_SCOPE)
+			set(${dep}_LIBRARIES ${lib_} CACHE INTERNAL "")
 
 		endif()
 		
 	endforeach() 
 	
-	set(${SRCS_} ${SRCS} PARENT_SCOPE)
+	set(${SRCS_} ${SRCS} CACHE INTERNAL "")
 #	hp_log("hp_cmake_find_deps: SRCS='${${SRCS_}}'")
 
 endfunction()

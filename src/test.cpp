@@ -108,6 +108,8 @@ static hp_ini definiobj = {.parser = test_inih_handler};
 hp_ini * hp_config_test = &definiobj;
 #define cfg(k) hp_ini_exec(hp_config_test, (k))
 #define cfgi(k) atoi(cfg(k))
+
+
  /////////////////////////////////////////////////////////////////////////////////////////
 
  int libhp_all_tests_main(int argc, char ** argv)
@@ -121,40 +123,7 @@ hp_ini * hp_config_test = &definiobj;
 	 }
 	 cfg("#show");
 	 assert(strlen(cfg("test/web_root")) > 0 && strcmp(cfg("test/web_root"), cfg("web_root")) == 0);
-	 // hp_log()
-	 {
-		 hp_log(stdout, "0 s, 0 char *\n");
-		 hp_log(stdout, "0 s, 1 char *\n", __FUNCTION__);
-		 hp_log(stdout, "1 s, 0 char *: '%s'\n");
-		 hp_log(stdout, "1 s, 1 char *: '%s'\n", __FUNCTION__);
-
-		 hp_log(stdout, "0 s, 0 string\n");
-		 hp_log(stdout, "0 s, 1 string\n", std::string("hello"));
-		 hp_log(stdout, "1 s, 0 string: '%s'\n");
-		 hp_log(stdout, "1 s, 1 string: '%s'\n", std::string("hello"));
-
-
-		 hp_log(stdout, "2 s, 0 string: '%s' '%s'\n");
-		 hp_log(stdout, "2 s, 1 string: '%s' '%s'\n", std::string("hello"));
-		 hp_log(stdout, "0 s, 2 string\n", std::string("hello"), std::string("world"));
-		 hp_log(stdout, "1 s, 2 string: '%s'\n", std::string("hello"), std::string("world"));
-		 hp_log(stdout, "2 s, 2 string: '%s' '%s'\n", std::string("hello"), std::string("world"));
-
-		 hp_log(stdout, "2 s, 1 string, 1 int: '%s' '%s'\n", std::string("hello"), (int)5);
-		 hp_log(stdout, "2 d, 1 string, 1 int: '%d' '%d'\n", std::string("hello"), (int)5);
-
-		 hp_log(stdout, "");
-		 hp_log(stdout, "%");
-		 hp_log(stdout, "%%");
-		 hp_log(stdout, "%%%");
-		 hp_log(stdout, "%%%%");
-		 hp_log(stdout, "\n");
-
-		 hp_log(stdout, "%%'%s'%%'%s'%%\n", "hello", std::string("world") );
-		 hp_log(stdout, "'%s'%%%'%s'\n", "hello", std::string("world") );
-
-		 hp_log(stdout, "%%p=%p\n", &rc);
-	 }
+	 run_test(test_hp_log_main);
 	 run_test(test_hp_config_main);
 	 run_test(test_cvector_main);
 	 run_test(test_cvector_cpp_main);
@@ -232,11 +201,8 @@ hp_ini * hp_config_test = &definiobj;
 	 run_test(test_hp_pub_main);
 #endif
 #endif
-#if defined(__linux__)
-	 run_test(test_hp_inotify_main);
-#endif
-
 #ifdef LIBHP_DEPRECADTED
+	 run_test(test_hp_inotify_main);
 	 run_test(test_hp_cache_main);
 #ifdef LIBHP_WITH_TIMERFD
 	 run_test(test_hp_expire_main);
@@ -246,7 +212,5 @@ hp_ini * hp_config_test = &definiobj;
 	 cfg("#unload");
 	 return rc;
  }
-
-
 #endif //NDEBUG
 /////////////////////////////////////////////////////////////////////////////////////////
